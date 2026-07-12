@@ -4,6 +4,7 @@
 import { utilityProcess, BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { getDb, getKnownFiles, upsertScannedBatch } from '../db'
+import { runPostScanPipeline } from './pipeline'
 
 export function startScan(win: BrowserWindow): void {
   const roots = getDb()
@@ -26,12 +27,9 @@ export function startScan(win: BrowserWindow): void {
         win.webContents.send('scan:progress', { phase: 'hashing', ...msg })
         break
       case 'done':
-        win.webContents.send('scan:progress', {
-          phase: 'done',
-          filesFound: msg.stats.filesFound,
-          filesProcessed: msg.stats.filesProcessed
-        })
         worker.kill()
+        // Enchaîne EXIF puis miniatures, puis émet phase 'done'
+        void runPostScanPipeline(win)
         break
       case 'error':
         console.error('[scanner]', msg.message)

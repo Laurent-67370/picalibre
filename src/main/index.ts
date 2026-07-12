@@ -1,9 +1,29 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, protocol, net } from 'electron'
+import { pathToFileURL } from 'node:url'
 import { join } from 'node:path'
 import { initDb, getDb } from './db'
 import { startScan } from './services/scanner'
 
 let mainWindow: BrowserWindow
+
+// Doit être appelé AVANT app.whenReady()
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'thumb', privileges: { standard: true, secure: true, supportFetchAPI: true } }
+])
+
+/** thumb://library/{size}/{photoId} → fichier webp du cache */
+function registerThumbProtocol(): void {
+  protocol.handle('thumb', (request) => {
+    const parts = new URL(request.url).pathname.split('/').filter(Boolean)
+    const size = parseInt(parts[0], 10)
+    const photoId = parseInt(parts[1], 10)
+    const row = getDb()
+      .prepare('SELECT cache_path FROM thumbnails WHERE photo_id = ? AND size = ?')
+      .get(photoId, size) as { cache_path: string } | undefined
+    if (!row) return new Response('not found', { status: 404 })
+    return net.fetch(pathToFileURL(row.cache_path).toString())
+  })
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -63,6 +83,7 @@ function registerIpc(): void {
 
 app.whenReady().then(() => {
   initDb(join(__dirname, 'migrations'))
+  registerThumbProtocol()
   registerIpc()
   createWindow()
   app.on('activate', () => {

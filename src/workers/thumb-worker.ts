@@ -1,0 +1,131 @@
+/**
+ * ThumbWorker — utilityProcess dédié aux miniatures (sharp/libvips).
+ *
+ * Protocole (process.parentPort) :
+ *   ← { type: 'thumbs', items: ThumbItem[], cacheDir: string }
+ *   → { type: 'thumb-batch', results: ThumbResult[] }   (lots de 50)
+ *   → { type: 'thumb-progress', done, total }
+ *   → { type: 'thumbs-done', stats }
+ *
+ * Cache adressé par HASH de contenu (pas par chemin) :
+ *   {cacheDir}/{h2}/{hash}_{size}.webp
+ * → déplacer un fichier ne régénère jamais sa miniature.
+ */
+import sharp from 'sharp'
+import { mkdir, access } from 'node:fs/promises'
+import { join, dirname } from 'node:path'
+import { cpus } from 'node:os'
+
+const SIZES = [256, 1024] as const
+const QUALITY = 82
+const CONCURRENCY = Math.max(2, (cpus().length || 4) - 1)
+const RESULT_BATCH = 50
+
+export interface ThumbItem {
+  photoId: number
+  filepath: string
+  hash: string
+}
+
+export interface ThumbResult {
+  photoId: number
+  size: number
+  cachePath: string
+  width?: number
+  height?: number
+  ok: boolean
+  error?: string
+}
+
+const port = (process as any).parentPort
+const send = (m: unknown) => port.postMessage(m)
+
+function cachePathFor(cacheDir: string, hash: string, size: number): string {
+  return join(cacheDir, hash.slice(0, 2), `${hash}_${size}.webp`)
+}
+
+async function exists(p: string): Promise<boolean> {
+  try {
+    await access(p)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function processItem(item: ThumbItem, cacheDir: string): Promise<ThumbResult[]> {
+  const out: ThumbResult[] = []
+  try {
+    // .rotate() sans argument applique l'orientation EXIF
+    const base = sharp(item.filepath, { failOn: 'none' }).rotate()
+    const meta = await base.metadata()
+
+    for (const size of SIZES) {
+      const cachePath = cachePathFor(cacheDir, item.hash, size)
+      if (!(await exists(cachePath))) {
+        await mkdir(dirname(cachePath), { recursive: true })
+        await base
+          .clone()
+          .resize(size, size, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: QUALITY })
+          .toFile(cachePath)
+      }
+      out.push({
+        photoId: item.photoId,
+        size,
+        cachePath,
+        width: meta.width,
+        height: meta.height,
+        ok: true
+      })
+    }
+  } catch (err) {
+    out.push({
+      photoId: item.photoId,
+      size: 0,
+      cachePath: '',
+      ok: false,
+      error: (err as Error).message
+    })
+  }
+  return out
+}
+
+async function run(items: ThumbItem[], cacheDir: string): Promise<void> {
+  let done = 0
+  let failed = 0
+  let pending: ThumbResult[] = []
+
+  const flush = () => {
+    if (pending.length > 0) {
+      send({ type: 'thumb-batch', results: pending })
+      pending = []
+    }
+  }
+
+  // Pool de concurrence simple
+  const queue = [...items]
+  const workers = Array.from({ length: CONCURRENCY }, async () => {
+    while (queue.length > 0) {
+      const item = queue.shift()
+      if (!item) break
+      const results = await processItem(item, cacheDir)
+      if (results.some((r) => !r.ok)) failed++
+      pending.push(...results.filter((r) => r.ok))
+      if (pending.length >= RESULT_BATCH) flush()
+      done++
+      if (done % 100 === 0) send({ type: 'thumb-progress', done, total: items.length })
+    }
+  })
+  await Promise.all(workers)
+  flush()
+  send({ type: 'thumbs-done', stats: { total: items.length, done, failed } })
+}
+
+port.on('message', (e: { data: { type: string; items: ThumbItem[]; cacheDir: string } }) => {
+  if (e.data?.type === 'thumbs') {
+    run(e.data.items, e.data.cacheDir).catch((err: Error) =>
+      send({ type: 'error', message: err.message })
+    )
+  }
+})

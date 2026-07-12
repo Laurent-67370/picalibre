@@ -9,7 +9,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
-          'scan-worker': resolve(__dirname, 'src/workers/scan-worker.ts')
+          'scan-worker': resolve(__dirname, 'src/workers/scan-worker.ts'),
+          'thumb-worker': resolve(__dirname, 'src/workers/thumb-worker.ts')
         }
       }
     }
