@@ -10,6 +10,7 @@
 import {
   EditStack,
   applyColorOps,
+  applySpatialOps,
   cropRectPx,
   straightenAngle
 } from '@shared/edit-engine'
@@ -70,10 +71,11 @@ export function renderPreview(
     rect.height
   )
 
-  // --- Couleur : math partagée ---
-  const hasColor = stack.ops.some((o) => o.type !== 'crop' && o.type !== 'straighten')
-  if (hasColor) {
+  // --- Pixels : math partagée (spatial puis couleur) ---
+  const hasPixelOps = stack.ops.some((o) => o.type !== 'crop' && o.type !== 'straighten')
+  if (hasPixelOps) {
     const img = ctx.getImageData(0, 0, rect.width, rect.height)
+    applySpatialOps(img.data, rect.width, rect.height, 4, stack.ops)
     applyColorOps(img.data, 4, stack.ops)
     ctx.putImageData(img, 0, 0)
   }

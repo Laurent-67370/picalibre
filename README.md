@@ -43,7 +43,8 @@ schéma des processus, DSL d'édition, schéma SQL complet, plan par phases.
 - [ ] Phase 1 — Import SD/appareil photo, détection doublons, watcher chokidar temps réel
 - [x] Phase 2 — Moteur d'édition : DSL JSON, math couleur partagée preview/export (parité testée), undo/redo illimité, éditeur (redressement, fill light, hautes lumières, contraste, saturation, température, avant/après, export JPEG pleine résolution)
 - [x] Phase 2 — Crop interactif (poignées, ratios, règle des tiers), contraste auto + couleur auto (analyse figée dans le DSL → déterministe preview/export), histogramme temps réel
-- [ ] Phase 2 — Yeux rouges, tampon, pipette de blanc, filtres créatifs par onglets, preview WebGL
+- [x] Phase 2 — Yeux rouges (zones cliquables), tampon 2 clics (défaut → source, bord adouci), pipette de blanc, 5 filtres créatifs avec intensité — le tout dans le DSL, parité preview/export testée
+- [ ] Optimisation ultérieure — preview WebGL (le DSL ne change pas)
 - [ ] Phase 3 — Visages & géolocalisation
 - [ ] Phase 4 — Collages, diaporamas, movies
 - [ ] Phase 5 — Partage, impression, migration de bibliothèque

@@ -3,6 +3,8 @@ import type { PhotoRow, RendererApi } from '@shared/ipc'
 import {
   ColorOpType,
   EditStack,
+  FilterName,
+  RedeyeZone,
   computeAutoColor,
   computeAutoContrast,
   emptyStack,
@@ -41,6 +43,15 @@ interface CropRect {
 }
 
 type DragMode = 'move' | 'nw' | 'ne' | 'sw' | 'se' | null
+type Tool = 'none' | 'white' | 'redeye' | 'retouch'
+
+const FILTERS: Array<{ name: FilterName; label: string }> = [
+  { name: 'bw', label: 'N&B' },
+  { name: 'sepia', label: 'Sépia' },
+  { name: 'warmify', label: 'Réchauffer' },
+  { name: 'cool', label: 'Refroidir' },
+  { name: 'invert', label: 'Négatif' }
+]
 
 export default function Editor({
   photo,
@@ -59,6 +70,11 @@ export default function Editor({
   const [cropMode, setCropMode] = useState(false)
   const [cropRect, setCropRect] = useState<CropRect>({ x: 0, y: 0, w: 1, h: 1 })
   const [ratio, setRatio] = useState<number | null>(null)
+
+  // Outils ponctuels
+  const [tool, setTool] = useState<Tool>('none')
+  const [retouchRadius, setRetouchRadius] = useState(0.03)
+  const [pendingDefect, setPendingDefect] = useState<{ x: number; y: number } | null>(null)
   const dragRef = useRef<{ mode: DragMode; startX: number; startY: number; start: CropRect }>({
     mode: null,
     startX: 0,
@@ -79,6 +95,8 @@ export default function Editor({
   cropModeRef.current = cropMode
   const showOriginalRef = useRef(showOriginal)
   showOriginalRef.current = showOriginal
+  const toolRef = useRef(tool)
+  toolRef.current = tool
 
   // ---------- Rendu ----------
   const drawHistogram = useCallback(() => {
@@ -188,7 +206,7 @@ export default function Editor({
   }
 
   // ---------- Auto-corrections : analyse UNE FOIS, résultat figé dans le DSL ----------
-  const analysePixels = (): Uint8ClampedArray | null => {
+  const analysePixels = (): { data: Uint8ClampedArray; width: number; height: number } | null => {
     const img = imgRef.current
     if (!img) return null
     // Analyse sur la géométrie courante, sans opérations couleur
@@ -199,21 +217,130 @@ export default function Editor({
     const off = document.createElement('canvas')
     renderPreview(img, geo, off)
     const ctx = off.getContext('2d', { willReadFrequently: true })!
-    return ctx.getImageData(0, 0, off.width, off.height).data
+    return { data: ctx.getImageData(0, 0, off.width, off.height).data, width: off.width, height: off.height }
   }
 
   const autoContrast = () => {
-    const data = analysePixels()
-    if (!data) return
-    const { black, white } = computeAutoContrast(data, 4)
+    const a = analysePixels()
+    if (!a) return
+    const { black, white } = computeAutoContrast(a.data, 4)
     applyOp({ type: 'levels', params: { black, white } }, 'auto_contrast')
   }
 
   const autoColor = () => {
-    const data = analysePixels()
-    if (!data) return
-    const gains = computeAutoColor(data, 4)
+    const a = analysePixels()
+    if (!a) return
+    const gains = computeAutoColor(a.data, 4)
     applyOp({ type: 'wb', params: gains }, 'auto_color')
+  }
+
+  // ---------- Outils ponctuels (pipette, yeux rouges, tampon) ----------
+  const canvasPoint = (e: React.MouseEvent): { x: number; y: number } | null => {
+    const canvas = canvasRef.current
+    if (!canvas) return null
+    const r = canvas.getBoundingClientRect()
+    const x = (e.clientX - r.left) / r.width
+    const y = (e.clientY - r.top) / r.height
+    if (x < 0 || x > 1 || y < 0 || y > 1) return null
+    return { x, y }
+  }
+
+  /** Pipette de blanc : le pixel cliqué doit devenir neutre → gains WB figés dans le DSL. */
+  const pickWhite = (pt: { x: number; y: number }) => {
+    const a = analysePixels()
+    if (!a) return
+    const cx = Math.round(pt.x * (a.width - 1))
+    const cy = Math.round(pt.y * (a.height - 1))
+    let sr = 0
+    let sg = 0
+    let sb = 0
+    let n = 0
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        const x = cx + dx
+        const y = cy + dy
+        if (x < 0 || x >= a.width || y < 0 || y >= a.height) continue
+        const i = (y * a.width + x) * 4
+        sr += a.data[i]
+        sg += a.data[i + 1]
+        sb += a.data[i + 2]
+        n++
+      }
+    }
+    if (n === 0) return
+    const ar = sr / n
+    const ag = sg / n
+    const ab = sb / n
+    const target = 0.299 * ar + 0.587 * ag + 0.114 * ab
+    const cl = (x: number): number => Math.round(Math.min(2, Math.max(0.5, x)) * 1000) / 1000
+    applyOp(
+      {
+        type: 'wb',
+        params: {
+          r: cl(target / Math.max(1, ar)),
+          g: cl(target / Math.max(1, ag)),
+          b: cl(target / Math.max(1, ab))
+        }
+      },
+      'white_pick'
+    )
+    setTool('none')
+  }
+
+  const redeyeZones = (): RedeyeZone[] => getOp(stackRef.current, 'redeye')?.params.zones ?? []
+
+  const addRedeyeZone = (pt: { x: number; y: number }) => {
+    applyOp(
+      { type: 'redeye', params: { zones: [...redeyeZones(), { x: pt.x, y: pt.y, r: 0.03 }] } },
+      'redeye'
+    )
+  }
+
+  const removeRedeyeZone = (index: number) => {
+    applyOp(
+      { type: 'redeye', params: { zones: redeyeZones().filter((_, i) => i !== index) } },
+      'redeye'
+    )
+  }
+
+  const addRetouchStroke = (pt: { x: number; y: number }) => {
+    if (!pendingDefect) {
+      setPendingDefect(pt)
+      return
+    }
+    const strokes = getOp(stackRef.current, 'retouch')?.params.strokes ?? []
+    applyOp(
+      {
+        type: 'retouch',
+        params: {
+          strokes: [
+            ...strokes,
+            { dx: pendingDefect.x, dy: pendingDefect.y, sx: pt.x, sy: pt.y, r: retouchRadius }
+          ]
+        }
+      },
+      'retouch'
+    )
+    setPendingDefect(null)
+  }
+
+  const onCanvasClick = (e: React.MouseEvent) => {
+    if (cropModeRef.current || toolRef.current === 'none') return
+    const pt = canvasPoint(e)
+    if (!pt) return
+    if (toolRef.current === 'white') pickWhite(pt)
+    else if (toolRef.current === 'redeye') addRedeyeZone(pt)
+    else if (toolRef.current === 'retouch') addRetouchStroke(pt)
+  }
+
+  /** Position du canvas affiché dans le wrapper (pour les marqueurs). */
+  const canvasDisp = (): { left: number; top: number; width: number; height: number } | null => {
+    const canvas = canvasRef.current
+    const wrap = wrapRef.current
+    if (!canvas || !wrap) return null
+    const c = canvas.getBoundingClientRect()
+    const w = wrap.getBoundingClientRect()
+    return { left: c.left - w.left, top: c.top - w.top, width: c.width, height: c.height }
   }
 
   // ---------- Recadrage interactif ----------
@@ -310,7 +437,10 @@ export default function Editor({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (cropModeRef.current) setCropMode(false)
+        if (toolRef.current !== 'none') {
+          setTool('none')
+          setPendingDefect(null)
+        } else if (cropModeRef.current) setCropMode(false)
         else onClose()
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) doUndo()
@@ -377,7 +507,7 @@ export default function Editor({
                 ✂ Recadrer
               </button>
             </div>
-            <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
               <button onClick={autoContrast} style={{ flex: 1 }}>
                 Contraste auto
               </button>
@@ -385,6 +515,108 @@ export default function Editor({
                 Couleur auto
               </button>
             </div>
+
+            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 4 }}>OUTILS</div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              {(
+                [
+                  ['white', '💧 Pipette'],
+                  ['redeye', '👁 Yeux rouges'],
+                  ['retouch', '🩹 Tampon']
+                ] as Array<[Tool, string]>
+              ).map(([t, label]) => (
+                <button
+                  key={t}
+                  onClick={() => {
+                    setTool(tool === t ? 'none' : t)
+                    setPendingDefect(null)
+                  }}
+                  style={{ flex: 1, background: tool === t ? '#2f6feb' : undefined, fontSize: 12 }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {tool === 'white' && (
+              <p style={{ fontSize: 12, opacity: 0.75, margin: '0 0 8px' }}>
+                Clique une zone qui devrait être blanche/grise neutre.
+              </p>
+            )}
+            {tool === 'redeye' && (
+              <p style={{ fontSize: 12, opacity: 0.75, margin: '0 0 8px' }}>
+                Clique sur chaque œil rouge. Clique un cercle pour le retirer.
+              </p>
+            )}
+            {tool === 'retouch' && (
+              <>
+                <p style={{ fontSize: 12, opacity: 0.75, margin: '0 0 6px' }}>
+                  1er clic : le défaut · 2e clic : la zone propre à copier.
+                  {pendingDefect && ' → choisis la source…'}
+                </p>
+                <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                  Taille : {(retouchRadius * 100).toFixed(0)}
+                  <input
+                    type="range"
+                    min={0.01}
+                    max={0.12}
+                    step={0.005}
+                    value={retouchRadius}
+                    onChange={(e) => setRetouchRadius(parseFloat(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                </label>
+              </>
+            )}
+
+            <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>EFFETS</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+              {FILTERS.map((f) => {
+                const cur = getOp(stack, 'filter')
+                const active = cur?.params.name === f.name
+                return (
+                  <button
+                    key={f.name}
+                    onClick={() =>
+                      applyOp(
+                        {
+                          type: 'filter',
+                          params: { name: f.name, intensity: active ? 0 : 0.8 }
+                        },
+                        'filter'
+                      )
+                    }
+                    style={{ padding: '4px 10px', fontSize: 12, background: active ? '#2f6feb' : undefined }}
+                  >
+                    {f.label}
+                  </button>
+                )
+              })}
+            </div>
+            {getOp(stack, 'filter') && (
+              <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+                Intensité : {(((getOp(stack, 'filter')?.params.intensity ?? 0) as number) * 100).toFixed(0)}
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={getOp(stack, 'filter')?.params.intensity ?? 0}
+                  onChange={(e) =>
+                    applyOp(
+                      {
+                        type: 'filter',
+                        params: {
+                          name: getOp(stack, 'filter')!.params.name,
+                          intensity: parseFloat(e.target.value)
+                        }
+                      },
+                      'filter'
+                    )
+                  }
+                  style={{ width: '100%' }}
+                />
+              </label>
+            )}
 
             <label style={{ fontSize: 13, display: 'block', marginBottom: 14 }}>
               Redressement : {angle.toFixed(1)}°
@@ -499,14 +731,70 @@ export default function Editor({
       >
         <canvas
           ref={canvasRef}
+          onClick={onCanvasClick}
           style={{
             maxWidth: '100%',
             maxHeight: '100%',
             objectFit: 'contain',
             boxShadow: '0 4px 24px #0008',
-            borderRadius: 4
+            borderRadius: 4,
+            cursor: tool !== 'none' && !cropMode ? 'crosshair' : 'default'
           }}
         />
+
+        {/* Marqueurs yeux rouges */}
+        {tool === 'redeye' &&
+          !cropMode &&
+          (() => {
+            const d = canvasDisp()
+            if (!d) return null
+            return redeyeZones().map((z, i) => {
+              const rp = z.r * d.width
+              return (
+                <div
+                  key={i}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeRedeyeZone(i)
+                  }}
+                  title="Retirer cette zone"
+                  style={{
+                    position: 'absolute',
+                    left: d.left + z.x * d.width - rp,
+                    top: d.top + z.y * d.height - rp,
+                    width: rp * 2,
+                    height: rp * 2,
+                    border: '2px solid #ff5252',
+                    borderRadius: '50%',
+                    cursor: 'pointer'
+                  }}
+                />
+              )
+            })
+          })()}
+
+        {/* Marqueur tampon en attente de source */}
+        {tool === 'retouch' &&
+          pendingDefect &&
+          (() => {
+            const d = canvasDisp()
+            if (!d) return null
+            const rp = retouchRadius * d.width
+            return (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: d.left + pendingDefect.x * d.width - rp,
+                  top: d.top + pendingDefect.y * d.height - rp,
+                  width: rp * 2,
+                  height: rp * 2,
+                  border: '2px dashed #f5c518',
+                  borderRadius: '50%',
+                  pointerEvents: 'none'
+                }}
+              />
+            )
+          })()}
 
         {cropMode && disp && (
           <div

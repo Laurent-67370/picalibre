@@ -5,6 +5,7 @@
 import sharp from 'sharp'
 import assert from 'node:assert'
 import {
+  applySpatialOps,
   computeAutoContrast,
   computeAutoColor,
   emptyStack,
@@ -132,6 +133,54 @@ async function main() {
   ns = upsertOp(ns, { type: 'wb', params: { r: 1, g: 1, b: 1 } })
   assert.equal(ns.ops.length, 0, 'wb neutre supprimé')
   console.log('✅ Levels, WB, auto-contraste, auto-couleur')
+
+  // --- 6ter. Filtres, yeux rouges, tampon ---
+  const fbw = new Uint8ClampedArray([200, 100, 50, 255])
+  applyColorOps(fbw, 4, [{ type: 'filter', params: { name: 'bw', intensity: 1 } }])
+  assert.equal(fbw[0] === fbw[1] && fbw[1] === fbw[2], true, 'filtre N&B : canaux égaux')
+
+  const fhalf = new Uint8ClampedArray([200, 100, 50, 255])
+  applyColorOps(fhalf, 4, [{ type: 'filter', params: { name: 'invert', intensity: 0.5 } }])
+  assert.deepEqual([fhalf[0], fhalf[1], fhalf[2]], [128, 128, 128], 'intensité 0,5 = mélange 50/50')
+
+  // Image 4x4 : pixel rouge vif au centre d'une zone yeux rouges
+  const W = 4, H = 4
+  const eye = new Uint8Array(W * H * 3).fill(80)
+  const ci = (1 * W + 1) * 3
+  eye[ci] = 220; eye[ci + 1] = 60; eye[ci + 2] = 60
+  applySpatialOps(eye, W, H, 3, [
+    { type: 'redeye', params: { zones: [{ x: 0.375, y: 0.375, r: 0.3 }] } }
+  ])
+  assert.equal(eye[ci], 60, 'rouge dominant ramené à la moyenne G/B')
+  assert.equal(eye[0], 80, 'pixels hors zone intacts')
+
+  // Tampon : copie la source (claire) sur la destination (sombre)
+  const W2 = 10, H2 = 10
+  const patch = new Uint8Array(W2 * H2 * 3).fill(200)
+  const di = (5 * W2 + 2) * 3
+  patch[di] = 10; patch[di + 1] = 10; patch[di + 2] = 10 // défaut sombre en (2,5)
+  applySpatialOps(patch, W2, H2, 3, [
+    { type: 'retouch', params: { strokes: [{ dx: 0.2, dy: 0.5, sx: 0.7, sy: 0.5, r: 0.1 }] } }
+  ])
+  assert.equal(patch[di] > 150, true, `défaut recouvert par la source (${patch[di]})`)
+
+  // Parité 3/4 canaux maintenue avec les ops spatiales + filtre
+  const spOps: EditStack['ops'] = [
+    { type: 'redeye', params: { zones: [{ x: 0.5, y: 0.5, r: 0.4 }] } },
+    { type: 'filter', params: { name: 'sepia', intensity: 0.7 } }
+  ]
+  const p3 = new Uint8Array([220, 60, 60])
+  const p4 = new Uint8ClampedArray([220, 60, 60, 255])
+  applySpatialOps(p3, 1, 1, 3, spOps); applyColorOps(p3, 3, spOps)
+  applySpatialOps(p4, 1, 1, 4, spOps); applyColorOps(p4, 4, spOps)
+  assert.deepEqual([p4[0], p4[1], p4[2]], [p3[0], p3[1], p3[2]], 'parité spatial+filtre')
+
+  // Neutralité
+  let zs = upsertOp(emptyStack(), { type: 'redeye', params: { zones: [] } })
+  zs = upsertOp(zs, { type: 'filter', params: { name: 'bw', intensity: 0 } })
+  zs = upsertOp(zs, { type: 'retouch', params: { strokes: [] } })
+  assert.equal(zs.ops.length, 0, 'ops vides/neutres supprimées')
+  console.log('✅ Filtres créatifs, yeux rouges, tampon (+ parité)')
 
   // --- 6. stackHash stable ---
   assert.equal(stackHash(stack), stackHash(JSON.parse(JSON.stringify(stack))), 'hash stable')

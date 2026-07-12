@@ -12,6 +12,7 @@ import sharp from 'sharp'
 import {
   EditStack,
   applyColorOps,
+  applySpatialOps,
   cropRectPx,
   straightenAngle
 } from '../../shared/edit-engine'
@@ -48,7 +49,8 @@ export async function renderEdited(
     .raw()
     .toBuffer({ resolveWithObject: true })
 
-  // Math couleur partagée avec la preview
+  // Math partagée avec la preview : spatial (tampon, yeux rouges) puis couleur
+  applySpatialOps(data, info.width, info.height, 3, stack.ops)
   applyColorOps(data, 3, stack.ops)
 
   // Encodage final

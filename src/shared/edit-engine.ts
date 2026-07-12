@@ -16,11 +16,30 @@
 
 export type ColorOpType = 'fill_light' | 'highlights' | 'contrast' | 'saturation' | 'temperature'
 
+export type FilterName = 'bw' | 'sepia' | 'warmify' | 'cool' | 'invert'
+
+export interface RedeyeZone {
+  x: number
+  y: number
+  r: number
+} // centre + rayon, normalisés sur l'image post-géométrie
+
+export interface RetouchStroke {
+  dx: number
+  dy: number // destination (le défaut à corriger)
+  sx: number
+  sy: number // source (la zone propre copiée)
+  r: number // rayon normalisé
+}
+
 export type EditOp =
   | { type: 'crop'; params: { x: number; y: number; w: number; h: number } }
   | { type: 'straighten'; params: { angle: number } } // degrés, -15..15
   | { type: 'levels'; params: { black: number; white: number } } // contraste auto (0..255)
   | { type: 'wb'; params: { r: number; g: number; b: number } } // gains balance des blancs
+  | { type: 'filter'; params: { name: FilterName; intensity: number } } // 0..1
+  | { type: 'redeye'; params: { zones: RedeyeZone[] } }
+  | { type: 'retouch'; params: { strokes: RetouchStroke[] } }
   | { type: ColorOpType; params: { value: number } } // -1..1 (fill_light : 0..1)
 
 export interface EditStack {
@@ -47,7 +66,10 @@ export function upsertOp(stack: EditStack, op: EditOp): EditStack {
     ('value' in op.params && op.params.value === 0) ||
     (op.type === 'straighten' && op.params.angle === 0) ||
     (op.type === 'levels' && op.params.black === 0 && op.params.white === 255) ||
-    (op.type === 'wb' && op.params.r === 1 && op.params.g === 1 && op.params.b === 1)
+    (op.type === 'wb' && op.params.r === 1 && op.params.g === 1 && op.params.b === 1) ||
+    (op.type === 'filter' && op.params.intensity === 0) ||
+    (op.type === 'redeye' && op.params.zones.length === 0) ||
+    (op.type === 'retouch' && op.params.strokes.length === 0)
   if (!isNeutral) ops.push(op)
   return { version: 1, ops }
 }
@@ -76,7 +98,10 @@ export function applyColorOps(
   channels: 3 | 4,
   ops: EditOp[]
 ): void {
-  const colorOps = ops.filter((o) => o.type !== 'crop' && o.type !== 'straighten')
+  const colorOps = ops.filter(
+    (o) =>
+      o.type !== 'crop' && o.type !== 'straighten' && o.type !== 'redeye' && o.type !== 'retouch'
+  )
   if (colorOps.length === 0) return
 
   const n = data.length
@@ -99,6 +124,40 @@ export function applyColorOps(
         r *= gains.r
         g *= gains.g
         b *= gains.b
+        continue
+      }
+      if (op.type === 'filter') {
+        const { name, intensity: t } = op.params as { name: FilterName; intensity: number }
+        const l = 0.299 * r + 0.587 * g + 0.114 * b
+        let er = r
+        let eg = g
+        let eb = b
+        switch (name) {
+          case 'bw':
+            er = l; eg = l; eb = l
+            break
+          case 'sepia':
+            er = 0.393 * r + 0.769 * g + 0.189 * b
+            eg = 0.349 * r + 0.686 * g + 0.168 * b
+            eb = 0.272 * r + 0.534 * g + 0.131 * b
+            break
+          case 'warmify':
+            er = l + (r - l) * 1.15 + 28
+            eg = l + (g - l) * 1.15 + 6
+            eb = l + (b - l) * 1.15 - 22
+            break
+          case 'cool':
+            er = l + (r - l) * 1.05 - 22
+            eg = l + (g - l) * 1.05
+            eb = l + (b - l) * 1.05 + 26
+            break
+          case 'invert':
+            er = 255 - r; eg = 255 - g; eb = 255 - b
+            break
+        }
+        r += t * (er - r)
+        g += t * (eg - g)
+        b += t * (eb - b)
         continue
       }
       const v = (op.params as { value: number }).value
@@ -173,6 +232,88 @@ export function cropRectPx(
 
 export function straightenAngle(stack: EditStack): number {
   return getOp(stack, 'straighten')?.params.angle ?? 0
+}
+
+/**
+ * Opérations SPATIALES (yeux rouges, tampon) — appliquées sur les pixels bruts
+ * POST-GÉOMETRIE, AVANT les opérations couleur, dans les DEUX moteurs.
+ * Ordre d'application global (fixe, identique preview/export) :
+ *   géométrie (straighten + crop) → retouch → redeye → ops couleur (ordre du stack)
+ */
+export function applySpatialOps(
+  data: Uint8Array | Uint8ClampedArray,
+  width: number,
+  height: number,
+  channels: 3 | 4,
+  ops: EditOp[]
+): void {
+  const retouch = ops.find((o) => o.type === 'retouch') as
+    | Extract<EditOp, { type: 'retouch' }>
+    | undefined
+  const redeye = ops.find((o) => o.type === 'redeye') as
+    | Extract<EditOp, { type: 'redeye' }>
+    | undefined
+  if (!retouch && !redeye) return
+
+  // --- Tampon : copie de disque adouci depuis la source vers la destination ---
+  if (retouch && retouch.params.strokes.length > 0) {
+    // Lecture depuis un instantané pour éviter les traînées entre strokes
+    const src = data.slice()
+    for (const st of retouch.params.strokes) {
+      const rPx = Math.max(2, st.r * width)
+      const dcx = st.dx * width
+      const dcy = st.dy * height
+      const ox = Math.round((st.sx - st.dx) * width)
+      const oy = Math.round((st.sy - st.dy) * height)
+      const x0 = Math.max(0, Math.floor(dcx - rPx))
+      const x1 = Math.min(width - 1, Math.ceil(dcx + rPx))
+      const y0 = Math.max(0, Math.floor(dcy - rPx))
+      const y1 = Math.min(height - 1, Math.ceil(dcy + rPx))
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const dist = Math.hypot(x - dcx, y - dcy)
+          if (dist > rPx) continue
+          const sxp = x + ox
+          const syp = y + oy
+          if (sxp < 0 || sxp >= width || syp < 0 || syp >= height) continue
+          // Bord adouci sur les 30 % extérieurs du rayon
+          const t = dist / rPx
+          const w = t < 0.7 ? 1 : (1 - t) / 0.3
+          const di = (y * width + x) * channels
+          const si = (syp * width + sxp) * channels
+          for (let c = 0; c < 3; c++) {
+            data[di + c] = Math.round(data[di + c] + w * (src[si + c] - data[di + c]))
+          }
+        }
+      }
+    }
+  }
+
+  // --- Yeux rouges : désaturation du rouge dans les zones ---
+  if (redeye && redeye.params.zones.length > 0) {
+    for (const z of redeye.params.zones) {
+      const rPx = Math.max(2, z.r * width)
+      const cx = z.x * width
+      const cy = z.y * height
+      const x0 = Math.max(0, Math.floor(cx - rPx))
+      const x1 = Math.min(width - 1, Math.ceil(cx + rPx))
+      const y0 = Math.max(0, Math.floor(cy - rPx))
+      const y1 = Math.min(height - 1, Math.ceil(cy + rPx))
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          if (Math.hypot(x - cx, y - cy) > rPx) continue
+          const i = (y * width + x) * channels
+          const rr = data[i]
+          const gg = data[i + 1]
+          const bb = data[i + 2]
+          // Pixel "rouge dominant" → ramené vers la moyenne G/B
+          if (rr > (gg + bb) / 2 + 15) {
+            data[i] = Math.round((gg + bb) / 2)
+          }
+        }
+      }
+    }
+  }
 }
 
 /**
