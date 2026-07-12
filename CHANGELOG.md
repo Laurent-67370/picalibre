@@ -3,6 +3,23 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.3.0] — 2026-07-12
+
+### Ajouté
+- **Preview WebGL** pour les opérations couleur de l'éditeur : fragment shader
+  généré depuis le stack (un extrait GLSL par op, dans l'ordre), uniforms pour
+  les valeurs, cache de programmes par signature de séquence. Chemin rapide sans
+  op spatiale : texture directe depuis le canvas, aucun `getImageData`.
+- Fallback CPU automatique (WebGL absent, contexte perdu ou erreur shader) —
+  `applyColorOps` reste la vérité commune avec l'export sharp.
+- Mode test `PICALIBRE_TEST_WEBGL=1` : suite de parité GPU↔CPU exécutée dans le
+  renderer Electron réel (13 cas : chaque op isolée, 5 filtres, chaîne complète).
+
+### Corrigé
+- Double inversion verticale du rendu GPU (flip à l'upload **et** au recopiage),
+  détectée immédiatement par la suite de parité : écart max ramené de 255/255 à
+  1/255 (≤ 0,4 % des pixels).
+
 ## [1.2.0] — 2026-07-12
 
 ### Ajouté
@@ -137,6 +154,7 @@ Les 5 phases du plan initial sont couvertes.
   (fichier inchangé size+mtime = jamais re-hashé).
 - Configuration de build Linux (AppImage/deb), Windows (NSIS), macOS (DMG).
 
+[1.3.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.2.0
 [1.1.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.1
 [1.0.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.0.0

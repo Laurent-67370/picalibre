@@ -3,9 +3,9 @@
  * Géométrie : straighten via ctx.rotate, crop via extraction de zone.
  * Couleur : applyColorOps sur l'ImageData — MÊME math que l'export sharp.
  *
- * Rendu d'une preview 1024 px : quelques ms à quelques dizaines de ms,
- * suffisant pour des sliders fluides avec debounce. (Optimisation WebGL
- * prévue plus tard sans changer le DSL.)
+ * Les opérations COULEUR passent par le GPU (render-webgl, parité testée
+ * 13/13 à ±1/255 contre applyColorOps) avec fallback CPU automatique ;
+ * sans op spatiale, le chemin GPU évite même le getImageData.
  */
 import {
   EditStack,
@@ -14,11 +14,13 @@ import {
   cropRectPx,
   straightenAngle
 } from '@shared/edit-engine'
+import { applyColorOpsWebGL, colorOpsOf } from './render-webgl'
 
 export function renderPreview(
   source: HTMLImageElement,
   stack: EditStack,
-  target: HTMLCanvasElement
+  target: HTMLCanvasElement,
+  opts: { forceCpu?: boolean } = {}
 ): void {
   const sw = source.naturalWidth
   const sh = source.naturalHeight
@@ -71,12 +73,31 @@ export function renderPreview(
     rect.height
   )
 
-  // --- Pixels : math partagée (spatial puis couleur) ---
-  const hasPixelOps = stack.ops.some((o) => o.type !== 'crop' && o.type !== 'straighten')
-  if (hasPixelOps) {
+  // --- Pixels : spatial (CPU, zones locales) puis couleur (GPU si possible) ---
+  const hasSpatial = stack.ops.some((o) => o.type === 'redeye' || o.type === 'retouch')
+  const hasColor = colorOpsOf(stack.ops).length > 0
+  if (!hasSpatial && !hasColor) return
+
+  if (hasSpatial) {
     const img = ctx.getImageData(0, 0, rect.width, rect.height)
     applySpatialOps(img.data, rect.width, rect.height, 4, stack.ops)
-    applyColorOps(img.data, 4, stack.ops)
+    if (
+      hasColor &&
+      !opts.forceCpu &&
+      applyColorOpsWebGL(img, stack.ops, ctx, rect.width, rect.height)
+    ) {
+      return // GPU a écrit le résultat (spatial inclus via la texture ImageData)
+    }
+    if (hasColor) applyColorOps(img.data, 4, stack.ops)
     ctx.putImageData(img, 0, 0)
+    return
   }
+
+  // Chemin rapide : couleur seule → texture directe depuis le canvas, AUCUN getImageData
+  if (!opts.forceCpu && applyColorOpsWebGL(target, stack.ops, ctx, rect.width, rect.height)) {
+    return
+  }
+  const img = ctx.getImageData(0, 0, rect.width, rect.height)
+  applyColorOps(img.data, 4, stack.ops)
+  ctx.putImageData(img, 0, 0)
 }

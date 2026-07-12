@@ -1,22 +1,21 @@
 # PicaLibre 📸
 
-[![Version](https://img.shields.io/badge/version-1.2.0-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.3.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
 
-## 🆕 Quoi de neuf en 1.2.0
+## 🆕 Quoi de neuf en 1.3.0
 
-- 🎬 **Vidéos dans les films** : mixe photos et vidéos dans un même MP4 —
-  segments normalisés puis assemblage en copie de flux (pas de double ré-encodage)
-- 🌅 **Transitions en fondu** (image + son) entre les éléments
-- 🎵 **Multi-pistes audio** : plusieurs fichiers enchaînés en bande-son, bornée
-  à la durée exacte du film
-- 🖼️ **Miniatures vidéo** dans la grille (frame à 10 % de la durée) avec badge 🎬 + durée
-- 🧩 **timeline-core** : fondation du futur éditeur de montage (pistes, trim,
-  crossfade/wipe/slide)
+- ⚡ **Preview GPU (WebGL)** : les réglages couleur de l'éditeur sont rendus par
+  un shader généré depuis la pile d'éditions — sliders fluides même en 4K,
+  zéro `getImageData` sur le chemin rapide
+- 🎯 **Parité garantie** : même math que l'export sharp (13 cas testés dans
+  Electron, écart max 1/255), fallback CPU automatique si WebGL indisponible
+- 🧪 Mode CI `PICALIBRE_TEST_WEBGL=1` : la suite de parité tourne dans le vrai
+  renderer
 
 Détail complet des versions : [CHANGELOG.md](CHANGELOG.md)
 
@@ -61,7 +60,7 @@ schéma des processus, DSL d'édition, schéma SQL complet, plan par phases.
 - [x] Phase 2 — Moteur d'édition : DSL JSON, math couleur partagée preview/export (parité testée), undo/redo illimité, éditeur (redressement, fill light, hautes lumières, contraste, saturation, température, avant/après, export JPEG pleine résolution)
 - [x] Phase 2 — Crop interactif (poignées, ratios, règle des tiers), contraste auto + couleur auto (analyse figée dans le DSL → déterministe preview/export), histogramme temps réel
 - [x] Phase 2 — Yeux rouges (zones cliquables), tampon 2 clics (défaut → source, bord adouci), pipette de blanc, 5 filtres créatifs avec intensité — le tout dans le DSL, parité preview/export testée
-- [ ] Optimisation ultérieure — preview WebGL (le DSL ne change pas)
+- [x] Preview WebGL : shader généré depuis le stack (même math 0–255, luminance recalculée par op, clamp unique en sortie), cache de programmes par signature, fallback CPU auto — parité GPU↔CPU testée dans Electron (13/13, écart max 1/255)
 - [x] Phase 3 — Reconnaissance faciale : détection @vladmandic/human (fenêtre cachée, 100 % offline, modèles servis via faceres://), embeddings faceres, clustering incrémental par cosinus (seuil 0,55), vue Personnes avec avatars recadrés et nommage
 - [x] Phase 3 — Carte MapLibre/OSM : marqueurs-miniatures des photos géotaguées (EXIF GPS), géotag manuel des photos du bac par clic sur la carte
 - [x] Phase 3 — Gestion manuelle des clusters : fusion (avec transfert de nom), scission, confirmation/rejet des rattachements, recalcul exact des centroïdes sur embeddings réels, tri des visages par confiance croissante

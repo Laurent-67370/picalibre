@@ -66,10 +66,23 @@ function createWindow(): void {
       sandbox: false
     }
   })
+  const webglTest = !!process.env.PICALIBRE_TEST_WEBGL
   if (process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL + (webglTest ? '?webgltest=1' : ''))
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), {
+      query: webglTest ? { webgltest: '1' } : undefined
+    })
+  }
+  if (webglTest) {
+    mainWindow.webContents.on('console-message', (_e, _level, message) => {
+      if (message.startsWith('[webgl-test]')) {
+        console.log(message)
+        if (message.includes('VERDICT:')) {
+          app.exit(message.includes('PASS') || message.includes('SKIP') ? 0 : 1)
+        }
+      }
+    })
   }
 }
 
