@@ -5,23 +5,28 @@
  */
 import Database from 'better-sqlite3'
 import { app } from 'electron'
-import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ScannedFile } from '../../workers/scan-worker'
+import migration001 from './migrations/001_init.sql?raw'
+
+/** Migrations embarquées dans le bundle (import Vite ?raw) — ordre croissant. */
+const MIGRATIONS: Array<{ version: number; sql: string }> = [
+  { version: 1, sql: migration001 }
+]
 
 let db: Database.Database
 
-export function initDb(migrationsDir: string): Database.Database {
+export function initDb(): Database.Database {
   const dbPath = join(app.getPath('userData'), 'library.db')
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   db.pragma('synchronous = NORMAL')
-  runMigrations(migrationsDir)
+  runMigrations()
   return db
 }
 
-function runMigrations(dir: string): void {
+function runMigrations(): void {
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
     version INTEGER PRIMARY KEY,
     applied_at INTEGER NOT NULL DEFAULT (unixepoch())
@@ -29,17 +34,14 @@ function runMigrations(dir: string): void {
   const applied = new Set(
     db.prepare('SELECT version FROM schema_migrations').all().map((r: any) => r.version)
   )
-  const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()
-  for (const file of files) {
-    const version = parseInt(file.split('_')[0], 10)
-    if (applied.has(version)) continue
-    const sql = readFileSync(join(dir, file), 'utf-8')
+  for (const m of MIGRATIONS) {
+    if (applied.has(m.version)) continue
     const apply = db.transaction(() => {
-      db.exec(sql)
-      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(version)
+      db.exec(m.sql)
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(m.version)
     })
     apply()
-    console.log(`[db] migration ${file} appliquée`)
+    console.log(`[db] migration ${m.version} appliquée`)
   }
 }
 

@@ -7,6 +7,8 @@ import { getEditState, saveStack, undo, redo } from './services/edits'
 import { renderEdited } from './services/render-sharp'
 import { startScan } from './services/scanner'
 
+app.setName('picalibre')
+
 let mainWindow: BrowserWindow
 
 // Doit être appelé AVANT app.whenReady()
@@ -180,10 +182,34 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(() => {
-  initDb(join(__dirname, 'migrations'))
+  initDb()
   registerThumbProtocol()
   registerIpc()
   createWindow()
+
+  // Mode test headless (CI) : scanne un dossier, vérifie le pipeline, quitte.
+  const testRoot = process.env.PICALIBRE_TEST_SCAN
+  if (testRoot) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(testRoot)
+    startScan(mainWindow)
+    const t0 = Date.now()
+    const iv = setInterval(() => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      const dims = q('SELECT COUNT(*) c FROM photos WHERE width IS NOT NULL')
+      console.log(`[test] photos=${photos} thumbs=${thumbs} dims=${dims}`)
+      if (photos > 0 && thumbs >= photos * 2 && dims === photos) {
+        console.log(`[test] PIPELINE OK en ${Date.now() - t0} ms`)
+        clearInterval(iv)
+        app.quit()
+      } else if (Date.now() - t0 > 60000) {
+        console.error('[test] TIMEOUT pipeline')
+        clearInterval(iv)
+        app.exit(1)
+      }
+    }, 1500)
+  }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

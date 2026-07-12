@@ -21,6 +21,14 @@ npm run build:linux  # AppImage + .deb
 npx tsx scripts/test-engine.ts  # tests du moteur d'édition
 ```
 
+### Test headless du pipeline (CI)
+
+```bash
+npm run build
+PICALIBRE_TEST_SCAN=/chemin/vers/photos npx electron out/main/index.js
+# → [test] PIPELINE OK : scan + hash + EXIF + miniatures vérifiés en DB
+```
+
 ## Architecture
 
 Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) : choix Electron vs Tauri,
