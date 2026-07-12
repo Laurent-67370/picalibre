@@ -3,7 +3,10 @@
   "version": "1.3.0",
   "description": "Gestionnaire de photos open-source inspiré de Picasa — Electron + React + TypeScript + SQLite",
   "main": "./out/main/index.js",
-  "author": "Laurent-67370",
+  "author": {
+    "name": "Laurent-67370",
+    "email": "laurent-67370@users.noreply.github.com"
+  },
   "license": "MIT",
   "scripts": {
     "dev": "electron-vite dev",
