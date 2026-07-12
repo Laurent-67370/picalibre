@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { AlbumRow, FolderRow, PhotoRow, ScanProgress, RendererApi } from '@shared/ipc'
+import Editor from './Editor'
 
 declare global {
   interface Window {
@@ -37,6 +38,7 @@ export default function App(): JSX.Element {
   const [photos, setPhotos] = useState<PhotoRow[]>([])
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [searchInput, setSearchInput] = useState('')
+  const [editing, setEditing] = useState<PhotoRow | null>(null)
 
   // ---- Tray (bac Picasa) ----
   const [tray, setTray] = useState<Map<number, PhotoRow>>(new Map())
@@ -261,6 +263,7 @@ export default function App(): JSX.Element {
                               alt={p.filename}
                               loading="lazy"
                               onClick={() => toggleTray(p)}
+                              onDoubleClick={() => setEditing(p)}
                               style={{
                                 width: '100%',
                                 aspectRatio: '1',
@@ -331,6 +334,8 @@ export default function App(): JSX.Element {
           </div>
         </main>
       </div>
+
+      {editing && <Editor photo={editing} onClose={() => setEditing(null)} />}
 
       {/* ---- Tray (bac Picasa) ---- */}
       <footer

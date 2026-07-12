@@ -1,7 +1,10 @@
 import { app, BrowserWindow, ipcMain, dialog, protocol, net } from 'electron'
 import { pathToFileURL } from 'node:url'
 import { join } from 'node:path'
+import { writeFile } from 'node:fs/promises'
 import { initDb, getDb } from './db'
+import { getEditState, saveStack, undo, redo } from './services/edits'
+import { renderEdited } from './services/render-sharp'
 import { startScan } from './services/scanner'
 
 let mainWindow: BrowserWindow
@@ -145,6 +148,30 @@ function registerIpc(): void {
       for (const pid of ids) stmt.run(pid, tag.id)
     })
     tx(photoIds)
+  })
+  ipcMain.handle('edits:get', (_e, { photoId }) => getEditState(photoId))
+  ipcMain.handle('edits:save', (_e, { photoId, stack, action }) => {
+    const s = saveStack(photoId, stack, action)
+    return { canUndo: s.canUndo, canRedo: s.canRedo }
+  })
+  ipcMain.handle('edits:undo', (_e, { photoId }) => undo(photoId))
+  ipcMain.handle('edits:redo', (_e, { photoId }) => redo(photoId))
+  ipcMain.handle('edits:export', async (_e, { photoId, format = 'jpeg', maxSize }) => {
+    const photo = getDb()
+      .prepare('SELECT filepath, filename FROM photos WHERE id = ?')
+      .get(photoId) as { filepath: string; filename: string } | undefined
+    if (!photo) return { outPath: null }
+    const base = photo.filename.replace(/\.[^.]+$/, '')
+    const ext = format === 'jpeg' ? 'jpg' : format
+    const r = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: `${base}_edit.${ext}`,
+      filters: [{ name: format.toUpperCase(), extensions: [ext] }]
+    })
+    if (r.canceled || !r.filePath) return { outPath: null }
+    const { stack } = getEditState(photoId)
+    const buffer = await renderEdited(photo.filepath, stack, { format, maxSize })
+    await writeFile(r.filePath, buffer)
+    return { outPath: r.filePath }
   })
   ipcMain.handle('dialog:pickFolder', async () => {
     const r = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] })

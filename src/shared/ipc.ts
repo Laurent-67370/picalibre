@@ -1,3 +1,5 @@
+import type { EditStack } from './edit-engine'
+
 /**
  * Contrat IPC typé — source de vérité unique entre main, preload et renderer.
  * Chaque canal déclare son payload de requête et sa réponse.
@@ -66,6 +68,11 @@ export interface IpcInvokeMap {
   'albums:addPhotos': { req: { albumId: number; photoIds: number[] }; res: void }
   'tags:list': { req: void; res: TagRow[] }
   'tags:addToPhotos': { req: { name: string; photoIds: number[] }; res: void }
+  'edits:get': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
+  'edits:save': { req: { photoId: number; stack: EditStack; action: string }; res: { canUndo: boolean; canRedo: boolean } }
+  'edits:undo': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
+  'edits:redo': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
+  'edits:export': { req: { photoId: number; format?: 'jpeg' | 'webp' | 'png'; maxSize?: number }; res: { outPath: string | null } }
   'dialog:pickFolder': { req: void; res: string | null }
 }
 
