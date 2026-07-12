@@ -20,6 +20,7 @@ type View =
   | { type: 'person'; id: number }
   | { type: 'search'; query: string }
   | { type: 'map' }
+  | { type: 'duplicates' }
 
 const PHASE_LABEL: Record<ScanProgress['phase'], string> = {
   walking: 'Parcours des dossiers',
@@ -40,6 +41,8 @@ export default function App(): JSX.Element {
   const [persons, setPersons] = useState<PersonRow[]>([])
   const [faceProgress, setFaceProgress] = useState<{ done: number; total: number } | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [dupGroups, setDupGroups] = useState<Array<{ hash: string; photos: PhotoRow[] }>>([])
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number; copied: number; skipped: number } | null>(null)
   const [view, setView] = useState<View | null>(null)
   const [photos, setPhotos] = useState<PhotoRow[]>([])
   const [progress, setProgress] = useState<ScanProgress | null>(null)
@@ -72,6 +75,11 @@ export default function App(): JSX.Element {
       setPhotos([])
       return
     }
+    if (v.type === 'duplicates') {
+      setPhotos([])
+      window.api.invoke('duplicates:list', undefined).then(setDupGroups)
+      return
+    }
     const req =
       v.type === 'folder'
         ? window.api.invoke('photos:byFolder', { folderId: v.id, offset: 0, limit: PAGE })
@@ -101,6 +109,10 @@ export default function App(): JSX.Element {
       if (p.done >= p.total) refreshSidebar()
     })
     const off4 = window.api.on('persons:changed', () => refreshSidebar())
+    const off5 = window.api.on('import:progress', (p) => {
+      setImportProgress(p.done >= p.total ? null : p)
+    })
+    void off5
     return () => {
       off1()
       off2()
@@ -108,6 +120,28 @@ export default function App(): JSX.Element {
       off4()
     }
   }, [refreshSidebar, loadView])
+
+  const runImport = async () => {
+    const sourceDir = await window.api.invoke('dialog:pickFolder', undefined)
+    if (!sourceDir) return
+    const destDir = await window.api.invoke('dialog:pickFolder', undefined)
+    if (!destDir) return
+    setImportProgress({ done: 0, total: 1, copied: 0, skipped: 0 })
+    const stats = await window.api.invoke('import:run', { sourceDir, destDir })
+    setImportProgress(null)
+    alert(
+      `Import terminé : ${stats.copied} copiée(s), ${stats.skippedDuplicates} doublon(s) ignoré(s), ${stats.errors} erreur(s).`
+    )
+  }
+
+  const mergeGroup = async (hash: string, keepId: number) => {
+    const group = dupGroups.find((g) => g.hash === hash)
+    if (!group) return
+    const removeIds = group.photos.filter((p) => p.id !== keepId).map((p) => p.id)
+    await window.api.invoke('duplicates:merge', { keepId, removeIds })
+    window.api.invoke('duplicates:list', undefined).then(setDupGroups)
+    refreshSidebar()
+  }
 
   const addFolder = async () => {
     const path = await window.api.invoke('dialog:pickFolder', undefined)
@@ -207,11 +241,25 @@ export default function App(): JSX.Element {
             }}
           />
 
+          <button onClick={runImport} style={{ width: '100%', padding: 6, marginBottom: 10, fontSize: 12 }}>
+            📥 Importer SD / appareil
+          </button>
+          {importProgress && (
+            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
+              Import… {importProgress.done}/{importProgress.total} ({importProgress.skipped} doublons)
+            </div>
+          )}
           <div
             onClick={() => loadView({ type: 'map' })}
             style={sidebarItem(view?.type === 'map')}
           >
             🗺 Carte
+          </div>
+          <div
+            onClick={() => loadView({ type: 'duplicates' })}
+            style={sidebarItem(view?.type === 'duplicates')}
+          >
+            ⧉ Doublons
           </div>
 
           <div style={{ fontSize: 11, opacity: 0.5, margin: '10px 0 4px' }}>PERSONNES</div>
@@ -356,7 +404,62 @@ export default function App(): JSX.Element {
             </div>
           )}
 
-          {view?.type === 'map' ? (
+          {view?.type === 'duplicates' ? (
+            <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+              {dupGroups.length === 0 ? (
+                <p style={{ opacity: 0.7 }}>✨ Aucun doublon exact (même hash) dans la bibliothèque.</p>
+              ) : (
+                dupGroups.map((g) => (
+                  <div
+                    key={g.hash}
+                    style={{
+                      border: '1px solid #333',
+                      borderRadius: 6,
+                      padding: 12,
+                      marginBottom: 12
+                    }}
+                  >
+                    <div style={{ fontSize: 12, opacity: 0.5, marginBottom: 8 }}>
+                      {g.photos.length} copies — hash {g.hash}
+                    </div>
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                      {g.photos.map((p) => (
+                        <div key={p.id} style={{ width: 180 }}>
+                          <img
+                            src={`thumb://library/256/${p.id}`}
+                            style={{
+                              width: '100%',
+                              aspectRatio: '1',
+                              objectFit: 'cover',
+                              borderRadius: 4
+                            }}
+                          />
+                          <div
+                            title={p.filepath}
+                            style={{
+                              fontSize: 11,
+                              opacity: 0.7,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {p.filepath}
+                          </div>
+                          <button
+                            onClick={() => mergeGroup(g.hash, p.id)}
+                            style={{ width: '100%', marginTop: 4, fontSize: 12 }}
+                          >
+                            Garder celle-ci
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : view?.type === 'map' ? (
             <MapView
               trayIds={trayIds}
               onGeotagged={() => {

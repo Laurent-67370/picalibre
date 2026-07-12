@@ -91,6 +91,9 @@ export interface IpcInvokeMap {
   'photos:byPerson': { req: { personId: number; offset: number; limit: number }; res: PhotoRow[] }
   'faces:scan': { req: void; res: { started: boolean } }
   'photos:withGps': { req: void; res: GpsPhoto[] }
+  'duplicates:list': { req: void; res: Array<{ hash: string; photos: PhotoRow[] }> }
+  'duplicates:merge': { req: { keepId: number; removeIds: number[] }; res: void }
+  'import:run': { req: { sourceDir: string; destDir: string }; res: { found: number; copied: number; skippedDuplicates: number; errors: number } }
   'photos:setGps': { req: { photoIds: number[]; lat: number; lon: number }; res: void }
   'edits:get': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
   'edits:save': { req: { photoId: number; stack: EditStack; action: string }; res: { canUndo: boolean; canRedo: boolean } }
@@ -106,6 +109,7 @@ export interface IpcEventMap {
   'library:changed': { folderIds: number[] }
   'faces:progress': { done: number; total: number }
   'persons:changed': Record<string, never>
+  'import:progress': { done: number; total: number; copied: number; skipped: number }
 }
 
 export type IpcChannel = keyof IpcInvokeMap

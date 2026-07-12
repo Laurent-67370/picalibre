@@ -5,6 +5,8 @@ import { writeFile } from 'node:fs/promises'
 import { initDb, getDb } from './db'
 import { getEditState, saveStack, undo, redo } from './services/edits'
 import { startFaceScan, isFaceScanRunning, humanModelsPath } from './services/faces'
+import { startWatchers } from './services/watcher'
+import { importFromDevice } from './services/importer'
 import { renderEdited } from './services/render-sharp'
 import { startScan } from './services/scanner'
 
@@ -70,10 +72,12 @@ function registerIpc(): void {
     const r = getDb()
       .prepare('INSERT INTO scan_roots (path, mode) VALUES (?, ?) RETURNING id')
       .get(path, mode) as { id: number }
+    startWatchers(mainWindow)
     return r
   })
   ipcMain.handle('scanRoots:remove', (_e, { id }) => {
     getDb().prepare('DELETE FROM scan_roots WHERE id = ?').run(id)
+    startWatchers(mainWindow)
   })
   ipcMain.handle('scan:start', () => {
     startScan(mainWindow)
@@ -164,6 +168,53 @@ function registerIpc(): void {
     })
     tx(photoIds)
   })
+  ipcMain.handle('duplicates:list', () => {
+    const db = getDb()
+    const hashes = db
+      .prepare(
+        `SELECT hash_xxh3 AS hash FROM photos
+         WHERE status = 'active' AND hash_xxh3 != ''
+         GROUP BY hash_xxh3 HAVING COUNT(*) > 1`
+      )
+      .all() as { hash: string }[]
+    const byHash = db.prepare(
+      `SELECT * FROM photos WHERE hash_xxh3 = ? AND status = 'active' ORDER BY filepath`
+    )
+    return hashes.map((h) => ({ hash: h.hash, photos: byHash.all(h.hash) }))
+  })
+  ipcMain.handle('duplicates:merge', (_e, { keepId, removeIds }) => {
+    const db = getDb()
+    const tx = db.transaction((ids: number[]) => {
+      for (const rid of ids) {
+        // Fusion des références : albums, tags, visages pointent vers la photo gardée
+        db.prepare(
+          `INSERT OR IGNORE INTO album_items (album_id, photo_id, position, added_at)
+           SELECT album_id, ?, position, added_at FROM album_items WHERE photo_id = ?`
+        ).run(keepId, rid)
+        db.prepare('DELETE FROM album_items WHERE photo_id = ?').run(rid)
+        db.prepare(
+          `INSERT OR IGNORE INTO photo_tags (photo_id, tag_id)
+           SELECT ?, tag_id FROM photo_tags WHERE photo_id = ?`
+        ).run(keepId, rid)
+        db.prepare('DELETE FROM photo_tags WHERE photo_id = ?').run(rid)
+        db.prepare('UPDATE faces SET photo_id = ? WHERE photo_id = ?').run(keepId, rid)
+        // La meilleure note/favori survit
+        db.prepare(
+          `UPDATE photos SET
+             rating = MAX(rating, (SELECT rating FROM photos WHERE id = ?)),
+             is_favorite = MAX(is_favorite, (SELECT is_favorite FROM photos WHERE id = ?))
+           WHERE id = ?`
+        ).run(rid, rid, keepId)
+        db.prepare(`UPDATE photos SET status = 'trashed' WHERE id = ?`).run(rid)
+      }
+    })
+    tx(removeIds)
+  })
+  ipcMain.handle('import:run', async (_e, { sourceDir, destDir }) => {
+    const stats = await importFromDevice(mainWindow, sourceDir, destDir)
+    startWatchers(mainWindow) // la nouvelle racine est surveillée
+    return stats
+  })
   ipcMain.handle('persons:list', () =>
     getDb()
       .prepare(
@@ -251,11 +302,23 @@ app.whenReady().then(() => {
   registerFaceresProtocol()
   registerIpc()
   createWindow()
+  startWatchers(mainWindow)
+
+  // Mode test headless import : PICALIBRE_TEST_IMPORT="source::dest"
+  const testImport = process.env.PICALIBRE_TEST_IMPORT
+  if (testImport) {
+    const [src, dst] = testImport.split('::')
+    void importFromDevice(mainWindow, src, dst).then((stats) => {
+      console.log('[test] IMPORT', JSON.stringify(stats))
+      setTimeout(() => app.quit(), 4000) // laisse le scan de la destination finir
+    })
+  }
 
   // Mode test headless (CI) : scanne un dossier, vérifie le pipeline, quitte.
   const testRoot = process.env.PICALIBRE_TEST_SCAN
   if (testRoot) {
     getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(testRoot)
+    startWatchers(mainWindow)
     startScan(mainWindow)
     const t0 = Date.now()
     const iv = setInterval(() => {
@@ -267,7 +330,7 @@ app.whenReady().then(() => {
       if (photos > 0 && thumbs >= photos * 2 && dims === photos) {
         console.log(`[test] PIPELINE OK en ${Date.now() - t0} ms`)
         clearInterval(iv)
-        app.quit()
+        if (!process.env.PICALIBRE_TEST_KEEPALIVE) app.quit()
       } else if (Date.now() - t0 > 60000) {
         console.error('[test] TIMEOUT pipeline')
         clearInterval(iv)

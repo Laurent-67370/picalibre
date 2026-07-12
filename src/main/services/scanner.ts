@@ -6,11 +6,13 @@ import { join } from 'node:path'
 import { getDb, getKnownFiles, upsertScannedBatch } from '../db'
 import { runPostScanPipeline } from './pipeline'
 
-export function startScan(win: BrowserWindow): void {
-  const roots = getDb()
-    .prepare(`SELECT path FROM scan_roots WHERE mode != 'excluded'`)
-    .all()
-    .map((r: any) => r.path)
+export function startScan(win: BrowserWindow, rootsOverride?: string[]): void {
+  const roots =
+    rootsOverride ??
+    getDb()
+      .prepare(`SELECT path FROM scan_roots WHERE mode != 'excluded'`)
+      .all()
+      .map((r: any) => r.path)
   if (roots.length === 0) return
 
   const worker = utilityProcess.fork(join(__dirname, 'scan-worker.js'))
