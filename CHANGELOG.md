@@ -3,6 +3,21 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.3.1] — 2026-07-12
+
+### Ajouté
+- **CI GitHub Actions Linux + Windows** : typecheck, 4 suites unitaires, build,
+  E2E pipeline complet + parité WebGL exécutés dans Electron sur runners réels
+  (Xvfb sur Linux, session native sur Windows), installeurs en artefacts
+  (AppImage/.deb et NSIS .exe). Logs E2E publiés en commentaire de commit.
+
+### Corrigé (révélé par la CI Windows)
+- Chemins `/tmp` en dur dans les suites de test → `os.tmpdir()`.
+- Les modes test ne quittaient jamais : le process exiftool persistant bloquait
+  `app.quit()` → arrêt exiftool + `app.exit` forcé.
+- `package-lock.json` désynchronisé (échec `npm ci`) ; rebuild ABI Electron
+  forcé en CI ; email d'auteur requis par la cible .deb.
+
 ## [1.3.0] — 2026-07-12
 
 ### Ajouté
@@ -154,6 +169,7 @@ Les 5 phases du plan initial sont couvertes.
   (fichier inchangé size+mtime = jamais re-hashé).
 - Configuration de build Linux (AppImage/deb), Windows (NSIS), macOS (DMG).
 
+[1.3.1]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.3.1
 [1.3.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.2.0
 [1.1.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.1
