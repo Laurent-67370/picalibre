@@ -1126,139 +1126,130 @@ export default function App(): JSX.Element {
       )}
 
       {/* ---- Tray (bac Picasa) ---- */}
-      <footer
-        style={{
-          borderTop: '1px solid #333',
-          padding: '8px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          background: '#181b20',
-          minHeight: 48
-        }}
-      >
-        <div style={{ display: 'flex', gap: 4, overflow: 'auto', maxWidth: 320 }}>
-          {[...tray.values()].slice(0, 8).map((p) => (
-            <img
-              key={p.id}
-              src={`thumb://library/256/${p.id}`}
-              onClick={() => toggleTray(p)}
-              title={`${p.filename} — retirer du bac`}
-              style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 3, cursor: 'pointer' }}
-            />
-          ))}
-          {tray.size > 8 && <span style={{ fontSize: 12, alignSelf: 'center' }}>+{tray.size - 8}</span>}
-        </div>
-        <span style={{ fontSize: 13, opacity: 0.7, minWidth: 110 }}>
-          {tray.size === 0 ? 'Bac vide — clique des photos' : `${tray.size} dans le bac`}
-        </span>
-        <input
-          placeholder="Nom d'album ou tag…"
-          value={trayName}
-          onChange={(e) => setTrayName(e.target.value)}
-          style={{
-            padding: 6,
-            background: '#14171c',
-            border: '1px solid #333',
-            borderRadius: 4,
-            color: '#d7dae0',
-            width: 170
-          }}
-        />
-        <button onClick={trayCreateAlbum} disabled={tray.size === 0 || !trayName.trim()}>
-          Nouvel album
-        </button>
-        <button onClick={trayTag} disabled={tray.size === 0 || !trayName.trim()}>
-          Tag
-        </button>
-        <select
-          value={trayAlbumId}
-          onChange={(e) => setTrayAlbumId(e.target.value === '' ? '' : Number(e.target.value))}
-          style={{ padding: 6, background: '#14171c', color: '#d7dae0', border: '1px solid #333' }}
-        >
-          <option value="">Album existant…</option>
-          {albums.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
-        <button onClick={trayAddToAlbum} disabled={tray.size === 0 || trayAlbumId === ''}>
-          Ajouter
-        </button>
-        <button onClick={() => setTray(new Map())} disabled={tray.size === 0}>
-          Vider
-        </button>
-        <span style={{ width: 1, alignSelf: 'stretch', background: '#333' }} />
-        <select
-          value={exportPreset}
-          onChange={(e) => setExportPreset(Number(e.target.value))}
-          title="Taille d'export"
-          style={{ padding: 6, background: '#14171c', color: '#d7dae0', border: '1px solid #333' }}
-        >
-          <option value={0}>Original</option>
-          <option value={2048}>2048 px</option>
-          <option value={1600}>1600 px</option>
-          <option value={1024}>1024 px</option>
-        </select>
-        <input
-          placeholder="Filigrane…"
-          value={watermark}
-          onChange={(e) => setWatermark(e.target.value)}
-          style={{ padding: 6, width: 110, background: '#14171c', border: '1px solid #333', borderRadius: 4, color: '#d7dae0' }}
-        />
-        <button onClick={trayExport} disabled={tray.size === 0} title="Exporter (éditions appliquées)">
-          💾
-        </button>
-        <button onClick={trayCsv} disabled={tray.size === 0} title="Exporter les métadonnées en CSV">
-          📄
-        </button>
-        <button onClick={trayHide} disabled={tray.size === 0} title="Masquer / démasquer">
-          {view?.type === 'hidden' ? '👁' : '🙈'}
-        </button>
-        <button
-          onClick={() => window.api.invoke('photos:print', { photoIds: trayIds, perPage: 4 })}
-          disabled={tray.size === 0}
-          title="Imprimer (4 par page)"
-        >
-          🖨
-        </button>
-        <button
-          onClick={() => window.api.invoke('share:email', { photoIds: trayIds })}
-          disabled={tray.size === 0}
-          title="Partager par email (copies 1600 px)"
-        >
-          ✉
-        </button>
-        <span style={{ width: 1, alignSelf: 'stretch', background: '#333' }} />
-        <button
-          onClick={() => setSlideshow(true)}
-          disabled={tray.size === 0 && photos.length === 0}
-          title="Diaporama plein écran (bac, sinon vue courante)"
-        >
-          ▶
-        </button>
-        <select
-          value={collageLayout}
-          onChange={(e) => setCollageLayout(e.target.value as typeof collageLayout)}
-          title="Layout du collage"
-          style={{ padding: 6, background: '#14171c', color: '#d7dae0', border: '1px solid #333' }}
-        >
-          <option value="grid">Grille</option>
-          <option value="mosaic">Mosaïque</option>
-          <option value="row">Bande H</option>
-          <option value="column">Bande V</option>
-        </select>
-        <button onClick={trayCollage} disabled={tray.size === 0} title="Créer un collage">
-          🧩
-        </button>
-        <button onClick={trayMovie} disabled={tray.size === 0 || movieBusy} title="Créer un film MP4">
-          {movieBusy ? '⏳' : '🎬'}
-        </button>
-        {exportProgress && (
-          <span style={{ fontSize: 12, opacity: 0.7 }}>
-            {exportProgress.done}/{exportProgress.total}
-          </span>
+      <footer className="ft">
+        {tray.size === 0 ? (
+          <div className="ftempty">
+            <span className="hint">🧺 Clique sur des photos pour remplir le bac, puis agis dessus ici</span>
+            <button
+              onClick={() => setSlideshow(true)}
+              disabled={photos.length === 0}
+              title="Diaporama de la vue courante"
+            >
+              ▶ Diaporama
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="ftgroup" style={{ maxWidth: 330 }}>
+              <span className="traycount">{tray.size}</span>
+              <div style={{ display: 'flex', gap: 4, overflow: 'auto' }}>
+                {[...tray.values()].slice(0, 6).map((p) => (
+                  <img
+                    key={p.id}
+                    className="traythumb"
+                    src={`thumb://library/256/${p.id}`}
+                    onClick={() => toggleTray(p)}
+                    title={`${p.filename} — clic pour retirer`}
+                  />
+                ))}
+                {tray.size > 6 && (
+                  <span style={{ fontSize: 12, alignSelf: 'center', color: '#94a3b8' }}>
+                    +{tray.size - 6}
+                  </span>
+                )}
+              </div>
+              <button className="danger" onClick={() => setTray(new Map())} title="Vider le bac">
+                ✕
+              </button>
+            </div>
+
+            <div className="ftgroup">
+              <span className="ftlabel">Organiser</span>
+              <input
+                placeholder="Nom d'album ou tag…"
+                value={trayName}
+                onChange={(e) => setTrayName(e.target.value)}
+                style={{ width: 150 }}
+              />
+              <button className="primary" onClick={trayCreateAlbum} disabled={!trayName.trim()}>
+                ➕ Album
+              </button>
+              <button onClick={trayTag} disabled={!trayName.trim()}>
+                🏷 Tag
+              </button>
+              <select
+                value={trayAlbumId}
+                onChange={(e) => setTrayAlbumId(e.target.value === '' ? '' : Number(e.target.value))}
+              >
+                <option value="">Album existant…</option>
+                {albums.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+              <button onClick={trayAddToAlbum} disabled={trayAlbumId === ''}>
+                Ajouter
+              </button>
+            </div>
+
+            <div className="ftgroup">
+              <span className="ftlabel">Créer</span>
+              <button onClick={() => setSlideshow(true)} title="Diaporama plein écran du bac">
+                ▶ Diaporama
+              </button>
+              <select value={collageLayout} onChange={(e) => setCollageLayout(e.target.value as typeof collageLayout)} title="Disposition du collage">
+                <option value="grid">Grille</option>
+                <option value="mosaic">Mosaïque</option>
+                <option value="row">Bande H</option>
+                <option value="column">Bande V</option>
+              </select>
+              <button onClick={trayCollage} title="Assembler les photos du bac en une image">
+                🧩 Collage
+              </button>
+              <button className="primary" onClick={trayMovie} disabled={movieBusy} title="Film MP4 : photos + vidéos, fondus, musique">
+                {movieBusy ? '⏳ Film…' : '🎬 Film'}
+              </button>
+            </div>
+
+            <div className="ftgroup">
+              <span className="ftlabel">Partager</span>
+              <select value={exportPreset} onChange={(e) => setExportPreset(Number(e.target.value))} title="Taille d'export">
+                <option value={0}>Original</option>
+                <option value={2048}>2048 px</option>
+                <option value={1600}>1600 px</option>
+                <option value={1024}>1024 px</option>
+              </select>
+              <input
+                placeholder="Filigrane…"
+                value={watermark}
+                onChange={(e) => setWatermark(e.target.value)}
+                style={{ width: 100 }}
+                title="Texte du filigrane (optionnel)"
+              />
+              <button onClick={trayExport} title="Exporter les photos (éditions appliquées)">
+                💾 Exporter
+              </button>
+              <button onClick={() => window.api.invoke('photos:print', { photoIds: trayIds, perPage: 4 })} title="Imprimer, 4 par page">
+                🖨 Imprimer
+              </button>
+              <button onClick={() => window.api.invoke('share:email', { photoIds: trayIds })} title="Email avec copies 1600 px">
+                ✉ Email
+              </button>
+              <button onClick={trayCsv} title="Métadonnées en CSV">
+                📄 CSV
+              </button>
+              <button onClick={trayHide} title="Masquer / démasquer">
+                {view?.type === 'hidden' ? '👁 Démasquer' : '🙈 Masquer'}
+              </button>
+            </div>
+
+            {exportProgress && (
+              <span style={{ fontSize: 12, color: '#94a3b8', flexShrink: 0 }}>
+                {exportProgress.done}/{exportProgress.total}
+              </span>
+            )}
+          </>
         )}
       </footer>
     </div>

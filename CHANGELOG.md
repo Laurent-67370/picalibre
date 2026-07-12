@@ -3,6 +3,22 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.4.3] — 2026-07-12
+
+### Modifié
+- **Barre d'actions du bac entièrement repensée** (elle était illisible :
+  icônes seules minuscules, gris sur gris, sans hiérarchie) :
+  - boutons avec icône **et** libellé, survol net, état désactivé évident ;
+  - actions regroupées sous étiquettes : bac (compteur orange + vignettes +
+    vider), **Organiser** (album/tag), **Créer** (diaporama, collage, film),
+    **Partager** (export, impression, email, CSV, masquage) ;
+  - actions principales en orange (palette navy/orange) ;
+  - bac vide → invitation claire « Clique sur des photos… » au lieu d'une
+    rangée de boutons grisés ;
+  - retour à la ligne automatique : plus rien de coupé en fenêtre étroite.
+- Feuille de style globale : tous les boutons, champs et listes de
+  l'application héritent du nouveau style (survol, focus orange, arrondis).
+
 ## [1.4.2] — 2026-07-12
 
 ### Corrigé
@@ -211,6 +227,7 @@ Les 5 phases du plan initial sont couvertes.
   (fichier inchangé size+mtime = jamais re-hashé).
 - Configuration de build Linux (AppImage/deb), Windows (NSIS), macOS (DMG).
 
+[1.4.3]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.3
 [1.4.2]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.2
 [1.4.1]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.1
 [1.4.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.0

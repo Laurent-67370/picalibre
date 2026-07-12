@@ -626,6 +626,12 @@ app.whenReady().then(() => {
       await mainWindow.webContents.executeJavaScript(
         `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('📁')); if (el) el.click(); })()`
       )
+      // Remplir le bac avec les 2 premières vignettes pour capturer la barre d'actions
+      setTimeout(() => {
+        void mainWindow.webContents.executeJavaScript(
+          `(() => { [...document.querySelectorAll('main figure img')].slice(0, 2).forEach((im) => im.click()) })()`
+        )
+      }, 3000)
       setTimeout(async () => {
         const img = await mainWindow.webContents.capturePage()
         await writeFile(join(shotDir, 'capture.png'), img.toPNG())
