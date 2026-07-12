@@ -166,13 +166,14 @@ function registerThumbProtocol(): void {
         })
       }
 
-      cachePath = await generateThumbOnTheFly(
-        photoId,
-        size,
-        photo.filepath,
-        photo.hash_xxh3,
-        photo.media_type
-      )
+      cachePath =
+        (await generateThumbOnTheFly(
+          photoId,
+          size,
+          photo.filepath,
+          photo.hash_xxh3,
+          photo.media_type
+        )) ?? undefined
 
       if (!cachePath) {
         return new Response('not found', {
@@ -598,6 +599,25 @@ app.whenReady().then(() => {
       console.log('[test] IMPORT', JSON.stringify(stats))
       setTimeout(() => exitTest(0), 4000) // laisse le scan de la destination finir
     })
+  }
+
+  // Mode capture : scanne, sélectionne le 1er dossier, capture la fenêtre en PNG, quitte.
+  const shotDir = process.env.PICALIBRE_TEST_SCREENSHOT
+  if (shotDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(shotDir)
+    startScan(mainWindow)
+    setTimeout(async () => {
+      // Sélectionner le premier dossier dans l'UI
+      await mainWindow.webContents.executeJavaScript(
+        `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('📁')); if (el) el.click(); })()`
+      )
+      setTimeout(async () => {
+        const img = await mainWindow.webContents.capturePage()
+        await writeFile(join(shotDir, 'capture.png'), img.toPNG())
+        console.log('[shot] capture écrite')
+        exitTest(0)
+      }, 6000)
+    }, 9000)
   }
 
   // Mode test headless (CI) : scanne un dossier, vérifie le pipeline, quitte.

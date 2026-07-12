@@ -3,6 +3,25 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.4.1] — 2026-07-12
+
+### Corrigé
+- **Images des dossiers importés qui ne s'affichaient pas** (PR #3 finalisée) :
+  - Chromium mettait en cache les 404 du protocole `thumb://` pendant le scan et
+    ne redemandait jamais l'image une fois la miniature prête → `Cache-Control:
+    no-store` sur les 404 ;
+  - génération **à la volée** d'une miniature manquante au moment de l'affichage
+    (le pipeline de fond ne sert plus qu'à pré-générer en masse) ;
+  - deux dossiers ajoutés rapidement : le 2ᵉ pipeline était silencieusement
+    ignoré (`running` déjà vrai) → file d'attente avec relance ;
+  - composant `ThumbImg` avec retry à backoff (500 ms → 8 s) côté interface ;
+  - régénération automatique si le fichier de cache a disparu du disque.
+- Erreur TypeScript de la PR #3 qui bloquait la CI (null vs undefined).
+
+### Ajouté
+- Mode `PICALIBRE_TEST_SCREENSHOT` : scan + sélection du 1er dossier + capture
+  PNG de la fenêtre — validation visuelle de la grille en CI/headless.
+
 ## [1.4.0] — 2026-07-12
 
 ### Ajouté
@@ -180,6 +199,7 @@ Les 5 phases du plan initial sont couvertes.
   (fichier inchangé size+mtime = jamais re-hashé).
 - Configuration de build Linux (AppImage/deb), Windows (NSIS), macOS (DMG).
 
+[1.4.1]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.1
 [1.4.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.0
 [1.3.1]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.3.1
 [1.3.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.3.0
