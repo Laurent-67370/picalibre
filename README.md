@@ -1,7 +1,24 @@
 # PicaLibre 📸
 
-Gestionnaire de photos desktop open-source inspiré de **Picasa** (Google, 2002–2016).
-Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+[![Version](https://img.shields.io/badge/version-1.2.0-f97316)](CHANGELOG.md)
+[![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
+![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
+
+Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
+(Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 1.2.0
+
+- 🎬 **Vidéos dans les films** : mixe photos et vidéos dans un même MP4 —
+  segments normalisés puis assemblage en copie de flux (pas de double ré-encodage)
+- 🌅 **Transitions en fondu** (image + son) entre les éléments
+- 🎵 **Multi-pistes audio** : plusieurs fichiers enchaînés en bande-son, bornée
+  à la durée exacte du film
+- 🖼️ **Miniatures vidéo** dans la grille (frame à 10 % de la durée) avec badge 🎬 + durée
+- 🧩 **timeline-core** : fondation du futur éditeur de montage (pistes, trim,
+  crossfade/wipe/slide)
+
+Détail complet des versions : [CHANGELOG.md](CHANGELOG.md)
 
 ## Principes
 
@@ -35,8 +52,6 @@ Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) : choix Electron vs Tauri,
 schéma des processus, DSL d'édition, schéma SQL complet, plan par phases.
 
 ## État d'avancement
-
-Historique détaillé des versions : [CHANGELOG.md](CHANGELOG.md)
 
 - [x] Phase 0 — Socle : electron-vite, DB + migrations, contrat IPC typé
 - [x] Phase 1 — Scanner récursif + hash xxh3 incrémental
