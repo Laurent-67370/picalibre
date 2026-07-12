@@ -67,7 +67,11 @@
       "target": "nsis"
     },
     "mac": {
-      "target": "dmg"
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.photography"
     },
     "publish": {
       "provider": "github",
