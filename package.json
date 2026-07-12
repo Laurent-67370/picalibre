@@ -1,0 +1,47 @@
+{
+  "name": "picalibre",
+  "version": "0.1.0",
+  "description": "Gestionnaire de photos open-source inspiré de Picasa — Electron + React + TypeScript + SQLite",
+  "main": "./out/main/index.js",
+  "author": "Laurent-67370",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "postinstall": "electron-builder install-app-deps",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build:linux": "electron-vite build && electron-builder --linux",
+    "build:win": "electron-vite build && electron-builder --win",
+    "build:mac": "electron-vite build && electron-builder --mac"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.0",
+    "chokidar": "^4.0.3",
+    "exiftool-vendored": "^28.3.1",
+    "sharp": "^0.33.5",
+    "xxhash-wasm": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "zustand": "^5.0.2"
+  },
+  "build": {
+    "appId": "fr.lhusser.picalibre",
+    "productName": "PicaLibre",
+    "files": ["out/**"],
+    "asarUnpack": ["**/*.node", "node_modules/sharp/**", "node_modules/better-sqlite3/**"],
+    "linux": { "target": ["AppImage", "deb"], "category": "Graphics" },
+    "win": { "target": "nsis" },
+    "mac": { "target": "dmg" }
+  }
+}
