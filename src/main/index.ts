@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import { initDb, getDb } from './db'
 import { getEditState, saveStack, undo, redo } from './services/edits'
+import { shutdownExiftool } from './services/exif'
 import { startFaceScan, isFaceScanRunning, humanModelsPath } from './services/faces'
 import { mergePersons, splitFaces, confirmFaces, rejectFaces, facesByPerson } from './services/faces/manage-core'
 import { startWatchers } from './services/watcher'
@@ -422,6 +423,15 @@ function registerIpc(): void {
   })
 }
 
+
+/** Sortie des modes test CI : ferme exiftool (process enfant persistant) puis force la fin. */
+function exitTest(code: number): void {
+  void shutdownExiftool()
+    .catch(() => {})
+    .then(() => app.exit(code))
+  setTimeout(() => app.exit(code), 3000) // filet de sécurité
+}
+
 app.whenReady().then(() => {
   initDb()
   registerThumbProtocol()
@@ -435,7 +445,7 @@ app.whenReady().then(() => {
   if (testRelocate) {
     void relocateLibrary(mainWindow, testRelocate).then((stats) => {
       console.log('[test] RELOCATE', JSON.stringify(stats))
-      app.quit()
+      exitTest(0)
     })
   }
 
@@ -445,7 +455,7 @@ app.whenReady().then(() => {
     const [src, dst] = testImport.split('::')
     void importFromDevice(mainWindow, src, dst).then((stats) => {
       console.log('[test] IMPORT', JSON.stringify(stats))
-      setTimeout(() => app.quit(), 4000) // laisse le scan de la destination finir
+      setTimeout(() => exitTest(0), 4000) // laisse le scan de la destination finir
     })
   }
 
@@ -465,11 +475,11 @@ app.whenReady().then(() => {
       if (photos > 0 && thumbs >= photos * 2 && dims === photos) {
         console.log(`[test] PIPELINE OK en ${Date.now() - t0} ms`)
         clearInterval(iv)
-        if (!process.env.PICALIBRE_TEST_KEEPALIVE) app.quit()
+        if (!process.env.PICALIBRE_TEST_KEEPALIVE) exitTest(0)
       } else if (Date.now() - t0 > 60000) {
         console.error('[test] TIMEOUT pipeline')
         clearInterval(iv)
-        app.exit(1)
+        exitTest(1)
       }
     }, 1500)
   }
