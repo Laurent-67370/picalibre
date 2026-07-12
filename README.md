@@ -30,7 +30,8 @@ schéma des processus, DSL d'édition, schéma SQL complet, plan par phases.
 - [x] Phase 0 — Socle : electron-vite, DB + migrations, contrat IPC typé
 - [x] Phase 1 — Scanner récursif + hash xxh3 incrémental
 - [x] Phase 1 — Miniatures sharp (cache par hash, protocole thumb://), extraction EXIF/GPS, grille + notation étoiles
-- [ ] Phase 1 — Grille virtualisée (TanStack Virtual), albums, tags, tray, recherche FTS
+- [x] Phase 1 — Grille virtualisée (TanStack Virtual), tray Picasa, albums virtuels, tags, recherche
+- [ ] Phase 1 — Import SD/appareil photo, détection doublons, watcher chokidar temps réel
 - [ ] Phase 2 — Moteur d'édition non destructive (preview WebGL / export sharp)
 - [ ] Phase 3 — Visages & géolocalisation
 - [ ] Phase 4 — Collages, diaporamas, movies

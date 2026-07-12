@@ -1,6 +1,6 @@
 {
   "name": "picalibre",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Gestionnaire de photos open-source inspiré de Picasa — Electron + React + TypeScript + SQLite",
   "main": "./out/main/index.js",
   "author": "Laurent-67370",
@@ -22,6 +22,7 @@
     "xxhash-wasm": "^1.1.0"
   },
   "devDependencies": {
+    "@tanstack/react-virtual": "^3.11.1",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.12",

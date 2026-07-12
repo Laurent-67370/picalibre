@@ -37,6 +37,19 @@ export interface ScanProgress {
   currentPath?: string
 }
 
+export interface AlbumRow {
+  id: number
+  name: string
+  kind: 'manual' | 'person' | 'smart'
+  count: number
+}
+
+export interface TagRow {
+  id: number
+  name: string
+  count: number
+}
+
 /** Canaux invoke (requête → réponse) */
 export interface IpcInvokeMap {
   'scanRoots:list': { req: void; res: { id: number; path: string; mode: string }[] }
@@ -45,7 +58,14 @@ export interface IpcInvokeMap {
   'scan:start': { req: { rootId?: number }; res: { jobId: number } }
   'folders:tree': { req: void; res: FolderRow[] }
   'photos:byFolder': { req: { folderId: number; offset: number; limit: number }; res: PhotoRow[] }
+  'photos:byAlbum': { req: { albumId: number; offset: number; limit: number }; res: PhotoRow[] }
+  'photos:search': { req: { query: string; offset: number; limit: number }; res: PhotoRow[] }
   'photos:setRating': { req: { photoId: number; rating: number }; res: void }
+  'albums:list': { req: void; res: AlbumRow[] }
+  'albums:create': { req: { name: string }; res: { id: number } }
+  'albums:addPhotos': { req: { albumId: number; photoIds: number[] }; res: void }
+  'tags:list': { req: void; res: TagRow[] }
+  'tags:addToPhotos': { req: { name: string; photoIds: number[] }; res: void }
   'dialog:pickFolder': { req: void; res: string | null }
 }
 
