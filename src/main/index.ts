@@ -76,14 +76,18 @@ function createWindow(): void {
 /** Photos + stacks d'édition, dans l'ordre demandé. */
 function photosWithStacks(photoIds: number[]): Array<CollageItem & MovieItem> {
   const db = getDb()
-  const getPhoto = db.prepare('SELECT filepath FROM photos WHERE id = ?')
+  const getPhoto = db.prepare('SELECT filepath, media_type FROM photos WHERE id = ?')
   const getStack = db.prepare('SELECT current_stack FROM edits WHERE photo_id = ?')
   const items: Array<CollageItem & MovieItem> = []
   for (const id of photoIds) {
-    const p = getPhoto.get(id) as { filepath: string } | undefined
+    const p = getPhoto.get(id) as { filepath: string; media_type: string } | undefined
     if (!p) continue
     const e = getStack.get(id) as { current_stack: string } | undefined
-    items.push({ filepath: p.filepath, stack: parseStack(e?.current_stack ?? '{}') })
+    items.push({
+      filepath: p.filepath,
+      stack: parseStack(e?.current_stack ?? '{}'),
+      isVideo: p.media_type === 'video'
+    })
   }
   return items
 }
@@ -381,15 +385,23 @@ function registerIpc(): void {
     const items = photosWithStacks(photoIds)
     return makeCollage(items, layout, outFile)
   })
-  ipcMain.handle('create:movie', async (_e, { photoIds, durationSec, audioPath, outFile }) => {
+  ipcMain.handle('create:movie', async (_e, { photoIds, durationSec, audioPaths, transition, outFile }) => {
     const items = photosWithStacks(photoIds)
-    await makeMovie(items, {
+    return makeMovie(items, {
       ffmpegPath: (ffmpegPath as unknown as string) ?? 'ffmpeg',
       durationSec,
-      audioPath,
+      audioPaths,
+      transition,
       outFile,
       onProgress: (done, total) => mainWindow.webContents.send('movie:progress', { done, total })
     })
+  })
+  ipcMain.handle('dialog:pickFiles', async (_e, { name, extensions }) => {
+    const r = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name, extensions }]
+    })
+    return r.canceled ? [] : r.filePaths
   })
   ipcMain.handle('dialog:pickFolder', async () => {
     const r = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] })

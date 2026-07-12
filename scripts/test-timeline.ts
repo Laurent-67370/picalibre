@@ -1,48 +1,13 @@
 // timeline-core.test.ts
 import Database from 'better-sqlite3';
-import { TimelineCore } from './timeline-core';
-import { beforeEach, describe, it, expect } from 'vitest';
+import { TimelineCore } from '../src/main/services/timeline/core';
+import assert from 'node:assert';
+import { readFileSync } from 'node:fs';
 
 function createInMemoryDb(): Database.Database {
   const db = new Database(':memory:');
-  db.exec(`
-    CREATE TABLE timelines (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-    CREATE TABLE tracks (
-      id TEXT PRIMARY KEY,
-      timeline_id TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('video', 'audio')),
-      order_index INTEGER NOT NULL,
-      gain REAL DEFAULT 1.0,
-      muted INTEGER DEFAULT 0,
-      visible INTEGER DEFAULT 1,
-      FOREIGN KEY (timeline_id) REFERENCES timelines(id) ON DELETE CASCADE
-    );
-    CREATE TABLE clips (
-      id TEXT PRIMARY KEY,
-      track_id TEXT NOT NULL,
-      media_type TEXT NOT NULL CHECK(media_type IN ('photo', 'video', 'audio')),
-      source_path TEXT NOT NULL,
-      start_time REAL NOT NULL,
-      duration REAL NOT NULL,
-      source_in_offset REAL DEFAULT 0,
-      source_out_offset REAL NOT NULL,
-      transition_in_id TEXT,
-      transition_out_id TEXT,
-      volume REAL DEFAULT 1.0,
-      FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
-    );
-    CREATE TABLE transitions (
-      id TEXT PRIMARY KEY,
-      type TEXT NOT NULL CHECK(type IN ('crossfade', 'wipe', 'slide')),
-      duration REAL NOT NULL,
-      direction TEXT
-    );
-  `);
+  db.pragma('foreign_keys = ON');
+  db.exec(readFileSync('src/main/db/migrations/003_timeline.sql', 'utf8'));
   return db;
 }
 
@@ -59,24 +24,26 @@ function createAudioTrack(db: Database.Database, timelineId: string): string {
     .run(trackId, timelineId);
   return trackId;
 }
-describe('TimelineCore', () => {
-  let db: Database.Database;
-  let core: TimelineCore;
 
-  beforeEach(() => {
+let db: Database.Database = createInMemoryDb()
+let core: TimelineCore = new TimelineCore(db)
+const tests: Array<[string, () => void]> = []
+
+
+  function freshState(): void {
     db = createInMemoryDb();
     core = new TimelineCore(db);
-  });
+  }
 
-  it('1. crée une timeline avec les bons champs par défaut', () => {
+  tests.push(['1. crée une timeline avec les bons champs par défaut', () => { freshState?.();
     const timeline = core.createTimeline('project-1');
-    expect(timeline.projectId).toBe('project-1');
-    expect(timeline.videoTracks).toEqual([]);
-    expect(timeline.audioTracks).toEqual([]);
-    expect(timeline.totalDuration).toBe(0);
-  });
+    assert.strictEqual(timeline.projectId, 'project-1');
+    assert.deepStrictEqual(timeline.videoTracks, []);
+    assert.deepStrictEqual(timeline.audioTracks, []);
+    assert.strictEqual(timeline.totalDuration, 0);
+  }]);
 
-  it('2. ajoute un clip vidéo sans modifier le fichier source', () => {
+  tests.push(['2. ajoute un clip vidéo sans modifier le fichier source', () => { freshState?.();
     const timeline = core.createTimeline('project-1');
     const trackId = createVideoTrack(db, timeline.id);
     const clip = core.addClip(trackId, {
@@ -87,13 +54,13 @@ describe('TimelineCore', () => {
       sourceInOffset: 0,
       sourceOutOffset: 10,
     });
-    expect(clip.sourcePath).toBe('/media/clip1.mp4');
+    assert.strictEqual(clip.sourcePath, '/media/clip1.mp4');
     const row = db.prepare(`SELECT * FROM clips WHERE id = ?`).get(clip.id) as any;
-    expect(row.source_in_offset).toBe(0);
-    expect(row.source_out_offset).toBe(10);
-  });
+    assert.strictEqual(row.source_in_offset, 0);
+    assert.strictEqual(row.source_out_offset, 10);
+  }]);
 
-  it('3. trim un clip sans altérer sourcePath ni créer de nouveau fichier', () => {
+  tests.push(['3. trim un clip sans altérer sourcePath ni créer de nouveau fichier', () => { freshState?.();
     const timeline = core.createTimeline('project-1');
     const trackId = createVideoTrack(db, timeline.id);
     const clip = core.addClip(trackId, {
@@ -102,13 +69,13 @@ describe('TimelineCore', () => {
     });
     core.trimClip(clip.id, 2, 8);
     const row = db.prepare(`SELECT * FROM clips WHERE id = ?`).get(clip.id) as any;
-    expect(row.source_in_offset).toBe(2);
-    expect(row.source_out_offset).toBe(8);
-    expect(row.duration).toBe(6);
-    expect(row.source_path).toBe('/media/clip1.mp4');
-  });
+    assert.strictEqual(row.source_in_offset, 2);
+    assert.strictEqual(row.source_out_offset, 8);
+    assert.strictEqual(row.duration, 6);
+    assert.strictEqual(row.source_path, '/media/clip1.mp4');
+  }]);
 
-  it('4. déplace un clip vers un nouveau start_time sur la même piste', () => {
+  tests.push(['4. déplace un clip vers un nouveau start_time sur la même piste', () => { freshState?.();
     const timeline = core.createTimeline('project-1');
     const trackId = createVideoTrack(db, timeline.id);
     const clip = core.addClip(trackId, {
@@ -117,10 +84,10 @@ describe('TimelineCore', () => {
     });
     core.moveClip(clip.id, 12);
     const row = db.prepare(`SELECT * FROM clips WHERE id = ?`).get(clip.id) as any;
-    expect(row.start_time).toBe(12);
-  });
+    assert.strictEqual(row.start_time, 12);
+  }]);
 
-  it('5. déplace un clip vers une autre piste (drag cross-track)', () => {
+  tests.push(['5. déplace un clip vers une autre piste (drag cross-track)', () => { freshState?.();
     const timeline = core.createTimeline('project-1');
     const trackA = createVideoTrack(db, timeline.id);
     const trackB = createVideoTrack(db, timeline.id);
@@ -130,11 +97,11 @@ describe('TimelineCore', () => {
     });
     core.moveClip(clip.id, 3, trackB);
     const row = db.prepare(`SELECT * FROM clips WHERE id = ?`).get(clip.id) as any;
-    expect(row.track_id).toBe(trackB);
-    expect(row.start_time).toBe(3);
-  });
+    assert.strictEqual(row.track_id, trackB);
+    assert.strictEqual(row.start_time, 3);
+  }]);
 
-  it('6. ajoute une transition crossfade et la lie au clip', () => {
+  tests.push(['6. ajoute une transition crossfade et la lie au clip', () => { freshState?.();
     const timeline = core.createTimeline('project-1');
     const trackId = createVideoTrack(db, timeline.id);
     const clip = core.addClip(trackId, {
@@ -143,12 +110,12 @@ describe('TimelineCore', () => {
     });
     const transition = core.addTransition(clip.id, 'in', { type: 'crossfade', duration: 1 });
     const row = db.prepare(`SELECT * FROM clips WHERE id = ?`).get(clip.id) as any;
-    expect(row.transition_in_id).toBe(transition.id);
+    assert.strictEqual(row.transition_in_id, transition.id);
     const transitionRow = db.prepare(`SELECT * FROM transitions WHERE id = ?`).get(transition.id) as any;
-    expect(transitionRow.type).toBe('crossfade');
-  });
+    assert.strictEqual(transitionRow.type, 'crossfade');
+  }]);
 
-  it('7. calcule totalDuration correctement sur pistes mixtes vidéo/audio', () => {
+  tests.push(['7. calcule totalDuration correctement sur pistes mixtes vidéo/audio', () => { freshState?.();
     const timeline = core.createTimeline('project-1');
     const videoTrack = createVideoTrack(db, timeline.id);
     const audioTrack = createAudioTrack(db, timeline.id);
@@ -161,10 +128,10 @@ describe('TimelineCore', () => {
       startTime: 5, duration: 10, sourceInOffset: 0, sourceOutOffset: 10,
     });
     const result = core.getTimeline(timeline.id);
-    expect(result?.totalDuration).toBe(15);
-  });
+    assert.strictEqual(result?.totalDuration, 15);
+  }]);
 
-  it('8. supprime un clip sans affecter les autres clips de la piste', () => {
+  tests.push(['8. supprime un clip sans affecter les autres clips de la piste', () => { freshState?.();
     const timeline = core.createTimeline('project-1');
     const trackId = createVideoTrack(db, timeline.id);
     const clip1 = core.addClip(trackId, {
@@ -177,7 +144,20 @@ describe('TimelineCore', () => {
     });
     core.deleteClip(clip1.id);
     const result = core.getTimeline(timeline.id);
-    expect(result?.videoTracks[0].clips).toHaveLength(1);
-    expect(result?.videoTracks[0].clips[0].id).toBe(clip2.id);
-  });
-});
+    assert.strictEqual((result?.videoTracks[0].clips).length, 1);
+    assert.strictEqual(result?.videoTracks[0].clips[0].id, clip2.id);
+  }]);
+
+// --- Runner séquentiel ---
+let passed = 0
+for (const [name, fn] of tests) {
+  try {
+    fn()
+    passed++
+    console.log('✅', name)
+  } catch (e) {
+    console.error('❌', name, '\n  ', (e as Error).message)
+    process.exit(1)
+  }
+}
+console.log(`\n🎉 Timeline core : ${passed}/${tests.length}`)

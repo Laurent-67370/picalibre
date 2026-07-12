@@ -4,7 +4,13 @@
  */
 import { utilityProcess, BrowserWindow, app } from 'electron'
 import { join } from 'node:path'
+import { spawn } from 'node:child_process'
+import { mkdir, unlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import ffmpegPath from 'ffmpeg-static'
+import sharp from 'sharp'
 import { getDb } from '../db'
+import { probeDuration } from './movie'
 import { extractExifBatch } from './exif'
 import { startFaceScan } from './faces'
 import type { ThumbResult } from '../../workers/thumb-worker'
@@ -21,12 +27,85 @@ export async function runPostScanPipeline(win: BrowserWindow): Promise<void> {
   try {
     await exifPhase(win)
     await thumbsPhase(win)
+    await videoThumbsPhase(win)
     win.webContents.send('scan:progress', { phase: 'done', filesFound: 0, filesProcessed: 0 })
     win.webContents.send('library:changed', { folderIds: [] })
     // Détection de visages en tâche de fond (hors mode test headless)
     if (!process.env.PICALIBRE_TEST_SCAN) void startFaceScan(win)
   } finally {
     running = false
+  }
+}
+
+/**
+ * Miniatures des VIDÉOS : frame à 10 % de la durée (ffmpeg) → sharp 256/1024
+ * dans le même cache adressé par hash que les images.
+ */
+async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
+  const db = getDb()
+  const items = db
+    .prepare(
+      `SELECT p.id AS photoId, p.filepath, p.hash_xxh3 AS hash
+       FROM photos p
+       WHERE p.status = 'active' AND p.media_type = 'video' AND p.hash_xxh3 != ''
+         AND NOT EXISTS (
+           SELECT 1 FROM thumbnails t WHERE t.photo_id = p.id AND t.size = 256
+         )`
+    )
+    .all() as { photoId: number; filepath: string; hash: string }[]
+  if (items.length === 0) return
+
+  const ff = (ffmpegPath as unknown as string) ?? 'ffmpeg'
+  const insertThumb = db.prepare(
+    `INSERT OR REPLACE INTO thumbnails (photo_id, size, cache_path) VALUES (?, ?, ?)`
+  )
+  const updateMeta = db.prepare(
+    `UPDATE photos SET width = COALESCE(?, width), height = COALESCE(?, height),
+       duration_ms = COALESCE(?, duration_ms) WHERE id = ?`
+  )
+
+  let done = 0
+  for (const item of items) {
+    try {
+      const dur = await probeDuration(ff, item.filepath).catch(() => 0)
+      const seek = dur > 1 ? (dur * 0.1).toFixed(2) : '0'
+      const tmpFrame = join(tmpdir(), `picalibre-vf-${item.photoId}.jpg`)
+      await new Promise<void>((resolve, reject) => {
+        const proc = spawn(ff, [
+          '-y', '-ss', seek, '-i', item.filepath,
+          '-frames:v', '1', '-q:v', '3', tmpFrame
+        ])
+        proc.on('error', reject)
+        proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}`))))
+      })
+      const base = sharp(tmpFrame, { failOn: 'none' })
+      const meta = await base.metadata()
+      for (const size of [256, 1024]) {
+        const cachePath = join(thumbsCacheDir(), item.hash.slice(0, 2), `${item.hash}_${size}.webp`)
+        await mkdir(join(thumbsCacheDir(), item.hash.slice(0, 2)), { recursive: true })
+        await base
+          .clone()
+          .resize(size, size, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 82 })
+          .toFile(cachePath)
+        insertThumb.run(item.photoId, size, cachePath)
+      }
+      updateMeta.run(
+        meta.width ?? null,
+        meta.height ?? null,
+        dur > 0 ? Math.round(dur * 1000) : null,
+        item.photoId
+      )
+      await unlink(tmpFrame).catch(() => {})
+    } catch (err) {
+      console.error('[video-thumb]', item.filepath, (err as Error).message)
+    }
+    done++
+    win.webContents.send('scan:progress', {
+      phase: 'thumbs',
+      filesFound: items.length,
+      filesProcessed: done
+    })
   }
 }
 

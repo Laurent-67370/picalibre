@@ -247,27 +247,32 @@ export default function App(): JSX.Element {
     if (trayIds.length === 0) return
     const wantAudio = confirm('Ajouter une piste audio (MP3/M4A/WAV) ?')
     let audioPath: string | null = null
+    let audioPaths: string[] = []
     if (wantAudio) {
-      audioPath = await window.api.invoke('dialog:pickFile', {
-        name: 'Audio',
+      audioPaths = await window.api.invoke('dialog:pickFiles', {
+        name: 'Audio (sélection multiple = pistes enchaînées)',
         extensions: ['mp3', 'm4a', 'wav', 'ogg', 'flac']
       })
     }
+    const transition = confirm('Ajouter des transitions en fondu entre les éléments ?')
+      ? ('fade' as const)
+      : ('none' as const)
     const outFile = await window.api.invoke('dialog:saveFile', {
-      defaultName: 'diaporama.mp4',
+      defaultName: 'film.mp4',
       name: 'Vidéo MP4',
       extensions: ['mp4']
     })
     if (!outFile) return
     setMovieBusy(true)
     try {
-      await window.api.invoke('create:movie', {
+      const r = await window.api.invoke('create:movie', {
         photoIds: trayIds,
         durationSec: 3,
-        audioPath,
+        audioPaths,
+        transition,
         outFile
       })
-      alert(`🎬 Film créé : ${outFile}`)
+      alert(`🎬 Film créé (${r.totalDuration.toFixed(1)} s, ${r.segments} segment(s)) : ${outFile}`)
     } catch {
       alert('Échec de la création du film.')
     }
@@ -937,6 +942,21 @@ export default function App(): JSX.Element {
                                 }}
                               >
                                 ✓
+                              </span>
+                            )}
+                            {p.media_type === 'video' && (
+                              <span
+                                style={{
+                                  position: 'absolute',
+                                  bottom: 42,
+                                  left: 6,
+                                  background: '#000a',
+                                  borderRadius: 4,
+                                  padding: '1px 5px',
+                                  fontSize: 11
+                                }}
+                              >
+                                🎬{p.duration_ms ? ` ${Math.round(p.duration_ms / 1000)}s` : ''}
                               </span>
                             )}
                             <figcaption

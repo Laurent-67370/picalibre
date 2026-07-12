@@ -11,6 +11,7 @@ export interface PhotoRow {
   filename: string
   filepath: string
   media_type: 'image' | 'video'
+  duration_ms: number | null
   hash_xxh3: string
   file_size: number
   file_mtime: number
@@ -128,11 +129,12 @@ export interface IpcInvokeMap {
   'edits:undo': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
   'edits:redo': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
   'edits:export': { req: { photoId: number; format?: 'jpeg' | 'webp' | 'png'; maxSize?: number }; res: { outPath: string | null } }
+  'dialog:pickFiles': { req: { name: string; extensions: string[] }; res: string[] }
   'dialog:pickFolder': { req: void; res: string | null }
   'dialog:pickFile': { req: { name: string; extensions: string[] }; res: string | null }
   'dialog:saveFile': { req: { defaultName: string; name: string; extensions: string[] }; res: string | null }
   'create:collage': { req: { photoIds: number[]; layout: 'grid' | 'row' | 'column' | 'mosaic'; outFile: string }; res: { width: number; height: number } }
-  'create:movie': { req: { photoIds: number[]; durationSec: number; audioPath: string | null; outFile: string }; res: void }
+  'create:movie': { req: { photoIds: number[]; durationSec: number; audioPaths: string[]; transition: 'none' | 'fade'; outFile: string }; res: { totalDuration: number; segments: number } }
 }
 
 /** Canaux d'événements main → renderer */

@@ -49,7 +49,8 @@ schéma des processus, DSL d'édition, schéma SQL complet, plan par phases.
 - [x] Phase 3 — Carte MapLibre/OSM : marqueurs-miniatures des photos géotaguées (EXIF GPS), géotag manuel des photos du bac par clic sur la carte
 - [x] Phase 3 — Gestion manuelle des clusters : fusion (avec transfert de nom), scission, confirmation/rejet des rattachements, recalcul exact des centroïdes sur embeddings réels, tri des visages par confiance croissante
 - [x] Phase 4 — Collages (4 layouts : grille, mosaïque, bandes H/V — cellules calculées sans chevauchement, remplissage cover avec recadrage attentionnel, éditions appliquées), diaporama plein écran (fondu, lecture auto, clavier), movie maker ffmpeg embarqué (photos éditées → MP4 H.264 1280x720 letterbox, piste audio optionnelle -shortest, durée exacte)
-- [ ] Phase 4+ — Vidéos dans les movies, transitions animées, multi-pistes audio
+- [x] Phase 4+ — Vidéos dans les movies (segments normalisés H.264/AAC, concat en copie), transitions en fondu (vidéo+audio, cuites par segment), multi-pistes audio (playlist concaténée bornée au film), miniatures vidéo (frame ffmpeg à 10 % → cache sharp), badge 🎬+durée dans la grille
+- [x] Phase 4+ — timeline-core : fondation de montage non destructif (pistes vidéo/audio, clips avec trim in/out, transitions crossfade/wipe/slide, drag cross-track) — moteur de rendu et UI de montage à venir
 - [ ] Phase 5 — Partage, impression, migration de bibliothèque
 
 ## Changelog
