@@ -1,6 +1,6 @@
 {
   "name": "picalibre",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Gestionnaire de photos open-source inspiré de Picasa — Electron + React + TypeScript + SQLite",
   "main": "./out/main/index.js",
   "author": "Laurent-67370",
@@ -15,9 +15,11 @@
     "build:mac": "electron-vite build && electron-builder --mac"
   },
   "dependencies": {
+    "@vladmandic/human": "^3.3.6",
     "better-sqlite3": "^11.8.0",
     "chokidar": "^4.0.3",
     "exiftool-vendored": "^28.3.1",
+    "maplibre-gl": "^5.24.0",
     "sharp": "^0.33.5",
     "xxhash-wasm": "^1.1.0"
   },
@@ -39,10 +41,26 @@
   "build": {
     "appId": "fr.lhusser.picalibre",
     "productName": "PicaLibre",
-    "files": ["out/**"],
-    "asarUnpack": ["**/*.node", "node_modules/sharp/**", "node_modules/better-sqlite3/**"],
-    "linux": { "target": ["AppImage", "deb"], "category": "Graphics" },
-    "win": { "target": "nsis" },
-    "mac": { "target": "dmg" }
+    "files": [
+      "out/**"
+    ],
+    "asarUnpack": [
+      "**/*.node",
+      "node_modules/sharp/**",
+      "node_modules/better-sqlite3/**"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Graphics"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    }
   }
 }

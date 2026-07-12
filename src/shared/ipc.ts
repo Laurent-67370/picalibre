@@ -46,6 +46,24 @@ export interface AlbumRow {
   count: number
 }
 
+export interface PersonRow {
+  id: number
+  name: string | null
+  face_count: number
+  samplePhotoId: number | null
+  bbox_x: number | null
+  bbox_y: number | null
+  bbox_w: number | null
+  bbox_h: number | null
+}
+
+export interface GpsPhoto {
+  id: number
+  filename: string
+  gps_lat: number
+  gps_lon: number
+}
+
 export interface TagRow {
   id: number
   name: string
@@ -68,6 +86,12 @@ export interface IpcInvokeMap {
   'albums:addPhotos': { req: { albumId: number; photoIds: number[] }; res: void }
   'tags:list': { req: void; res: TagRow[] }
   'tags:addToPhotos': { req: { name: string; photoIds: number[] }; res: void }
+  'persons:list': { req: void; res: PersonRow[] }
+  'persons:rename': { req: { personId: number; name: string }; res: void }
+  'photos:byPerson': { req: { personId: number; offset: number; limit: number }; res: PhotoRow[] }
+  'faces:scan': { req: void; res: { started: boolean } }
+  'photos:withGps': { req: void; res: GpsPhoto[] }
+  'photos:setGps': { req: { photoIds: number[]; lat: number; lon: number }; res: void }
   'edits:get': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
   'edits:save': { req: { photoId: number; stack: EditStack; action: string }; res: { canUndo: boolean; canRedo: boolean } }
   'edits:undo': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
@@ -80,6 +104,8 @@ export interface IpcInvokeMap {
 export interface IpcEventMap {
   'scan:progress': ScanProgress
   'library:changed': { folderIds: number[] }
+  'faces:progress': { done: number; total: number }
+  'persons:changed': Record<string, never>
 }
 
 export type IpcChannel = keyof IpcInvokeMap

@@ -8,10 +8,12 @@ import { app } from 'electron'
 import { join } from 'node:path'
 import type { ScannedFile } from '../../workers/scan-worker'
 import migration001 from './migrations/001_init.sql?raw'
+import migration002 from './migrations/002_faces_scanned.sql?raw'
 
 /** Migrations embarquées dans le bundle (import Vite ?raw) — ordre croissant. */
 const MIGRATIONS: Array<{ version: number; sql: string }> = [
-  { version: 1, sql: migration001 }
+  { version: 1, sql: migration001 },
+  { version: 2, sql: migration002 }
 ]
 
 let db: Database.Database

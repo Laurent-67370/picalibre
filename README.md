@@ -45,7 +45,9 @@ schéma des processus, DSL d'édition, schéma SQL complet, plan par phases.
 - [x] Phase 2 — Crop interactif (poignées, ratios, règle des tiers), contraste auto + couleur auto (analyse figée dans le DSL → déterministe preview/export), histogramme temps réel
 - [x] Phase 2 — Yeux rouges (zones cliquables), tampon 2 clics (défaut → source, bord adouci), pipette de blanc, 5 filtres créatifs avec intensité — le tout dans le DSL, parité preview/export testée
 - [ ] Optimisation ultérieure — preview WebGL (le DSL ne change pas)
-- [ ] Phase 3 — Visages & géolocalisation
+- [x] Phase 3 — Reconnaissance faciale : détection @vladmandic/human (fenêtre cachée, 100 % offline, modèles servis via faceres://), embeddings faceres, clustering incrémental par cosinus (seuil 0,55), vue Personnes avec avatars recadrés et nommage
+- [x] Phase 3 — Carte MapLibre/OSM : marqueurs-miniatures des photos géotaguées (EXIF GPS), géotag manuel des photos du bac par clic sur la carte
+- [ ] Phase 3 — Fusion/scission manuelle de clusters, confirmation des suggestions
 - [ ] Phase 4 — Collages, diaporamas, movies
 - [ ] Phase 5 — Partage, impression, migration de bibliothèque
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { AlbumRow, FolderRow, PhotoRow, ScanProgress, RendererApi } from '@shared/ipc'
+import type { AlbumRow, FolderRow, PersonRow, PhotoRow, ScanProgress, RendererApi } from '@shared/ipc'
+import MapView from './MapView'
 import Editor from './Editor'
 
 declare global {
@@ -16,7 +17,9 @@ const ROW_H = 214 // vignette + nom + étoiles
 type View =
   | { type: 'folder'; id: number }
   | { type: 'album'; id: number }
+  | { type: 'person'; id: number }
   | { type: 'search'; query: string }
+  | { type: 'map' }
 
 const PHASE_LABEL: Record<ScanProgress['phase'], string> = {
   walking: 'Parcours des dossiers',
@@ -34,6 +37,9 @@ const folderName = (path: string): string => {
 export default function App(): JSX.Element {
   const [folders, setFolders] = useState<FolderRow[]>([])
   const [albums, setAlbums] = useState<AlbumRow[]>([])
+  const [persons, setPersons] = useState<PersonRow[]>([])
+  const [faceProgress, setFaceProgress] = useState<{ done: number; total: number } | null>(null)
+  const [renameValue, setRenameValue] = useState('')
   const [view, setView] = useState<View | null>(null)
   const [photos, setPhotos] = useState<PhotoRow[]>([])
   const [progress, setProgress] = useState<ScanProgress | null>(null)
@@ -57,16 +63,23 @@ export default function App(): JSX.Element {
   const refreshSidebar = useCallback(() => {
     window.api.invoke('folders:tree', undefined).then(setFolders)
     window.api.invoke('albums:list', undefined).then(setAlbums)
+    window.api.invoke('persons:list', undefined).then(setPersons)
   }, [])
 
   const loadView = useCallback((v: View) => {
     setView(v)
+    if (v.type === 'map') {
+      setPhotos([])
+      return
+    }
     const req =
       v.type === 'folder'
         ? window.api.invoke('photos:byFolder', { folderId: v.id, offset: 0, limit: PAGE })
         : v.type === 'album'
           ? window.api.invoke('photos:byAlbum', { albumId: v.id, offset: 0, limit: PAGE })
-          : window.api.invoke('photos:search', { query: v.query, offset: 0, limit: PAGE })
+          : v.type === 'person'
+            ? window.api.invoke('photos:byPerson', { personId: v.id, offset: 0, limit: PAGE })
+            : window.api.invoke('photos:search', { query: v.query, offset: 0, limit: PAGE })
     req.then(setPhotos)
   }, [])
 
@@ -81,11 +94,18 @@ export default function App(): JSX.Element {
     })
     const off2 = window.api.on('library:changed', () => {
       refreshSidebar()
-      if (viewRef.current) loadView(viewRef.current)
+      if (viewRef.current && viewRef.current.type !== 'map') loadView(viewRef.current)
     })
+    const off3 = window.api.on('faces:progress', (p) => {
+      setFaceProgress(p.done >= p.total ? null : p)
+      if (p.done >= p.total) refreshSidebar()
+    })
+    const off4 = window.api.on('persons:changed', () => refreshSidebar())
     return () => {
       off1()
       off2()
+      off3()
+      off4()
     }
   }, [refreshSidebar, loadView])
 
@@ -187,6 +207,78 @@ export default function App(): JSX.Element {
             }}
           />
 
+          <div
+            onClick={() => loadView({ type: 'map' })}
+            style={sidebarItem(view?.type === 'map')}
+          >
+            🗺 Carte
+          </div>
+
+          <div style={{ fontSize: 11, opacity: 0.5, margin: '10px 0 4px' }}>PERSONNES</div>
+          <button
+            onClick={async () => {
+              const r = await window.api.invoke('faces:scan', undefined)
+              if (r.started) setFaceProgress({ done: 0, total: 1 })
+            }}
+            style={{ width: '100%', padding: 6, marginBottom: 6, fontSize: 12 }}
+          >
+            🔍 Analyser les visages
+          </button>
+          {faceProgress && (
+            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
+              Détection… {faceProgress.done}/{faceProgress.total}
+            </div>
+          )}
+          {persons.map((pe) => {
+            const hasBox =
+              pe.samplePhotoId != null && pe.bbox_w != null && pe.bbox_w > 0 && pe.bbox_h != null
+            const bx = pe.bbox_x ?? 0
+            const by = pe.bbox_y ?? 0
+            const bw = pe.bbox_w ?? 1
+            const bh = pe.bbox_h ?? 1
+            return (
+              <div
+                key={pe.id}
+                onClick={() => {
+                  setRenameValue(pe.name ?? '')
+                  loadView({ type: 'person', id: pe.id })
+                }}
+                style={{
+                  ...sidebarItem(view?.type === 'person' && view.id === pe.id),
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8
+                }}
+              >
+                <span
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                    background: '#14171c',
+                    backgroundImage: hasBox
+                      ? `url("thumb://library/256/${pe.samplePhotoId}")`
+                      : undefined,
+                    backgroundSize: `${100 / bw}% ${100 / bh}%`,
+                    backgroundPosition: `${bw < 1 ? (bx / (1 - bw)) * 100 : 0}% ${
+                      bh < 1 ? (by / (1 - bh)) * 100 : 0
+                    }%`
+                  }}
+                />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {pe.name ?? `Personne ${pe.id}`}{' '}
+                  <span style={{ opacity: 0.5 }}>({pe.face_count})</span>
+                </span>
+              </div>
+            )
+          })}
+          {persons.length === 0 && !faceProgress && (
+            <div style={{ fontSize: 12, opacity: 0.4, padding: '2px 8px' }}>
+              Lance l'analyse ci-dessus
+            </div>
+          )}
+
           <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>ALBUMS</div>
           {albums.map((a) => (
             <div
@@ -228,7 +320,50 @@ export default function App(): JSX.Element {
               {photos.length} résultat(s) pour « {view.query} »
             </div>
           )}
+          {view?.type === 'person' && (
+            <div style={{ padding: '8px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                value={renameValue}
+                placeholder="Nom de la personne…"
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    await window.api.invoke('persons:rename', {
+                      personId: view.id,
+                      name: renameValue
+                    })
+                    refreshSidebar()
+                  }
+                }}
+                style={{
+                  padding: 6,
+                  background: '#14171c',
+                  border: '1px solid #333',
+                  borderRadius: 4,
+                  color: '#d7dae0',
+                  width: 220
+                }}
+              />
+              <button
+                onClick={async () => {
+                  await window.api.invoke('persons:rename', { personId: view.id, name: renameValue })
+                  refreshSidebar()
+                }}
+              >
+                ✔ Renommer
+              </button>
+              <span style={{ fontSize: 13, opacity: 0.6 }}>{photos.length} photo(s)</span>
+            </div>
+          )}
 
+          {view?.type === 'map' ? (
+            <MapView
+              trayIds={trayIds}
+              onGeotagged={() => {
+                /* les marqueurs se rechargent dans MapView */
+              }}
+            />
+          ) : (
           <div ref={gridRef} style={{ flex: 1, overflow: 'auto', padding: '8px 16px' }}>
             {view === null ? (
               <p style={{ opacity: 0.7 }}>
@@ -332,6 +467,7 @@ export default function App(): JSX.Element {
               </div>
             )}
           </div>
+          )}
         </main>
       </div>
 

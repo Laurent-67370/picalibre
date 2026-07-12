@@ -6,6 +6,7 @@ import { utilityProcess, BrowserWindow, app } from 'electron'
 import { join } from 'node:path'
 import { getDb } from '../db'
 import { extractExifBatch } from './exif'
+import { startFaceScan } from './faces'
 import type { ThumbResult } from '../../workers/thumb-worker'
 
 let running = false
@@ -22,6 +23,8 @@ export async function runPostScanPipeline(win: BrowserWindow): Promise<void> {
     await thumbsPhase(win)
     win.webContents.send('scan:progress', { phase: 'done', filesFound: 0, filesProcessed: 0 })
     win.webContents.send('library:changed', { folderIds: [] })
+    // Détection de visages en tâche de fond (hors mode test headless)
+    if (!process.env.PICALIBRE_TEST_SCAN) void startFaceScan(win)
   } finally {
     running = false
   }

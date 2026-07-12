@@ -16,6 +16,13 @@ import {
   EditStack
 } from '../src/shared/edit-engine'
 import { renderEdited } from '../src/main/services/render-sharp'
+import {
+  bestMatch,
+  blobToF32,
+  cosine,
+  f32ToBlob,
+  mergeCentroid
+} from '../src/main/services/faces/cluster'
 
 async function main() {
   // --- 1. DSL : upsertOp remplace, valeur neutre supprime ---
@@ -186,6 +193,34 @@ async function main() {
   assert.equal(stackHash(stack), stackHash(JSON.parse(JSON.stringify(stack))), 'hash stable')
   assert.notEqual(stackHash(stack), stackHash(emptyStack()), 'hash discriminant')
   console.log('✅ stackHash')
+
+  // --- 7. Clustering de visages ---
+  const vecA = Float32Array.from({ length: 64 }, (_, i) => Math.sin(i))
+  const vecA2 = vecA.map((v) => v * 1.05) as Float32Array // même direction
+  const vecB = Float32Array.from({ length: 64 }, (_, i) => Math.cos(i * 3))
+  assert.equal(cosine(vecA, vecA) > 0.999, true, 'cosinus identité')
+  assert.equal(cosine(vecA, vecA2) > 0.999, true, 'cosinus invariant à l échelle')
+  assert.equal(Math.abs(cosine(vecA, vecB)) < 0.3, true, 'vecteurs distincts peu similaires')
+
+  const persons = [
+    { id: 1, centroid: vecA, count: 5 },
+    { id: 2, centroid: vecB, count: 3 }
+  ]
+  const m = bestMatch(vecA2, persons)
+  assert.equal(m?.personId, 1, 'assignation au bon cluster')
+  const noMatch = bestMatch(
+    Float32Array.from({ length: 64 }, (_, i) => ((i * 37) % 13) - 6),
+    persons
+  )
+  assert.equal(noMatch === null || noMatch.similarity < 0.7, true, 'inconnu → pas de faux rattachement fort')
+
+  const merged = mergeCentroid(vecA, 1, vecB)
+  assert.equal(Math.abs(merged[0] - (vecA[0] + vecB[0]) / 2) < 1e-6, true, 'moyenne incrémentale n=1')
+
+  const rt = blobToF32(f32ToBlob(vecA))
+  assert.equal(rt.length, vecA.length, 'aller-retour BLOB longueur')
+  assert.equal(Math.abs(rt[10] - vecA[10]) < 1e-9, true, 'aller-retour BLOB valeurs')
+  console.log('✅ Clustering visages (cosinus, assignation, centroïdes, BLOB)')
 
   console.log('\n🎉 Tous les tests du moteur passent')
 }

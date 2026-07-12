@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import { initDb, getDb } from './db'
 import { getEditState, saveStack, undo, redo } from './services/edits'
+import { startFaceScan, isFaceScanRunning, humanModelsPath } from './services/faces'
 import { renderEdited } from './services/render-sharp'
 import { startScan } from './services/scanner'
 
@@ -13,10 +14,22 @@ let mainWindow: BrowserWindow
 
 // Doit être appelé AVANT app.whenReady()
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'thumb', privileges: { standard: true, secure: true, supportFetchAPI: true } }
+  { scheme: 'thumb', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+  { scheme: 'faceres', privileges: { standard: true, secure: true, supportFetchAPI: true } }
 ])
 
 /** thumb://library/{size}/{photoId} → fichier webp du cache */
+/** faceres://models/<fichier> → modèles Human embarqués (node_modules) */
+function registerFaceresProtocol(): void {
+  protocol.handle('faceres', (request) => {
+    const u = new URL(request.url)
+    const file = u.pathname.replace(/^\/+/, '')
+    if (file.includes('..')) return new Response('forbidden', { status: 403 })
+    const full = join(humanModelsPath(), file)
+    return net.fetch(pathToFileURL(full).toString())
+  })
+}
+
 function registerThumbProtocol(): void {
   protocol.handle('thumb', (request) => {
     const parts = new URL(request.url).pathname.split('/').filter(Boolean)
@@ -151,6 +164,57 @@ function registerIpc(): void {
     })
     tx(photoIds)
   })
+  ipcMain.handle('persons:list', () =>
+    getDb()
+      .prepare(
+        `SELECT pe.id, pe.name, pe.face_count,
+                f.photo_id AS samplePhotoId, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h
+         FROM persons pe
+         LEFT JOIN faces f ON f.id = (
+           SELECT id FROM faces WHERE person_id = pe.id ORDER BY confidence DESC LIMIT 1
+         )
+         WHERE pe.is_ignored = 0 AND pe.face_count > 0
+         ORDER BY pe.name IS NULL, pe.name COLLATE NOCASE, pe.face_count DESC`
+      )
+      .all()
+  )
+  ipcMain.handle('persons:rename', (_e, { personId, name }) => {
+    getDb().prepare('UPDATE persons SET name = ? WHERE id = ?').run(name.trim() || null, personId)
+  })
+  ipcMain.handle('photos:byPerson', (_e, { personId, offset, limit }) =>
+    getDb()
+      .prepare(
+        `SELECT DISTINCT p.* FROM photos p
+         JOIN faces f ON f.photo_id = p.id
+         WHERE f.person_id = ? AND p.status = 'active' AND p.is_hidden = 0
+         ORDER BY p.taken_at DESC LIMIT ? OFFSET ?`
+      )
+      .all(personId, limit, offset)
+  )
+  ipcMain.handle('faces:scan', () => {
+    if (isFaceScanRunning()) return { started: false }
+    void startFaceScan(mainWindow)
+    return { started: true }
+  })
+  ipcMain.handle('photos:withGps', () =>
+    getDb()
+      .prepare(
+        `SELECT id, filename, gps_lat, gps_lon FROM photos
+         WHERE gps_lat IS NOT NULL AND gps_lon IS NOT NULL
+           AND status = 'active' AND is_hidden = 0`
+      )
+      .all()
+  )
+  ipcMain.handle('photos:setGps', (_e, { photoIds, lat, lon }) => {
+    const db = getDb()
+    const stmt = db.prepare(
+      'UPDATE photos SET gps_lat = ?, gps_lon = ?, gps_manual = 1 WHERE id = ?'
+    )
+    const tx = db.transaction((ids: number[]) => {
+      for (const id of ids) stmt.run(lat, lon, id)
+    })
+    tx(photoIds)
+  })
   ipcMain.handle('edits:get', (_e, { photoId }) => getEditState(photoId))
   ipcMain.handle('edits:save', (_e, { photoId, stack, action }) => {
     const s = saveStack(photoId, stack, action)
@@ -184,6 +248,7 @@ function registerIpc(): void {
 app.whenReady().then(() => {
   initDb()
   registerThumbProtocol()
+  registerFaceresProtocol()
   registerIpc()
   createWindow()
 
