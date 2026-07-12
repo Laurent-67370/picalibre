@@ -52,6 +52,28 @@ schéma des processus, DSL d'édition, schéma SQL complet, plan par phases.
 - [ ] Phase 4+ — Vidéos dans les movies, transitions animées, multi-pistes audio
 - [ ] Phase 5 — Partage, impression, migration de bibliothèque
 
+## Changelog
+
+### v1.1.0
+
+**Démarrage**
+- Démarrage propre confirmé : le watcher lit la base de données sans erreur de module
+- Le postinstall gère désormais automatiquement les soucis d'ABI liés à l'environnement local
+
+**Phase 3 — Atelier de tri des visages (Vue Personne)**
+- **Fusionner dans…** : liste déroulante + bouton dans la barre d'action
+  - Tous les visages sont re-rattachés à la personne cible
+  - Le nom est transféré automatiquement si la cible est anonyme
+  - Le centroïde est recalculé sur les embeddings réels (pas une approximation)
+  - La personne source est supprimée après fusion
+- **👥 Gérer les visages** : grille d'avatars recadrés (même technique CSS que la sidebar), triés par confiance croissante pour prioriser la vérification manuelle des cas douteux
+- **Sélection multiple** avec trois actions :
+  - ✔ Confirmer (liseré vert persistant)
+  - ✖ Pas cette personne (détaché + marqué `rejected`)
+  - ✂ Détacher vers une nouvelle personne anonyme
+- Une personne vidée de tous ses visages disparaît automatiquement de la liste
+- Cœur logique isolé dans `manage-core.ts`, testé 8/8 sur base de données en mémoire avec les migrations réelles
+
 ## Licence
 
 MIT
