@@ -3,6 +3,17 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.4.0] — 2026-07-12
+
+### Ajouté
+- **Mises à jour automatiques** (electron-updater + releases GitHub) : vérification
+  au lancement puis toutes les 4 h, téléchargement en arrière-plan, bandeau dans
+  l'app avec « Redémarrer et installer » ou installation au prochain arrêt.
+  Actif sur Windows (NSIS), macOS et Linux AppImage ; le .deb reste géré par le
+  gestionnaire de paquets. Jamais actif en développement.
+- Les métadonnées de mise à jour (`latest*.yml`, blockmaps) sont publiées avec
+  chaque release par la CI.
+
 ## [1.3.1] — 2026-07-12
 
 ### Ajouté
@@ -169,6 +180,7 @@ Les 5 phases du plan initial sont couvertes.
   (fichier inchangé size+mtime = jamais re-hashé).
 - Configuration de build Linux (AppImage/deb), Windows (NSIS), macOS (DMG).
 
+[1.4.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.0
 [1.3.1]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.3.1
 [1.3.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.2.0

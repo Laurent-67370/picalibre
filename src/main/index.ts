@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import { initDb, getDb } from './db'
 import { getEditState, saveStack, undo, redo } from './services/edits'
+import { initAutoUpdate, installUpdate } from './services/updater'
 import { shutdownExiftool } from './services/exif'
 import { startFaceScan, isFaceScanRunning, humanModelsPath } from './services/faces'
 import { mergePersons, splitFaces, confirmFaces, rejectFaces, facesByPerson } from './services/faces/manage-core'
@@ -410,6 +411,7 @@ function registerIpc(): void {
       onProgress: (done, total) => mainWindow.webContents.send('movie:progress', { done, total })
     })
   })
+  ipcMain.handle('update:install', () => installUpdate())
   ipcMain.handle('dialog:pickFiles', async (_e, { name, extensions }) => {
     const r = await dialog.showOpenDialog(mainWindow, {
       properties: ['openFile', 'multiSelections'],
@@ -439,6 +441,7 @@ app.whenReady().then(() => {
   registerIpc()
   createWindow()
   startWatchers(mainWindow)
+  initAutoUpdate(mainWindow)
 
   // Mode test headless relocate : PICALIBRE_TEST_RELOCATE="nouvelleRacine"
   const testRelocate = process.env.PICALIBRE_TEST_RELOCATE

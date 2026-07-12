@@ -129,6 +129,7 @@ export interface IpcInvokeMap {
   'edits:undo': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
   'edits:redo': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
   'edits:export': { req: { photoId: number; format?: 'jpeg' | 'webp' | 'png'; maxSize?: number }; res: { outPath: string | null } }
+  'update:install': { req: void; res: void }
   'dialog:pickFiles': { req: { name: string; extensions: string[] }; res: string[] }
   'dialog:pickFolder': { req: void; res: string | null }
   'dialog:pickFile': { req: { name: string; extensions: string[] }; res: string | null }
@@ -139,6 +140,10 @@ export interface IpcInvokeMap {
 
 /** Canaux d'événements main → renderer */
 export interface IpcEventMap {
+  'update:status': {
+    status: 'available' | 'downloading' | 'ready' | 'error'
+    info?: { version?: string; percent?: number; message?: string }
+  }
   'scan:progress': ScanProgress
   'library:changed': { folderIds: number[] }
   'faces:progress': { done: number; total: number }

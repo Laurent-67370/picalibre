@@ -64,6 +64,7 @@ export default function App(): JSX.Element {
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [editing, setEditing] = useState<PhotoRow | null>(null)
+  const [update, setUpdate] = useState<{ status: string; version?: string; percent?: number } | null>(null)
 
   // ---- Tray (bac Picasa) ----
   const [tray, setTray] = useState<Map<number, PhotoRow>>(new Map())
@@ -141,6 +142,10 @@ export default function App(): JSX.Element {
       if (p.done >= p.total) refreshSidebar()
     })
     const off4 = window.api.on('persons:changed', () => refreshSidebar())
+    const offU = window.api.on('update:status', (u) => {
+      if (u.status === 'error') return
+      setUpdate({ status: u.status, version: u.info?.version, percent: u.info?.percent })
+    })
     const off5 = window.api.on('import:progress', (p) => {
       setImportProgress(p.done >= p.total ? null : p)
     })
@@ -154,6 +159,7 @@ export default function App(): JSX.Element {
       off2()
       off3()
       off4()
+      offU()
     }
   }, [refreshSidebar, loadView])
 
@@ -1007,6 +1013,35 @@ export default function App(): JSX.Element {
           photos={tray.size > 0 ? [...tray.values()] : photos}
           onClose={() => setSlideshow(false)}
         />
+      )}
+
+      {update && update.status !== 'available' && (
+        <div
+          style={{
+            borderTop: '1px solid #333',
+            background: '#1d2d1f',
+            padding: '6px 16px',
+            fontSize: 13,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12
+          }}
+        >
+          {update.status === 'downloading' && (
+            <span>⬇️ Mise à jour {update.version ?? ''} en téléchargement… {update.percent ?? 0} %</span>
+          )}
+          {update.status === 'ready' && (
+            <>
+              <span>✅ PicaLibre {update.version} est prête à être installée.</span>
+              <button onClick={() => window.api.invoke('update:install', undefined)}>
+                Redémarrer et installer
+              </button>
+              <button onClick={() => setUpdate(null)} style={{ opacity: 0.7 }}>
+                Plus tard (au prochain arrêt)
+              </button>
+            </>
+          )}
+        </div>
       )}
 
       {/* ---- Tray (bac Picasa) ---- */}
