@@ -140,6 +140,7 @@ export interface IpcInvokeMap {
 
 /** Canaux d'événements main → renderer */
 export interface IpcEventMap {
+  'menu:action': { action: 'addFolder' | 'import' }
   'update:status': {
     status: 'available' | 'downloading' | 'ready' | 'error'
     info?: { version?: string; percent?: number; message?: string }

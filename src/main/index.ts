@@ -6,6 +6,7 @@ import sharp from 'sharp'
 import { initDb, getDb } from './db'
 import { getEditState, saveStack, undo, redo } from './services/edits'
 import { initAutoUpdate, installUpdate } from './services/updater'
+import { buildAppMenu } from './menu'
 import { shutdownExiftool } from './services/exif'
 import { startFaceScan, isFaceScanRunning, humanModelsPath } from './services/faces'
 import { mergePersons, splitFaces, confirmFaces, rejectFaces, facesByPerson } from './services/faces/manage-core'
@@ -579,6 +580,7 @@ app.whenReady().then(() => {
   registerFaceresProtocol()
   registerIpc()
   createWindow()
+  buildAppMenu(mainWindow)
   startWatchers(mainWindow)
   initAutoUpdate(mainWindow)
 
@@ -599,6 +601,19 @@ app.whenReady().then(() => {
       console.log('[test] IMPORT', JSON.stringify(stats))
       setTimeout(() => exitTest(0), 4000) // laisse le scan de la destination finir
     })
+  }
+
+  // Mode test menu : vérifie la structure du menu applicatif puis quitte.
+  if (process.env.PICALIBRE_TEST_MENU) {
+    const { Menu } = require('electron')
+    const m = Menu.getApplicationMenu()
+    const labels = m ? m.items.map((i: any) => i.label) : []
+    const aide = m?.items.find((i: any) => i.label === 'Aide')
+    const aideItems = aide ? (aide as any).submenu.items.filter((x: any) => x.type !== 'separator').map((x: any) => x.label) : []
+    console.log('[menu] barres:', JSON.stringify(labels))
+    console.log('[menu] aide:', JSON.stringify(aideItems))
+    console.log('[menu]', aideItems.length >= 5 ? 'OK' : 'VIDE')
+    exitTest(aideItems.length >= 5 ? 0 : 1)
   }
 
   // Mode capture : scanne, sélectionne le 1er dossier, capture la fenêtre en PNG, quitte.

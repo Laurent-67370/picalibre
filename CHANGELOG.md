@@ -3,6 +3,18 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.4.2] — 2026-07-12
+
+### Corrigé
+- **Menu « Aide » vide** : l'application n'avait aucun menu défini, Electron
+  affichait le sien par défaut. Menu applicatif complet en français :
+  - Fichier : « Ajouter un dossier » (Ctrl+O) et « Importer SD/appareil »
+    (Ctrl+I) reliés aux actions de l'interface ;
+  - Édition / Affichage / Fenêtre : rôles natifs traduits ;
+  - Aide : Documentation, Journal des modifications, Signaler un problème,
+    **Rechercher les mises à jour** (avec retour visuel : à jour / mode dev /
+    cas .deb), À propos (version + versions Electron/Chromium/Node).
+
 ## [1.4.1] — 2026-07-12
 
 ### Corrigé
@@ -199,6 +211,7 @@ Les 5 phases du plan initial sont couvertes.
   (fichier inchangé size+mtime = jamais re-hashé).
 - Configuration de build Linux (AppImage/deb), Windows (NSIS), macOS (DMG).
 
+[1.4.2]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.2
 [1.4.1]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.1
 [1.4.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.0
 [1.3.1]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.3.1

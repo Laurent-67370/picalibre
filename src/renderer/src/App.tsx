@@ -122,6 +122,8 @@ export default function App(): JSX.Element {
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [editing, setEditing] = useState<PhotoRow | null>(null)
+  const addFolderRef = useRef<(() => Promise<void>) | null>(null)
+  const importRef = useRef<(() => Promise<void>) | null>(null)
   const [update, setUpdate] = useState<{ status: string; version?: string; percent?: number } | null>(null)
 
   // ---- Tray (bac Picasa) ----
@@ -213,6 +215,10 @@ export default function App(): JSX.Element {
       if (p.done >= p.total) refreshSidebar()
     })
     const off4 = window.api.on('persons:changed', () => refreshSidebar())
+    const offM = window.api.on('menu:action', ({ action }) => {
+      if (action === 'addFolder') void addFolderRef.current?.()
+      if (action === 'import') void importRef.current?.()
+    })
     const offU = window.api.on('update:status', (u) => {
       if (u.status === 'error') return
       setUpdate({ status: u.status, version: u.info?.version, percent: u.info?.percent })
@@ -231,6 +237,7 @@ export default function App(): JSX.Element {
       off3()
       off4()
       offU()
+      offM()
     }
   }, [refreshSidebar, loadView])
 
@@ -362,6 +369,9 @@ export default function App(): JSX.Element {
     await window.api.invoke('scanRoots:add', { path })
     await window.api.invoke('scan:start', {})
   }
+
+  addFolderRef.current = addFolder
+  importRef.current = runImport
 
   const setRating = async (photoId: number, rating: number) => {
     await window.api.invoke('photos:setRating', { photoId, rating })
