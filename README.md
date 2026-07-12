@@ -36,6 +36,8 @@ schéma des processus, DSL d'édition, schéma SQL complet, plan par phases.
 
 ## État d'avancement
 
+Historique détaillé des versions : [CHANGELOG.md](CHANGELOG.md)
+
 - [x] Phase 0 — Socle : electron-vite, DB + migrations, contrat IPC typé
 - [x] Phase 1 — Scanner récursif + hash xxh3 incrémental
 - [x] Phase 1 — Miniatures sharp (cache par hash, protocole thumb://), extraction EXIF/GPS, grille + notation étoiles
