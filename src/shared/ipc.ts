@@ -46,6 +46,17 @@ export interface AlbumRow {
   count: number
 }
 
+export interface FaceLite {
+  id: number
+  photo_id: number
+  bbox_x: number
+  bbox_y: number
+  bbox_w: number
+  bbox_h: number
+  confidence: number
+  assignment: 'auto' | 'suggested' | 'confirmed' | 'rejected'
+}
+
 export interface PersonRow {
   id: number
   name: string | null
@@ -88,6 +99,11 @@ export interface IpcInvokeMap {
   'tags:addToPhotos': { req: { name: string; photoIds: number[] }; res: void }
   'persons:list': { req: void; res: PersonRow[] }
   'persons:rename': { req: { personId: number; name: string }; res: void }
+  'persons:merge': { req: { targetId: number; sourceIds: number[] }; res: void }
+  'faces:byPerson': { req: { personId: number }; res: FaceLite[] }
+  'faces:confirm': { req: { faceIds: number[] }; res: void }
+  'faces:split': { req: { faceIds: number[] }; res: { newPersonId: number | null } }
+  'faces:reject': { req: { faceIds: number[] }; res: { newPersonId: number | null } }
   'photos:byPerson': { req: { personId: number; offset: number; limit: number }; res: PhotoRow[] }
   'faces:scan': { req: void; res: { started: boolean } }
   'photos:withGps': { req: void; res: GpsPhoto[] }

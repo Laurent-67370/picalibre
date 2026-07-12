@@ -5,6 +5,7 @@ import { writeFile } from 'node:fs/promises'
 import { initDb, getDb } from './db'
 import { getEditState, saveStack, undo, redo } from './services/edits'
 import { startFaceScan, isFaceScanRunning, humanModelsPath } from './services/faces'
+import { mergePersons, splitFaces, confirmFaces, rejectFaces, facesByPerson } from './services/faces/manage-core'
 import { startWatchers } from './services/watcher'
 import { importFromDevice } from './services/importer'
 import { relocateLibrary } from './services/relocate'
@@ -296,6 +297,24 @@ function registerIpc(): void {
       )
       .all(personId, limit, offset)
   )
+  ipcMain.handle('persons:merge', (_e, { targetId, sourceIds }) => {
+    mergePersons(getDb(), targetId, sourceIds)
+    mainWindow.webContents.send('persons:changed', {})
+  })
+  ipcMain.handle('faces:byPerson', (_e, { personId }) => facesByPerson(getDb(), personId))
+  ipcMain.handle('faces:confirm', (_e, { faceIds }) => {
+    confirmFaces(getDb(), faceIds)
+  })
+  ipcMain.handle('faces:split', (_e, { faceIds }) => {
+    const newPersonId = splitFaces(getDb(), faceIds)
+    mainWindow.webContents.send('persons:changed', {})
+    return { newPersonId }
+  })
+  ipcMain.handle('faces:reject', (_e, { faceIds }) => {
+    const newPersonId = rejectFaces(getDb(), faceIds)
+    mainWindow.webContents.send('persons:changed', {})
+    return { newPersonId }
+  })
   ipcMain.handle('faces:scan', () => {
     if (isFaceScanRunning()) return { started: false }
     void startFaceScan(mainWindow)

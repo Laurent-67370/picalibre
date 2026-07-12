@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { AlbumRow, FolderRow, PersonRow, PhotoRow, ScanProgress, RendererApi } from '@shared/ipc'
+import type { AlbumRow, FaceLite, FolderRow, PersonRow, PhotoRow, ScanProgress, RendererApi } from '@shared/ipc'
 import MapView from './MapView'
 import Slideshow from './Slideshow'
 import Editor from './Editor'
@@ -44,6 +44,10 @@ export default function App(): JSX.Element {
   const [persons, setPersons] = useState<PersonRow[]>([])
   const [faceProgress, setFaceProgress] = useState<{ done: number; total: number } | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [manageFaces, setManageFaces] = useState(false)
+  const [faceList, setFaceList] = useState<FaceLite[]>([])
+  const [selFaces, setSelFaces] = useState<Set<number>>(new Set())
+  const [mergeTarget, setMergeTarget] = useState<number | ''>('')
   const [dupGroups, setDupGroups] = useState<Array<{ hash: string; photos: PhotoRow[] }>>([])
   const [roots, setRoots] = useState<Array<{ id: number; path: string; mode: string }>>([])
   const [privacy, setPrivacy] = useState<{ hasPassword: boolean; unlocked: boolean }>({ hasPassword: false, unlocked: true })
@@ -83,6 +87,8 @@ export default function App(): JSX.Element {
 
   const loadView = useCallback((v: View) => {
     setView(v)
+    setManageFaces(false)
+    setSelFaces(new Set())
     if (v.type === 'map') {
       setPhotos([])
       return
@@ -538,10 +544,150 @@ export default function App(): JSX.Element {
                 ✔ Renommer
               </button>
               <span style={{ fontSize: 13, opacity: 0.6 }}>{photos.length} photo(s)</span>
+              <button
+                onClick={async () => {
+                  const next = !manageFaces
+                  setManageFaces(next)
+                  setSelFaces(new Set())
+                  if (next) {
+                    setFaceList(await window.api.invoke('faces:byPerson', { personId: view.id }))
+                  }
+                }}
+              >
+                {manageFaces ? '▣ Grille photos' : '👥 Gérer les visages'}
+              </button>
+              <select
+                value={mergeTarget}
+                onChange={(e) => setMergeTarget(e.target.value === '' ? '' : Number(e.target.value))}
+                style={{ padding: 6, background: '#14171c', color: '#d7dae0', border: '1px solid #333' }}
+              >
+                <option value="">Fusionner dans…</option>
+                {persons
+                  .filter((pe) => pe.id !== view.id)
+                  .map((pe) => (
+                    <option key={pe.id} value={pe.id}>
+                      {pe.name ?? `Personne ${pe.id}`}
+                    </option>
+                  ))}
+              </select>
+              <button
+                disabled={mergeTarget === ''}
+                onClick={async () => {
+                  if (mergeTarget === '') return
+                  await window.api.invoke('persons:merge', {
+                    targetId: mergeTarget,
+                    sourceIds: [view.id]
+                  })
+                  setMergeTarget('')
+                  setManageFaces(false)
+                  loadView({ type: 'person', id: mergeTarget })
+                }}
+              >
+                ⇥ Fusionner
+              </button>
             </div>
           )}
 
-          {view?.type === 'settings' ? (
+          {view?.type === 'person' && manageFaces && (
+            <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+                <span style={{ fontSize: 13, opacity: 0.7 }}>
+                  {selFaces.size > 0
+                    ? `${selFaces.size} visage(s) sélectionné(s)`
+                    : 'Clique les visages à traiter (les moins sûrs en premier)'}
+                </span>
+                <button
+                  disabled={selFaces.size === 0}
+                  onClick={async () => {
+                    await window.api.invoke('faces:confirm', { faceIds: [...selFaces] })
+                    setFaceList(await window.api.invoke('faces:byPerson', { personId: view.id }))
+                    setSelFaces(new Set())
+                  }}
+                >
+                  ✔ C'est bien {renameValue || 'cette personne'}
+                </button>
+                <button
+                  disabled={selFaces.size === 0}
+                  onClick={async () => {
+                    await window.api.invoke('faces:reject', { faceIds: [...selFaces] })
+                    setFaceList(await window.api.invoke('faces:byPerson', { personId: view.id }))
+                    setSelFaces(new Set())
+                    window.api
+                      .invoke('photos:byPerson', { personId: view.id, offset: 0, limit: 10000 })
+                      .then(setPhotos)
+                  }}
+                >
+                  ✖ Pas cette personne
+                </button>
+                <button
+                  disabled={selFaces.size === 0}
+                  onClick={async () => {
+                    await window.api.invoke('faces:split', { faceIds: [...selFaces] })
+                    setFaceList(await window.api.invoke('faces:byPerson', { personId: view.id }))
+                    setSelFaces(new Set())
+                    window.api
+                      .invoke('photos:byPerson', { personId: view.id, offset: 0, limit: 10000 })
+                      .then(setPhotos)
+                  }}
+                >
+                  ✂ Détacher (nouvelle personne)
+                </button>
+              </div>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))',
+                  gap: 10
+                }}
+              >
+                {faceList.map((f) => {
+                  const sel = selFaces.has(f.id)
+                  return (
+                    <div
+                      key={f.id}
+                      onClick={() =>
+                        setSelFaces((prev) => {
+                          const next = new Set(prev)
+                          next.has(f.id) ? next.delete(f.id) : next.add(f.id)
+                          return next
+                        })
+                      }
+                      title={`Confiance ${(f.confidence * 100).toFixed(0)} %`}
+                      style={{ cursor: 'pointer', textAlign: 'center' }}
+                    >
+                      <div
+                        style={{
+                          width: '100%',
+                          aspectRatio: '1',
+                          borderRadius: 8,
+                          background: '#14171c',
+                          backgroundImage: `url("thumb://library/256/${f.photo_id}")`,
+                          backgroundSize: `${100 / f.bbox_w}% ${100 / f.bbox_h}%`,
+                          backgroundPosition: `${
+                            f.bbox_w < 1 ? (f.bbox_x / (1 - f.bbox_w)) * 100 : 0
+                          }% ${f.bbox_h < 1 ? (f.bbox_y / (1 - f.bbox_h)) * 100 : 0}%`,
+                          outline: sel
+                            ? '3px solid #2f6feb'
+                            : f.assignment === 'confirmed'
+                              ? '2px solid #3fb950'
+                              : '1px solid #333',
+                          outlineOffset: -2
+                        }}
+                      />
+                      <div style={{ fontSize: 10, opacity: 0.6, marginTop: 3 }}>
+                        {f.assignment === 'confirmed' ? '✔ confirmé' : `${(f.confidence * 100).toFixed(0)} %`}
+                      </div>
+                    </div>
+                  )
+                })}
+                {faceList.length === 0 && (
+                  <p style={{ opacity: 0.6, gridColumn: '1/-1' }}>Aucun visage pour cette personne.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {view?.type === 'person' && manageFaces ? null : view?.type === 'settings' ? (
             <div style={{ flex: 1, overflow: 'auto', padding: 16, maxWidth: 720 }}>
               <h3 style={{ marginTop: 0 }}>Dossiers surveillés</h3>
               {roots.map((r) => (
