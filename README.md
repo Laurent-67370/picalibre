@@ -51,7 +51,7 @@ schéma des processus, DSL d'édition, schéma SQL complet, plan par phases.
 - [x] Phase 4 — Collages (4 layouts : grille, mosaïque, bandes H/V — cellules calculées sans chevauchement, remplissage cover avec recadrage attentionnel, éditions appliquées), diaporama plein écran (fondu, lecture auto, clavier), movie maker ffmpeg embarqué (photos éditées → MP4 H.264 1280x720 letterbox, piste audio optionnelle -shortest, durée exacte)
 - [x] Phase 4+ — Vidéos dans les movies (segments normalisés H.264/AAC, concat en copie), transitions en fondu (vidéo+audio, cuites par segment), multi-pistes audio (playlist concaténée bornée au film), miniatures vidéo (frame ffmpeg à 10 % → cache sharp), badge 🎬+durée dans la grille
 - [x] Phase 4+ — timeline-core : fondation de montage non destructif (pistes vidéo/audio, clips avec trim in/out, transitions crossfade/wipe/slide, drag cross-track) — moteur de rendu et UI de montage à venir
-- [ ] Phase 5 — Partage, impression, migration de bibliothèque
+- [x] Phase 5 — Export batch avec presets/filigrane, export CSV des métadonnées (ISO-8859-1 ; \r\n), impression avec mise en page, partage email (pièces jointes redimensionnées), migration de bibliothèque par hash (chemins re-mappés sans perdre albums/tags/visages/éditions), masquage protégé par mot de passe (scrypt)
 
 ## Changelog
 
