@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installation
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Suites unitaires (ABI Node pour better-sqlite3)
+      - name: Rebuild better-sqlite3 (Node)
+        run: npm rebuild better-sqlite3
+      - name: Tests moteur d'édition
+        run: npx tsx scripts/test-engine.ts
+      - name: Tests clusters de visages
+        run: npx tsx scripts/test-faces-manage.ts
+      - name: Tests timeline
+        run: npx tsx scripts/test-timeline.ts
+      - name: Tests movie maker v2
+        run: npx tsx scripts/test-movie-v2.ts
+
+      # Build de l'app (ABI Electron)
+      - name: Rebuild dépendances natives (Electron)
+        run: npx electron-builder install-app-deps
+      - name: Build electron-vite
+        run: npm run build
+
+      # E2E : pipeline complet + parité WebGL dans le vrai Electron
+      - name: Assets de test
+        run: node scripts/make-test-assets.mjs "${{ runner.temp }}/photos"
+
+      - name: E2E pipeline (Linux, sous Xvfb)
+        if: runner.os == 'Linux'
+        env:
+          PICALIBRE_TEST_SCAN: ${{ runner.temp }}/photos
+        run: xvfb-run -a npx electron out/main/index.js --no-sandbox
+
+      - name: E2E parité WebGL (Linux, sous Xvfb)
+        if: runner.os == 'Linux'
+        env:
+          PICALIBRE_TEST_WEBGL: '1'
+        run: xvfb-run -a npx electron out/main/index.js --no-sandbox
+
+      - name: E2E pipeline (Windows)
+        if: runner.os == 'Windows'
+        env:
+          PICALIBRE_TEST_SCAN: ${{ runner.temp }}\photos
+        run: npx electron out/main/index.js
+
+      - name: E2E parité WebGL (Windows)
+        if: runner.os == 'Windows'
+        env:
+          PICALIBRE_TEST_WEBGL: '1'
+        run: npx electron out/main/index.js
+
+      # Packaging (sans publication) : AppImage/deb sur Linux, NSIS sur Windows
+      - name: Package
+        run: npx electron-builder --publish never
+      - name: Artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: picalibre-${{ matrix.os }}
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.exe
+          if-no-files-found: warn
+          retention-days: 14
