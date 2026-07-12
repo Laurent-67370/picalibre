@@ -23,6 +23,7 @@ import {
   f32ToBlob,
   mergeCentroid
 } from '../src/main/services/faces/cluster'
+import { hashPassword, verifyPassword } from '../src/main/services/privacy-core'
 
 async function main() {
   // --- 1. DSL : upsertOp remplace, valeur neutre supprime ---
@@ -221,6 +222,29 @@ async function main() {
   assert.equal(rt.length, vecA.length, 'aller-retour BLOB longueur')
   assert.equal(Math.abs(rt[10] - vecA[10]) < 1e-9, true, 'aller-retour BLOB valeurs')
   console.log('✅ Clustering visages (cosinus, assignation, centroïdes, BLOB)')
+
+  // --- 8. Watermark : mêmes dimensions, coin bas-droit modifié ---
+  const noWm = await renderEdited(tmp, emptyStack(), { format: 'png', maxSize: 400 })
+  const withWm = await renderEdited(tmp, emptyStack(), { format: 'png', maxSize: 400, watermark: 'PicaLibre © test' })
+  const m1 = await sharp(noWm).metadata()
+  const m2 = await sharp(withWm).metadata()
+  assert.deepEqual([m1.width, m1.height], [m2.width, m2.height], 'watermark ne change pas les dimensions')
+  const corner = { left: m1.width! - 120, top: m1.height! - 40, width: 110, height: 30 }
+  const c1 = await sharp(noWm).extract(corner).raw().toBuffer()
+  const c2 = await sharp(withWm).extract(corner).raw().toBuffer()
+  assert.equal(Buffer.compare(c1, c2) !== 0, true, 'coin bas-droit modifié par le filigrane')
+  const topLeft = { left: 0, top: 0, width: 100, height: 100 }
+  const t1 = await sharp(noWm).extract(topLeft).raw().toBuffer()
+  const t2 = await sharp(withWm).extract(topLeft).raw().toBuffer()
+  assert.equal(Buffer.compare(t1, t2), 0, 'reste de l image intact')
+  console.log('✅ Watermark (dimensions intactes, incrustation localisée)')
+
+  // --- 9. Mot de passe scrypt ---
+  const stored = hashPassword('l@urent67!')
+  assert.equal(verifyPassword('l@urent67!', stored), true, 'bon mot de passe accepté')
+  assert.equal(verifyPassword('mauvais', stored), false, 'mauvais mot de passe rejeté')
+  assert.notEqual(hashPassword('x'), hashPassword('x'), 'sel aléatoire : deux hashs différents')
+  console.log('✅ Mot de passe scrypt (vérif, rejet, sel)')
 
   console.log('\n🎉 Tous les tests du moteur passent')
 }

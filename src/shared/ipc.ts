@@ -93,6 +93,18 @@ export interface IpcInvokeMap {
   'photos:withGps': { req: void; res: GpsPhoto[] }
   'duplicates:list': { req: void; res: Array<{ hash: string; photos: PhotoRow[] }> }
   'duplicates:merge': { req: { keepId: number; removeIds: number[] }; res: void }
+  'scanRoots:setMode': { req: { id: number; mode: 'watch' | 'once' | 'excluded' }; res: void }
+  'library:relocate': { req: { newRoot: string }; res: { markedMissing: number; relinked: number; stillMissing: number } }
+  'photos:setHidden': { req: { photoIds: number[]; hidden: boolean }; res: { ok: boolean; error?: string } }
+  'photos:hidden': { req: void; res: PhotoRow[] }
+  'privacy:status': { req: void; res: { hasPassword: boolean; unlocked: boolean } }
+  'privacy:setPassword': { req: { password: string }; res: { ok: boolean; error?: string } }
+  'privacy:unlock': { req: { password: string }; res: { ok: boolean } }
+  'privacy:lock': { req: void; res: void }
+  'export:batch': { req: { photoIds: number[]; destDir: string; maxSize: number | null; quality: number; watermark: string | null }; res: { exported: number; errors: number } }
+  'export:metadata': { req: { photoIds: number[]; destFile: string }; res: { rows: number } }
+  'photos:print': { req: { photoIds: number[]; perPage: 1 | 2 | 4 }; res: void }
+  'share:email': { req: { photoIds: number[] }; res: { dir: string } }
   'import:run': { req: { sourceDir: string; destDir: string }; res: { found: number; copied: number; skippedDuplicates: number; errors: number } }
   'photos:setGps': { req: { photoIds: number[]; lat: number; lon: number }; res: void }
   'edits:get': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
@@ -110,6 +122,7 @@ export interface IpcEventMap {
   'faces:progress': { done: number; total: number }
   'persons:changed': Record<string, never>
   'import:progress': { done: number; total: number; copied: number; skipped: number }
+  'export:progress': { done: number; total: number }
 }
 
 export type IpcChannel = keyof IpcInvokeMap

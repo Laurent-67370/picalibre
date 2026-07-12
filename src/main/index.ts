@@ -7,6 +7,10 @@ import { getEditState, saveStack, undo, redo } from './services/edits'
 import { startFaceScan, isFaceScanRunning, humanModelsPath } from './services/faces'
 import { startWatchers } from './services/watcher'
 import { importFromDevice } from './services/importer'
+import { relocateLibrary } from './services/relocate'
+import { privacyStatus, setPassword, unlock, lock, isUnlocked } from './services/privacy'
+import { batchExport, exportMetadataCsv, emailShare } from './services/exporter'
+import { printPhotos } from './services/printer'
 import { renderEdited } from './services/render-sharp'
 import { startScan } from './services/scanner'
 
@@ -168,6 +172,37 @@ function registerIpc(): void {
     })
     tx(photoIds)
   })
+  ipcMain.handle('scanRoots:setMode', (_e, { id, mode }) => {
+    getDb().prepare('UPDATE scan_roots SET mode = ? WHERE id = ?').run(mode, id)
+    startWatchers(mainWindow)
+  })
+  ipcMain.handle('library:relocate', (_e, { newRoot }) => relocateLibrary(mainWindow, newRoot))
+  ipcMain.handle('photos:setHidden', (_e, { photoIds, hidden }) => {
+    if (!hidden && !isUnlocked()) return { ok: false, error: 'verrouillé' }
+    const db = getDb()
+    const stmt = db.prepare('UPDATE photos SET is_hidden = ? WHERE id = ?')
+    const tx = db.transaction((ids: number[]) => {
+      for (const id of ids) stmt.run(hidden ? 1 : 0, id)
+    })
+    tx(photoIds)
+    return { ok: true }
+  })
+  ipcMain.handle('photos:hidden', () => {
+    if (!isUnlocked()) return []
+    return getDb()
+      .prepare(`SELECT * FROM photos WHERE is_hidden = 1 AND status = 'active' ORDER BY taken_at DESC`)
+      .all()
+  })
+  ipcMain.handle('privacy:status', () => privacyStatus())
+  ipcMain.handle('privacy:setPassword', (_e, { password }) => setPassword(password))
+  ipcMain.handle('privacy:unlock', (_e, { password }) => ({ ok: unlock(password) }))
+  ipcMain.handle('privacy:lock', () => lock())
+  ipcMain.handle('export:batch', (_e, opts) => batchExport(mainWindow, opts))
+  ipcMain.handle('export:metadata', async (_e, { photoIds, destFile }) =>
+    exportMetadataCsv(photoIds, destFile)
+  )
+  ipcMain.handle('photos:print', (_e, { photoIds, perPage }) => printPhotos(photoIds, perPage))
+  ipcMain.handle('share:email', (_e, { photoIds }) => emailShare(mainWindow, photoIds))
   ipcMain.handle('duplicates:list', () => {
     const db = getDb()
     const hashes = db
@@ -303,6 +338,15 @@ app.whenReady().then(() => {
   registerIpc()
   createWindow()
   startWatchers(mainWindow)
+
+  // Mode test headless relocate : PICALIBRE_TEST_RELOCATE="nouvelleRacine"
+  const testRelocate = process.env.PICALIBRE_TEST_RELOCATE
+  if (testRelocate) {
+    void relocateLibrary(mainWindow, testRelocate).then((stats) => {
+      console.log('[test] RELOCATE', JSON.stringify(stats))
+      app.quit()
+    })
+  }
 
   // Mode test headless import : PICALIBRE_TEST_IMPORT="source::dest"
   const testImport = process.env.PICALIBRE_TEST_IMPORT

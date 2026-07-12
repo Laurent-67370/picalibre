@@ -21,6 +21,8 @@ type View =
   | { type: 'search'; query: string }
   | { type: 'map' }
   | { type: 'duplicates' }
+  | { type: 'hidden' }
+  | { type: 'settings' }
 
 const PHASE_LABEL: Record<ScanProgress['phase'], string> = {
   walking: 'Parcours des dossiers',
@@ -42,6 +44,12 @@ export default function App(): JSX.Element {
   const [faceProgress, setFaceProgress] = useState<{ done: number; total: number } | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [dupGroups, setDupGroups] = useState<Array<{ hash: string; photos: PhotoRow[] }>>([])
+  const [roots, setRoots] = useState<Array<{ id: number; path: string; mode: string }>>([])
+  const [privacy, setPrivacy] = useState<{ hasPassword: boolean; unlocked: boolean }>({ hasPassword: false, unlocked: true })
+  const [pwInput, setPwInput] = useState('')
+  const [exportPreset, setExportPreset] = useState<number | 0>(0)
+  const [watermark, setWatermark] = useState('')
+  const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
   const [importProgress, setImportProgress] = useState<{ done: number; total: number; copied: number; skipped: number } | null>(null)
   const [view, setView] = useState<View | null>(null)
   const [photos, setPhotos] = useState<PhotoRow[]>([])
@@ -80,6 +88,20 @@ export default function App(): JSX.Element {
       window.api.invoke('duplicates:list', undefined).then(setDupGroups)
       return
     }
+    if (v.type === 'settings') {
+      setPhotos([])
+      window.api.invoke('scanRoots:list', undefined).then(setRoots)
+      window.api.invoke('privacy:status', undefined).then(setPrivacy)
+      return
+    }
+    if (v.type === 'hidden') {
+      window.api.invoke('privacy:status', undefined).then((st) => {
+        setPrivacy(st)
+        if (st.unlocked) window.api.invoke('photos:hidden', undefined).then(setPhotos)
+        else setPhotos([])
+      })
+      return
+    }
     const req =
       v.type === 'folder'
         ? window.api.invoke('photos:byFolder', { folderId: v.id, offset: 0, limit: PAGE })
@@ -112,7 +134,11 @@ export default function App(): JSX.Element {
     const off5 = window.api.on('import:progress', (p) => {
       setImportProgress(p.done >= p.total ? null : p)
     })
+    const off6 = window.api.on('export:progress', (p) => {
+      setExportProgress(p.done >= p.total ? null : p)
+    })
     void off5
+    void off6
     return () => {
       off1()
       off2()
@@ -140,6 +166,54 @@ export default function App(): JSX.Element {
     const removeIds = group.photos.filter((p) => p.id !== keepId).map((p) => p.id)
     await window.api.invoke('duplicates:merge', { keepId, removeIds })
     window.api.invoke('duplicates:list', undefined).then(setDupGroups)
+    refreshSidebar()
+  }
+
+  const trayExport = async () => {
+    if (trayIds.length === 0) return
+    const destDir = await window.api.invoke('dialog:pickFolder', undefined)
+    if (!destDir) return
+    setExportProgress({ done: 0, total: trayIds.length })
+    const r = await window.api.invoke('export:batch', {
+      photoIds: trayIds,
+      destDir,
+      maxSize: exportPreset === 0 ? null : exportPreset,
+      quality: 90,
+      watermark: watermark.trim() || null
+    })
+    setExportProgress(null)
+    alert(`Export : ${r.exported} réussie(s), ${r.errors} erreur(s).`)
+  }
+
+  const trayCsv = async () => {
+    if (trayIds.length === 0) return
+    const destDir = await window.api.invoke('dialog:pickFolder', undefined)
+    if (!destDir) return
+    const r = await window.api.invoke('export:metadata', {
+      photoIds: trayIds,
+      destFile: `${destDir}/metadonnees.csv`
+    })
+    alert(`CSV écrit (${r.rows} ligne(s)) : ${destDir}/metadonnees.csv`)
+  }
+
+  const trayHide = async () => {
+    const hide = view?.type !== 'hidden'
+    const r = await window.api.invoke('photos:setHidden', { photoIds: trayIds, hidden: hide })
+    if (!r.ok) {
+      alert('Déverrouille les photos masquées d’abord (⚙ Réglages).')
+      return
+    }
+    setTray(new Map())
+    if (viewRef.current) loadView(viewRef.current)
+  }
+
+  const relocate = async () => {
+    const newRoot = await window.api.invoke('dialog:pickFolder', undefined)
+    if (!newRoot) return
+    const r = await window.api.invoke('library:relocate', { newRoot })
+    alert(
+      `Migration : ${r.relinked} photo(s) reliée(s) par hash, ${r.stillMissing} toujours manquante(s).`
+    )
     refreshSidebar()
   }
 
@@ -260,6 +334,18 @@ export default function App(): JSX.Element {
             style={sidebarItem(view?.type === 'duplicates')}
           >
             ⧉ Doublons
+          </div>
+          <div
+            onClick={() => loadView({ type: 'hidden' })}
+            style={sidebarItem(view?.type === 'hidden')}
+          >
+            🙈 Masquées
+          </div>
+          <div
+            onClick={() => loadView({ type: 'settings' })}
+            style={sidebarItem(view?.type === 'settings')}
+          >
+            ⚙ Réglages
           </div>
 
           <div style={{ fontSize: 11, opacity: 0.5, margin: '10px 0 4px' }}>PERSONNES</div>
@@ -404,7 +490,131 @@ export default function App(): JSX.Element {
             </div>
           )}
 
-          {view?.type === 'duplicates' ? (
+          {view?.type === 'settings' ? (
+            <div style={{ flex: 1, overflow: 'auto', padding: 16, maxWidth: 720 }}>
+              <h3 style={{ marginTop: 0 }}>Dossiers surveillés</h3>
+              {roots.map((r) => (
+                <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {r.path}
+                  </span>
+                  <select
+                    value={r.mode}
+                    onChange={async (e) => {
+                      await window.api.invoke('scanRoots:setMode', {
+                        id: r.id,
+                        mode: e.target.value as 'watch' | 'once' | 'excluded'
+                      })
+                      window.api.invoke('scanRoots:list', undefined).then(setRoots)
+                    }}
+                    style={{ padding: 4, background: '#14171c', color: '#d7dae0', border: '1px solid #333' }}
+                  >
+                    <option value="watch">Surveillé</option>
+                    <option value="once">Une fois</option>
+                    <option value="excluded">Exclu</option>
+                  </select>
+                  <button
+                    onClick={async () => {
+                      await window.api.invoke('scanRoots:remove', { id: r.id })
+                      window.api.invoke('scanRoots:list', undefined).then(setRoots)
+                      refreshSidebar()
+                    }}
+                  >
+                    🗑
+                  </button>
+                </div>
+              ))}
+              {roots.length === 0 && <p style={{ opacity: 0.6, fontSize: 13 }}>Aucune racine.</p>}
+
+              <h3>Migration de bibliothèque</h3>
+              <p style={{ fontSize: 13, opacity: 0.7 }}>
+                Tu as déplacé tes photos vers un nouveau disque ? Les fichiers sont reliés par
+                empreinte (hash) — albums, tags, visages et éditions sont conservés.
+              </p>
+              <button onClick={relocate}>📦 Relier vers un nouveau dossier…</button>
+
+              <h3 style={{ marginTop: 24 }}>Photos masquées — mot de passe</h3>
+              <p style={{ fontSize: 13, opacity: 0.7 }}>
+                {privacy.hasPassword
+                  ? privacy.unlocked
+                    ? 'Protégé, actuellement déverrouillé.'
+                    : 'Protégé et verrouillé.'
+                  : 'Aucun mot de passe : les photos masquées sont visibles par tous.'}
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="password"
+                  placeholder="Mot de passe…"
+                  value={pwInput}
+                  onChange={(e) => setPwInput(e.target.value)}
+                  style={{ padding: 6, background: '#14171c', border: '1px solid #333', borderRadius: 4, color: '#d7dae0' }}
+                />
+                {!privacy.hasPassword || privacy.unlocked ? (
+                  <button
+                    onClick={async () => {
+                      const r = await window.api.invoke('privacy:setPassword', { password: pwInput })
+                      if (!r.ok) alert('Déverrouille d’abord.')
+                      setPwInput('')
+                      window.api.invoke('privacy:status', undefined).then(setPrivacy)
+                    }}
+                  >
+                    {privacy.hasPassword ? 'Changer' : 'Définir'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      const r = await window.api.invoke('privacy:unlock', { password: pwInput })
+                      if (!r.ok) alert('Mot de passe incorrect.')
+                      setPwInput('')
+                      window.api.invoke('privacy:status', undefined).then(setPrivacy)
+                    }}
+                  >
+                    Déverrouiller
+                  </button>
+                )}
+                {privacy.hasPassword && privacy.unlocked && (
+                  <>
+                    <button
+                      onClick={async () => {
+                        await window.api.invoke('privacy:lock', undefined)
+                        window.api.invoke('privacy:status', undefined).then(setPrivacy)
+                      }}
+                    >
+                      Verrouiller
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await window.api.invoke('privacy:setPassword', { password: '' })
+                        window.api.invoke('privacy:status', undefined).then(setPrivacy)
+                      }}
+                    >
+                      Supprimer
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ) : view?.type === 'hidden' && !privacy.unlocked ? (
+            <div style={{ flex: 1, padding: 24 }}>
+              <h3>🙈 Photos masquées — verrouillé</h3>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="password"
+                  placeholder="Mot de passe…"
+                  value={pwInput}
+                  onChange={(e) => setPwInput(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key !== 'Enter') return
+                    const r = await window.api.invoke('privacy:unlock', { password: pwInput })
+                    setPwInput('')
+                    if (r.ok) loadView({ type: 'hidden' })
+                    else alert('Mot de passe incorrect.')
+                  }}
+                  style={{ padding: 6, background: '#14171c', border: '1px solid #333', borderRadius: 4, color: '#d7dae0' }}
+                />
+              </div>
+            </div>
+          ) : view?.type === 'duplicates' ? (
             <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
               {dupGroups.length === 0 ? (
                 <p style={{ opacity: 0.7 }}>✨ Aucun doublon exact (même hash) dans la bibliothèque.</p>
@@ -640,6 +850,52 @@ export default function App(): JSX.Element {
         <button onClick={() => setTray(new Map())} disabled={tray.size === 0}>
           Vider
         </button>
+        <span style={{ width: 1, alignSelf: 'stretch', background: '#333' }} />
+        <select
+          value={exportPreset}
+          onChange={(e) => setExportPreset(Number(e.target.value))}
+          title="Taille d'export"
+          style={{ padding: 6, background: '#14171c', color: '#d7dae0', border: '1px solid #333' }}
+        >
+          <option value={0}>Original</option>
+          <option value={2048}>2048 px</option>
+          <option value={1600}>1600 px</option>
+          <option value={1024}>1024 px</option>
+        </select>
+        <input
+          placeholder="Filigrane…"
+          value={watermark}
+          onChange={(e) => setWatermark(e.target.value)}
+          style={{ padding: 6, width: 110, background: '#14171c', border: '1px solid #333', borderRadius: 4, color: '#d7dae0' }}
+        />
+        <button onClick={trayExport} disabled={tray.size === 0} title="Exporter (éditions appliquées)">
+          💾
+        </button>
+        <button onClick={trayCsv} disabled={tray.size === 0} title="Exporter les métadonnées en CSV">
+          📄
+        </button>
+        <button onClick={trayHide} disabled={tray.size === 0} title="Masquer / démasquer">
+          {view?.type === 'hidden' ? '👁' : '🙈'}
+        </button>
+        <button
+          onClick={() => window.api.invoke('photos:print', { photoIds: trayIds, perPage: 4 })}
+          disabled={tray.size === 0}
+          title="Imprimer (4 par page)"
+        >
+          🖨
+        </button>
+        <button
+          onClick={() => window.api.invoke('share:email', { photoIds: trayIds })}
+          disabled={tray.size === 0}
+          title="Partager par email (copies 1600 px)"
+        >
+          ✉
+        </button>
+        {exportProgress && (
+          <span style={{ fontSize: 12, opacity: 0.7 }}>
+            {exportProgress.done}/{exportProgress.total}
+          </span>
+        )}
       </footer>
     </div>
   )

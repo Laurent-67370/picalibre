@@ -21,6 +21,7 @@ export interface ExportOptions {
   format?: 'jpeg' | 'webp' | 'png'
   quality?: number
   maxSize?: number // redimensionnement final optionnel (bord le plus long)
+  watermark?: string // texte incrusté en bas à droite
 }
 
 export async function renderEdited(
@@ -28,7 +29,7 @@ export async function renderEdited(
   stack: EditStack,
   opts: ExportOptions = {}
 ): Promise<Buffer> {
-  const { format = 'jpeg', quality = 92, maxSize } = opts
+  const { format = 'jpeg', quality = 92, maxSize, watermark } = opts
 
   // Passe 1 : orientation EXIF + redressement
   let pass1 = sharp(filepath, { failOn: 'none' }).rotate()
@@ -60,6 +61,28 @@ export async function renderEdited(
   if (maxSize) {
     out = out.resize(maxSize, maxSize, { fit: 'inside', withoutEnlargement: true })
   }
+
+  // Filigrane : composé APRÈS le redimensionnement, taille relative à l'image
+  if (watermark) {
+    const inter = await out.png().toBuffer()
+    const m = await sharp(inter).metadata()
+    const W = m.width ?? 100
+    const H = m.height ?? 100
+    const fontSize = Math.max(12, Math.round(W / 28))
+    const escaped = watermark.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      <text x="${W - Math.round(fontSize * 0.6)}" y="${H - Math.round(fontSize * 0.6)}"
+        text-anchor="end" font-family="DejaVu Sans, sans-serif" font-size="${fontSize}"
+        fill="#ffffff" fill-opacity="0.85" stroke="#000000" stroke-opacity="0.35"
+        stroke-width="1">${escaped}</text></svg>`
+    const composited = await sharp(inter)
+      .composite([{ input: Buffer.from(svg) }])
+      .removeAlpha() // le SVG introduit un canal alpha : on reste en RGB
+      .png()
+      .toBuffer()
+    out = sharp(composited)
+  }
+
   switch (format) {
     case 'webp':
       return out.webp({ quality }).toBuffer()
