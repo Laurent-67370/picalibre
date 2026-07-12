@@ -4,6 +4,8 @@
  */
 import sharp from 'sharp'
 import assert from 'node:assert'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   applySpatialOps,
   computeAutoContrast,
@@ -93,7 +95,7 @@ async function main() {
     ])
     .jpeg()
     .toBuffer()
-  const tmp = '/tmp/picalibre-test.jpg'
+  const tmp = join(tmpdir(), 'picalibre-test.jpg')
   await sharp(testImg).toFile(tmp)
 
   let stack = emptyStack()
@@ -277,7 +279,7 @@ async function main() {
     { filepath: tmp, stack: upsertOp(emptyStack(), { type: 'filter', params: { name: 'bw', intensity: 1 } }) },
     { filepath: tmp, stack: emptyStack() }
   ]
-  const collageOut = '/tmp/picalibre-collage.jpg'
+  const collageOut = join(tmpdir(), 'picalibre-collage.jpg')
   const dims = await makeCollage(collageItems, 'mosaic', collageOut)
   const cm = await sharp(collageOut).metadata()
   assert.deepEqual([cm.width, cm.height], [dims.width, dims.height], 'collage : dimensions annoncées')
@@ -285,7 +287,7 @@ async function main() {
   console.log(`✅ Collage mosaic 3 photos (${cm.width}x${cm.height}, filtre N&B appliqué à la 2e)`)
 
   // --- 12. Movie maker : MP4 réel vérifié au ffprobe ---
-  const movieOut = '/tmp/picalibre-movie.mp4'
+  const movieOut = join(tmpdir(), 'picalibre-movie.mp4')
   await makeMovie(
     [
       { filepath: tmp, stack: emptyStack() },
