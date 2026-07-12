@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { AlbumRow, FolderRow, PersonRow, PhotoRow, ScanProgress, RendererApi } from '@shared/ipc'
 import MapView from './MapView'
+import Slideshow from './Slideshow'
 import Editor from './Editor'
 
 declare global {
@@ -50,6 +51,9 @@ export default function App(): JSX.Element {
   const [exportPreset, setExportPreset] = useState<number | 0>(0)
   const [watermark, setWatermark] = useState('')
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
+  const [slideshow, setSlideshow] = useState(false)
+  const [collageLayout, setCollageLayout] = useState<'grid' | 'row' | 'column' | 'mosaic'>('grid')
+  const [movieBusy, setMovieBusy] = useState(false)
   const [importProgress, setImportProgress] = useState<{ done: number; total: number; copied: number; skipped: number } | null>(null)
   const [view, setView] = useState<View | null>(null)
   const [photos, setPhotos] = useState<PhotoRow[]>([])
@@ -215,6 +219,53 @@ export default function App(): JSX.Element {
       `Migration : ${r.relinked} photo(s) reliée(s) par hash, ${r.stillMissing} toujours manquante(s).`
     )
     refreshSidebar()
+  }
+
+  const trayCollage = async () => {
+    if (trayIds.length === 0) return
+    const outFile = await window.api.invoke('dialog:saveFile', {
+      defaultName: 'collage.jpg',
+      name: 'JPEG',
+      extensions: ['jpg']
+    })
+    if (!outFile) return
+    const r = await window.api.invoke('create:collage', {
+      photoIds: trayIds,
+      layout: collageLayout,
+      outFile
+    })
+    alert(`🧩 Collage ${r.width}x${r.height} créé : ${outFile}`)
+  }
+
+  const trayMovie = async () => {
+    if (trayIds.length === 0) return
+    const wantAudio = confirm('Ajouter une piste audio (MP3/M4A/WAV) ?')
+    let audioPath: string | null = null
+    if (wantAudio) {
+      audioPath = await window.api.invoke('dialog:pickFile', {
+        name: 'Audio',
+        extensions: ['mp3', 'm4a', 'wav', 'ogg', 'flac']
+      })
+    }
+    const outFile = await window.api.invoke('dialog:saveFile', {
+      defaultName: 'diaporama.mp4',
+      name: 'Vidéo MP4',
+      extensions: ['mp4']
+    })
+    if (!outFile) return
+    setMovieBusy(true)
+    try {
+      await window.api.invoke('create:movie', {
+        photoIds: trayIds,
+        durationSec: 3,
+        audioPath,
+        outFile
+      })
+      alert(`🎬 Film créé : ${outFile}`)
+    } catch {
+      alert('Échec de la création du film.')
+    }
+    setMovieBusy(false)
   }
 
   const addFolder = async () => {
@@ -785,6 +836,12 @@ export default function App(): JSX.Element {
       </div>
 
       {editing && <Editor photo={editing} onClose={() => setEditing(null)} />}
+      {slideshow && (
+        <Slideshow
+          photos={tray.size > 0 ? [...tray.values()] : photos}
+          onClose={() => setSlideshow(false)}
+        />
+      )}
 
       {/* ---- Tray (bac Picasa) ---- */}
       <footer
@@ -890,6 +947,31 @@ export default function App(): JSX.Element {
           title="Partager par email (copies 1600 px)"
         >
           ✉
+        </button>
+        <span style={{ width: 1, alignSelf: 'stretch', background: '#333' }} />
+        <button
+          onClick={() => setSlideshow(true)}
+          disabled={tray.size === 0 && photos.length === 0}
+          title="Diaporama plein écran (bac, sinon vue courante)"
+        >
+          ▶
+        </button>
+        <select
+          value={collageLayout}
+          onChange={(e) => setCollageLayout(e.target.value as typeof collageLayout)}
+          title="Layout du collage"
+          style={{ padding: 6, background: '#14171c', color: '#d7dae0', border: '1px solid #333' }}
+        >
+          <option value="grid">Grille</option>
+          <option value="mosaic">Mosaïque</option>
+          <option value="row">Bande H</option>
+          <option value="column">Bande V</option>
+        </select>
+        <button onClick={trayCollage} disabled={tray.size === 0} title="Créer un collage">
+          🧩
+        </button>
+        <button onClick={trayMovie} disabled={tray.size === 0 || movieBusy} title="Créer un film MP4">
+          {movieBusy ? '⏳' : '🎬'}
         </button>
         {exportProgress && (
           <span style={{ fontSize: 12, opacity: 0.7 }}>

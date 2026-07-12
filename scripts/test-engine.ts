@@ -24,6 +24,11 @@ import {
   mergeCentroid
 } from '../src/main/services/faces/cluster'
 import { hashPassword, verifyPassword } from '../src/main/services/privacy-core'
+import { computeLayout, makeCollage } from '../src/main/services/collage'
+import { makeMovie } from '../src/main/services/movie'
+import ffmpegPath from 'ffmpeg-static'
+import { path as ffprobePath } from 'ffprobe-static'
+import { execFileSync } from 'node:child_process'
 
 async function main() {
   // --- 1. DSL : upsertOp remplace, valeur neutre supprime ---
@@ -245,6 +250,61 @@ async function main() {
   assert.equal(verifyPassword('mauvais', stored), false, 'mauvais mot de passe rejeté')
   assert.notEqual(hashPassword('x'), hashPassword('x'), 'sel aléatoire : deux hashs différents')
   console.log('✅ Mot de passe scrypt (vérif, rejet, sel)')
+
+  // --- 10. Layouts de collage (pur) ---
+  for (const layout of ['grid', 'row', 'column', 'mosaic'] as const) {
+    for (const n of [1, 2, 3, 5, 7]) {
+      const plan = computeLayout(n, layout)
+      assert.equal(plan.cells.length, n, `${layout}/${n} : nb cellules`)
+      for (const c of plan.cells) {
+        assert.equal(c.x >= 0 && c.y >= 0 && c.x + c.w <= plan.W && c.y + c.h <= plan.H, true,
+          `${layout}/${n} : cellule dans le canevas`)
+        assert.equal(c.w > 0 && c.h > 0, true, `${layout}/${n} : cellule non vide`)
+      }
+      // Pas de chevauchement
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+        const a = plan.cells[i], b = plan.cells[j]
+        const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+        assert.equal(overlap, false, `${layout}/${n} : cellules ${i}/${j} se chevauchent`)
+      }
+    }
+  }
+  console.log('✅ Layouts collage (grid/row/column/mosaic × 1..7, bornes, zéro chevauchement)')
+
+  // --- 11. Collage complet (sharp, éditions appliquées) ---
+  const collageItems = [
+    { filepath: tmp, stack: emptyStack() },
+    { filepath: tmp, stack: upsertOp(emptyStack(), { type: 'filter', params: { name: 'bw', intensity: 1 } }) },
+    { filepath: tmp, stack: emptyStack() }
+  ]
+  const collageOut = '/tmp/picalibre-collage.jpg'
+  const dims = await makeCollage(collageItems, 'mosaic', collageOut)
+  const cm = await sharp(collageOut).metadata()
+  assert.deepEqual([cm.width, cm.height], [dims.width, dims.height], 'collage : dimensions annoncées')
+  assert.deepEqual([cm.width, cm.height], [2048, 1365], 'collage mosaic : 2048x1365')
+  console.log(`✅ Collage mosaic 3 photos (${cm.width}x${cm.height}, filtre N&B appliqué à la 2e)`)
+
+  // --- 12. Movie maker : MP4 réel vérifié au ffprobe ---
+  const movieOut = '/tmp/picalibre-movie.mp4'
+  await makeMovie(
+    [
+      { filepath: tmp, stack: emptyStack() },
+      { filepath: tmp, stack: upsertOp(emptyStack(), { type: 'filter', params: { name: 'sepia', intensity: 1 } }) },
+      { filepath: tmp, stack: emptyStack() }
+    ],
+    { ffmpegPath: ffmpegPath as string, durationSec: 2, audioPath: null, outFile: movieOut }
+  )
+  const probe = JSON.parse(
+    execFileSync(ffprobePath, [
+      '-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', movieOut
+    ]).toString()
+  )
+  const dur = parseFloat(probe.format.duration)
+  const v = probe.streams.find((st: any) => st.codec_type === 'video')
+  assert.equal(Math.abs(dur - 6) < 0.5, true, `durée ${dur}s ≈ 3×2s`)
+  assert.equal(v.codec_name, 'h264', 'codec h264')
+  assert.deepEqual([v.width, v.height], [1280, 720], 'résolution 1280x720')
+  console.log(`✅ Movie MP4 : ${dur}s, ${v.codec_name}, ${v.width}x${v.height}`)
 
   console.log('\n🎉 Tous les tests du moteur passent')
 }

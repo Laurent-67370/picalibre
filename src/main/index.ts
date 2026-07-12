@@ -11,6 +11,10 @@ import { relocateLibrary } from './services/relocate'
 import { privacyStatus, setPassword, unlock, lock, isUnlocked } from './services/privacy'
 import { batchExport, exportMetadataCsv, emailShare } from './services/exporter'
 import { printPhotos } from './services/printer'
+import { makeCollage, CollageItem } from './services/collage'
+import { makeMovie, MovieItem } from './services/movie'
+import ffmpegPath from 'ffmpeg-static'
+import { parseStack } from '../shared/edit-engine'
 import { renderEdited } from './services/render-sharp'
 import { startScan } from './services/scanner'
 
@@ -66,6 +70,21 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+/** Photos + stacks d'édition, dans l'ordre demandé. */
+function photosWithStacks(photoIds: number[]): Array<CollageItem & MovieItem> {
+  const db = getDb()
+  const getPhoto = db.prepare('SELECT filepath FROM photos WHERE id = ?')
+  const getStack = db.prepare('SELECT current_stack FROM edits WHERE photo_id = ?')
+  const items: Array<CollageItem & MovieItem> = []
+  for (const id of photoIds) {
+    const p = getPhoto.get(id) as { filepath: string } | undefined
+    if (!p) continue
+    const e = getStack.get(id) as { current_stack: string } | undefined
+    items.push({ filepath: p.filepath, stack: parseStack(e?.current_stack ?? '{}') })
+  }
+  return items
 }
 
 function registerIpc(): void {
@@ -324,6 +343,34 @@ function registerIpc(): void {
     const buffer = await renderEdited(photo.filepath, stack, { format, maxSize })
     await writeFile(r.filePath, buffer)
     return { outPath: r.filePath }
+  })
+  ipcMain.handle('dialog:pickFile', async (_e, { name, extensions }) => {
+    const r = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [{ name, extensions }]
+    })
+    return r.canceled ? null : r.filePaths[0]
+  })
+  ipcMain.handle('dialog:saveFile', async (_e, { defaultName, name, extensions }) => {
+    const r = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: defaultName,
+      filters: [{ name, extensions }]
+    })
+    return r.canceled || !r.filePath ? null : r.filePath
+  })
+  ipcMain.handle('create:collage', async (_e, { photoIds, layout, outFile }) => {
+    const items = photosWithStacks(photoIds)
+    return makeCollage(items, layout, outFile)
+  })
+  ipcMain.handle('create:movie', async (_e, { photoIds, durationSec, audioPath, outFile }) => {
+    const items = photosWithStacks(photoIds)
+    await makeMovie(items, {
+      ffmpegPath: (ffmpegPath as unknown as string) ?? 'ffmpeg',
+      durationSec,
+      audioPath,
+      outFile,
+      onProgress: (done, total) => mainWindow.webContents.send('movie:progress', { done, total })
+    })
   })
   ipcMain.handle('dialog:pickFolder', async () => {
     const r = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] })

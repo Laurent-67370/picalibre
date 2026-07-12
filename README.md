@@ -48,7 +48,8 @@ schéma des processus, DSL d'édition, schéma SQL complet, plan par phases.
 - [x] Phase 3 — Reconnaissance faciale : détection @vladmandic/human (fenêtre cachée, 100 % offline, modèles servis via faceres://), embeddings faceres, clustering incrémental par cosinus (seuil 0,55), vue Personnes avec avatars recadrés et nommage
 - [x] Phase 3 — Carte MapLibre/OSM : marqueurs-miniatures des photos géotaguées (EXIF GPS), géotag manuel des photos du bac par clic sur la carte
 - [ ] Phase 3 — Fusion/scission manuelle de clusters, confirmation des suggestions
-- [ ] Phase 4 — Collages, diaporamas, movies
+- [x] Phase 4 — Collages (4 layouts : grille, mosaïque, bandes H/V — cellules calculées sans chevauchement, remplissage cover avec recadrage attentionnel, éditions appliquées), diaporama plein écran (fondu, lecture auto, clavier), movie maker ffmpeg embarqué (photos éditées → MP4 H.264 1280x720 letterbox, piste audio optionnelle -shortest, durée exacte)
+- [ ] Phase 4+ — Vidéos dans les movies, transitions animées, multi-pistes audio
 - [ ] Phase 5 — Partage, impression, migration de bibliothèque
 
 ## Licence

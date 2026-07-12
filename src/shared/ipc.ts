@@ -113,6 +113,10 @@ export interface IpcInvokeMap {
   'edits:redo': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
   'edits:export': { req: { photoId: number; format?: 'jpeg' | 'webp' | 'png'; maxSize?: number }; res: { outPath: string | null } }
   'dialog:pickFolder': { req: void; res: string | null }
+  'dialog:pickFile': { req: { name: string; extensions: string[] }; res: string | null }
+  'dialog:saveFile': { req: { defaultName: string; name: string; extensions: string[] }; res: string | null }
+  'create:collage': { req: { photoIds: number[]; layout: 'grid' | 'row' | 'column' | 'mosaic'; outFile: string }; res: { width: number; height: number } }
+  'create:movie': { req: { photoIds: number[]; durationSec: number; audioPath: string | null; outFile: string }; res: void }
 }
 
 /** Canaux d'événements main → renderer */
@@ -123,6 +127,7 @@ export interface IpcEventMap {
   'persons:changed': Record<string, never>
   'import:progress': { done: number; total: number; copied: number; skipped: number }
   'export:progress': { done: number; total: number }
+  'movie:progress': { done: number; total: number }
 }
 
 export type IpcChannel = keyof IpcInvokeMap
