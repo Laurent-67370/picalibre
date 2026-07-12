@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, dialog, protocol, net } from 'electron'
 import { pathToFileURL } from 'node:url'
 import { join } from 'node:path'
-import { writeFile } from 'node:fs/promises'
+import { writeFile, access } from 'node:fs/promises'
+import sharp from 'sharp'
 import { initDb, getDb } from './db'
 import { getEditState, saveStack, undo, redo } from './services/edits'
 import { initAutoUpdate, installUpdate } from './services/updater'
@@ -20,6 +21,7 @@ import ffmpegPath from 'ffmpeg-static'
 import { parseStack } from '../shared/edit-engine'
 import { renderEdited } from './services/render-sharp'
 import { startScan } from './services/scanner'
+import { thumbsCacheDir } from './services/pipeline'
 
 app.setName('picalibre')
 
@@ -43,16 +45,152 @@ function registerFaceresProtocol(): void {
   })
 }
 
+/**
+ * thumb://library/{size}/{photoId} → fichier webp du cache.
+ *
+ * Correctifs:
+ *  1. Cache-Control: no-store sur les 404 — sinon Chromium met en cache
+ *     l'échec et ne redemande jamais l'image quand la miniature devient
+ *     disponible (cause n°1 du bug "images qui ne s'affichent pas").
+ *  2. Génération à la volée : si la miniature n'existe pas encore mais
+ *     que le fichier source est connu, on la génère ici-même plutôt que
+ *     d'attendre le thumbsPhase. Le pipeline de fond reste utile pour
+ *     pré-générer en masse, mais l'utilisateur n'attend plus.
+ *  3. Vérification d'existence du cache_path : si le fichier a été
+ *     supprimé du cache disque mais que la ligne SQL est toujours là,
+ *     on régénère.
+ */
+async function generateThumbOnTheFly(
+  photoId: number,
+  size: number,
+  filepath: string,
+  hash: string,
+  mediaType: string
+): Promise<string | null> {
+  try {
+    const cacheDir = thumbsCacheDir()
+    const cachePath = join(cacheDir, hash.slice(0, 2), `${hash}_${size}.webp`)
+    try {
+      await access(cachePath)
+      // Le fichier existe déjà sur disque, mais la ligne SQL manquait — on l'insère
+      getDb()
+        .prepare(
+          `INSERT OR REPLACE INTO thumbnails (photo_id, size, cache_path) VALUES (?, ?, ?)`
+        )
+        .run(photoId, size, cachePath)
+      return cachePath
+    } catch {
+      // Fichier absent du disque → on le génère
+    }
+
+    const { mkdir } = await import('node:fs/promises')
+    const { dirname } = await import('node:path')
+    await mkdir(dirname(cachePath), { recursive: true })
+
+    if (mediaType === 'video') {
+      // Pour les vidéos, on ne peut pas générer ici sans ffmpeg — on laisse
+      // le pipeline de fond le faire. Retourne 404 soft.
+      return null
+    }
+
+    await sharp(filepath, { failOn: 'none' })
+      .rotate()
+      .resize(size, size, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toFile(cachePath)
+
+    getDb()
+      .prepare(
+        `INSERT OR REPLACE INTO thumbnails (photo_id, size, cache_path) VALUES (?, ?, ?)`
+      )
+      .run(photoId, size, cachePath)
+
+    // Si on génère du 256, on en profite pour mettre à jour width/height
+    if (size === 256) {
+      const meta = await sharp(filepath).metadata()
+      getDb()
+        .prepare(
+          `UPDATE photos SET width = COALESCE(?, width), height = COALESCE(?, height) WHERE id = ?`
+        )
+        .run(meta.width ?? null, meta.height ?? null, photoId)
+    }
+    return cachePath
+  } catch (err) {
+    console.error('[thumb:gen]', photoId, (err as Error).message)
+    return null
+  }
+}
+
 function registerThumbProtocol(): void {
-  protocol.handle('thumb', (request) => {
+  protocol.handle('thumb', async (request) => {
     const parts = new URL(request.url).pathname.split('/').filter(Boolean)
     const size = parseInt(parts[0], 10)
     const photoId = parseInt(parts[1], 10)
+    if (!Number.isFinite(size) || !Number.isFinite(photoId) || size <= 0 || photoId <= 0) {
+      return new Response('bad request', {
+        status: 400,
+        headers: { 'Cache-Control': 'no-store' }
+      })
+    }
+
+    // Recherche en cache SQL
     const row = getDb()
       .prepare('SELECT cache_path FROM thumbnails WHERE photo_id = ? AND size = ?')
       .get(photoId, size) as { cache_path: string } | undefined
-    if (!row) return new Response('not found', { status: 404 })
-    return net.fetch(pathToFileURL(row.cache_path).toString())
+
+    let cachePath = row?.cache_path
+
+    // Vérifier que le fichier existe vraiment (peut avoir été supprimé du disque)
+    if (cachePath) {
+      try {
+        await access(cachePath)
+      } catch {
+        cachePath = undefined
+      }
+    }
+
+    // Génération à la volée si manquant
+    if (!cachePath) {
+      const photo = getDb()
+        .prepare('SELECT filepath, hash_xxh3, media_type FROM photos WHERE id = ?')
+        .get(photoId) as
+        | { filepath: string; hash_xxh3: string; media_type: string }
+        | undefined
+
+      if (!photo || !photo.hash_xxh3) {
+        // Photo inconnue ou hash pas encore calculé (scan en cours) :
+        // 404 NON caché pour que le renderer puisse réessayer
+        return new Response('not yet', {
+          status: 404,
+          headers: { 'Cache-Control': 'no-store' }
+        })
+      }
+
+      cachePath = await generateThumbOnTheFly(
+        photoId,
+        size,
+        photo.filepath,
+        photo.hash_xxh3,
+        photo.media_type
+      )
+
+      if (!cachePath) {
+        return new Response('not found', {
+          status: 404,
+          headers: { 'Cache-Control': 'no-store' }
+        })
+      }
+    }
+
+    const resp = await net.fetch(pathToFileURL(cachePath).toString())
+    // Réinjecte un Cache-Control raisonnable sur le succès
+    return new Response(resp.body, {
+      status: resp.status,
+      headers: {
+        'Content-Type': resp.headers.get('Content-Type') ?? 'image/webp',
+        'Cache-Control': 'no-cache'
+      }
+    })
   })
 }
 
