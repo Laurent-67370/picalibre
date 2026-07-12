@@ -5,6 +5,8 @@
 import sharp from 'sharp'
 import assert from 'node:assert'
 import {
+  computeAutoContrast,
+  computeAutoColor,
   emptyStack,
   upsertOp,
   applyColorOps,
@@ -102,6 +104,34 @@ async function main() {
   const pm = await sharp(plain).metadata()
   assert.deepEqual([pm.width, pm.height], [800, 600], 'stack vide = dimensions intactes')
   console.log('✅ Stack vide : original préservé')
+
+  // --- 6bis. Levels + WB + analyses auto ---
+  const lv = new Uint8ClampedArray([50, 50, 50, 255, 200, 200, 200, 255])
+  applyColorOps(lv, 4, [{ type: 'levels', params: { black: 50, white: 200 } }])
+  assert.deepEqual([lv[0], lv[4]], [0, 255], 'levels étire la dynamique')
+
+  const wb = new Uint8ClampedArray([100, 100, 100, 255])
+  applyColorOps(wb, 4, [{ type: 'wb', params: { r: 1.2, g: 1, b: 0.8 } }])
+  assert.deepEqual([wb[0], wb[1], wb[2]], [120, 100, 80], 'gains wb appliqués')
+
+  // Image bleutée : l'auto-color doit pousser R et réduire B
+  const cast = new Uint8Array(300)
+  for (let i = 0; i < 300; i += 3) { cast[i] = 80; cast[i+1] = 100; cast[i+2] = 160 }
+  const gains = computeAutoColor(cast, 3)
+  assert.equal(gains.r > 1 && gains.b < 1, true, 'gray world corrige la dominante')
+
+  // Image terne 60..180 : l'auto-contraste doit resserrer les points
+  const flat = new Uint8Array(3000)
+  for (let i = 0; i < 3000; i += 3) { const v = 60 + ((i/3) % 121); flat[i]=v; flat[i+1]=v; flat[i+2]=v }
+  const lvls = computeAutoContrast(flat, 3)
+  assert.equal(lvls.black >= 55 && lvls.white <= 185, true, `auto-contraste ${JSON.stringify(lvls)}`)
+
+  // Neutralité : upsert d'un levels neutre supprime l'op
+  let ns = upsertOp(emptyStack(), { type: 'levels', params: { black: 0, white: 255 } })
+  assert.equal(ns.ops.length, 0, 'levels neutre supprimé')
+  ns = upsertOp(ns, { type: 'wb', params: { r: 1, g: 1, b: 1 } })
+  assert.equal(ns.ops.length, 0, 'wb neutre supprimé')
+  console.log('✅ Levels, WB, auto-contraste, auto-couleur')
 
   // --- 6. stackHash stable ---
   assert.equal(stackHash(stack), stackHash(JSON.parse(JSON.stringify(stack))), 'hash stable')

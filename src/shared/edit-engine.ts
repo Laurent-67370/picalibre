@@ -19,6 +19,8 @@ export type ColorOpType = 'fill_light' | 'highlights' | 'contrast' | 'saturation
 export type EditOp =
   | { type: 'crop'; params: { x: number; y: number; w: number; h: number } }
   | { type: 'straighten'; params: { angle: number } } // degrés, -15..15
+  | { type: 'levels'; params: { black: number; white: number } } // contraste auto (0..255)
+  | { type: 'wb'; params: { r: number; g: number; b: number } } // gains balance des blancs
   | { type: ColorOpType; params: { value: number } } // -1..1 (fill_light : 0..1)
 
 export interface EditStack {
@@ -43,7 +45,9 @@ export function upsertOp(stack: EditStack, op: EditOp): EditStack {
   const ops = stack.ops.filter((o) => o.type !== op.type)
   const isNeutral =
     ('value' in op.params && op.params.value === 0) ||
-    (op.type === 'straighten' && op.params.angle === 0)
+    (op.type === 'straighten' && op.params.angle === 0) ||
+    (op.type === 'levels' && op.params.black === 0 && op.params.white === 255) ||
+    (op.type === 'wb' && op.params.r === 1 && op.params.g === 1 && op.params.b === 1)
   if (!isNeutral) ops.push(op)
   return { version: 1, ops }
 }
@@ -72,10 +76,7 @@ export function applyColorOps(
   channels: 3 | 4,
   ops: EditOp[]
 ): void {
-  const colorOps = ops.filter(
-    (o): o is Extract<EditOp, { type: ColorOpType }> =>
-      o.type !== 'crop' && o.type !== 'straighten'
-  )
+  const colorOps = ops.filter((o) => o.type !== 'crop' && o.type !== 'straighten')
   if (colorOps.length === 0) return
 
   const n = data.length
@@ -85,7 +86,22 @@ export function applyColorOps(
     let b = data[i + 2]
 
     for (const op of colorOps) {
-      const v = op.params.value
+      if (op.type === 'levels') {
+        const { black, white } = op.params as { black: number; white: number }
+        const k = 255 / Math.max(1, white - black)
+        r = (r - black) * k
+        g = (g - black) * k
+        b = (b - black) * k
+        continue
+      }
+      if (op.type === 'wb') {
+        const gains = op.params as { r: number; g: number; b: number }
+        r *= gains.r
+        g *= gains.g
+        b *= gains.b
+        continue
+      }
+      const v = (op.params as { value: number }).value
       // Luminance Rec.601, recalculée après chaque op (0..1)
       const l = (0.299 * r + 0.587 * g + 0.114 * b) / 255
 
@@ -157,6 +173,69 @@ export function cropRectPx(
 
 export function straightenAngle(stack: EditStack): number {
   return getOp(stack, 'straighten')?.params.angle ?? 0
+}
+
+/**
+ * Contraste auto : points noir/blanc aux centiles 0,5 %/99,5 % de l'histogramme
+ * de luminance. Le résultat est STOCKÉ dans le DSL (op 'levels') pour garantir
+ * un rendu identique en preview et en export, quelle que soit la résolution
+ * d'analyse.
+ */
+export function computeAutoContrast(
+  data: Uint8Array | Uint8ClampedArray,
+  channels: 3 | 4
+): { black: number; white: number } {
+  const hist = new Uint32Array(256)
+  let total = 0
+  for (let i = 0; i < data.length; i += channels) {
+    const l = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2])
+    hist[l]++
+    total++
+  }
+  const lowTarget = total * 0.005
+  const highTarget = total * 0.995
+  let acc = 0
+  let black = 0
+  let white = 255
+  for (let i = 0; i < 256; i++) {
+    acc += hist[i]
+    if (acc <= lowTarget) black = i
+    if (acc <= highTarget) white = i
+  }
+  if (white - black < 32) return { black: 0, white: 255 } // image quasi plate : neutre
+  return { black, white }
+}
+
+/**
+ * Couleur auto (balance des blancs "gray world") : gains RGB pour ramener
+ * chaque canal vers la luminance moyenne. Stocké en dur dans le DSL (op 'wb').
+ */
+export function computeAutoColor(
+  data: Uint8Array | Uint8ClampedArray,
+  channels: 3 | 4
+): { r: number; g: number; b: number } {
+  let sr = 0
+  let sg = 0
+  let sb = 0
+  let n = 0
+  for (let i = 0; i < data.length; i += channels) {
+    sr += data[i]
+    sg += data[i + 1]
+    sb += data[i + 2]
+    n++
+  }
+  if (n === 0) return { r: 1, g: 1, b: 1 }
+  const ar = sr / n
+  const ag = sg / n
+  const ab = sb / n
+  const target = 0.299 * ar + 0.587 * ag + 0.114 * ab
+  const clampGain = (x: number): number => Math.min(1.6, Math.max(0.6, x))
+  const round3 = (x: number): number => Math.round(x * 1000) / 1000
+  return {
+    r: round3(clampGain(target / Math.max(1, ar))),
+    g: round3(clampGain(target / Math.max(1, ag))),
+    b: round3(clampGain(target / Math.max(1, ab)))
+  }
 }
 
 /** Hash stable et rapide du stack (invalidation du cache de rendus). */
