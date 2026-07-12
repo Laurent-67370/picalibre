@@ -4,6 +4,7 @@ import type { AlbumRow, FaceLite, FolderRow, PersonRow, PhotoRow, ScanProgress, 
 import MapView from './MapView'
 import Slideshow from './Slideshow'
 import Editor from './Editor'
+import Lightbox from './Lightbox'
 
 declare global {
   interface Window {
@@ -27,14 +28,16 @@ function ThumbImg({
   style,
   onClick,
   onDoubleClick,
+  onContextMenu,
   loading = 'lazy'
 }: {
   photoId: number
   size?: number
   alt?: string
   style?: React.CSSProperties
-  onClick?: () => void
+  onClick?: (e: React.MouseEvent) => void
   onDoubleClick?: () => void
+  onContextMenu?: (e: React.MouseEvent) => void
   loading?: 'lazy' | 'eager'
 }): JSX.Element {
   const [attempt, setAttempt] = useState(0)
@@ -65,6 +68,10 @@ function ThumbImg({
       loading={loading}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        onContextMenu?.(e)
+      }}
       onError={handleError}
       style={style}
     />
@@ -122,6 +129,10 @@ export default function App(): JSX.Element {
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [editing, setEditing] = useState<PhotoRow | null>(null)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const anchorIndex = useRef<number>(-1)
+  const photosRef = useRef<PhotoRow[]>([])
+  const trayHideRef = useRef<(() => Promise<void>) | null>(null)
   const addFolderRef = useRef<(() => Promise<void>) | null>(null)
   const importRef = useRef<(() => Promise<void>) | null>(null)
   const [update, setUpdate] = useState<{ status: string; version?: string; percent?: number } | null>(null)
@@ -131,6 +142,30 @@ export default function App(): JSX.Element {
   const [trayName, setTrayName] = useState('')
   const [trayAlbumId, setTrayAlbumId] = useState<number | ''>('')
   const trayIds = useMemo(() => [...tray.keys()], [tray])
+
+  /** Sélection façon explorateur : clic = seule, Ctrl = bascule, Shift = plage. */
+  const selectPhoto = (p: PhotoRow, i: number, e: React.MouseEvent): void => {
+    if (e.shiftKey && anchorIndex.current >= 0) {
+      const [a, b] = [Math.min(anchorIndex.current, i), Math.max(anchorIndex.current, i)]
+      setTray((prev) => {
+        const next = e.ctrlKey || e.metaKey ? new Map(prev) : new Map<number, PhotoRow>()
+        for (let k = a; k <= b; k++) next.set(photos[k].id, photos[k])
+        return next
+      })
+    } else if (e.ctrlKey || e.metaKey) {
+      anchorIndex.current = i
+      setTray((prev) => {
+        const next = new Map(prev)
+        next.has(p.id) ? next.delete(p.id) : next.set(p.id, p)
+        return next
+      })
+    } else {
+      anchorIndex.current = i
+      setTray((prev) =>
+        prev.size === 1 && prev.has(p.id) ? new Map() : new Map([[p.id, p]])
+      )
+    }
+  }
 
   const toggleTray = (p: PhotoRow) =>
     setTray((prev) => {
@@ -215,6 +250,13 @@ export default function App(): JSX.Element {
       if (p.done >= p.total) refreshSidebar()
     })
     const off4 = window.api.on('persons:changed', () => refreshSidebar())
+    const offP = window.api.on('photo:action', ({ action, photoId }) => {
+      const i = photosRef.current.findIndex((x) => x.id === photoId)
+      if (action === 'open' && i >= 0) setLightboxIndex(i)
+      if (action === 'edit' && i >= 0) setEditing(photosRef.current[i])
+      if (action === 'tagFocus') document.querySelector<HTMLInputElement>('.ft input')?.focus()
+      if (action === 'hide') void trayHideRef.current?.()
+    })
     const offM = window.api.on('menu:action', ({ action }) => {
       if (action === 'addFolder') void addFolderRef.current?.()
       if (action === 'import') void importRef.current?.()
@@ -238,6 +280,7 @@ export default function App(): JSX.Element {
       off4()
       offU()
       offM()
+      offP()
     }
   }, [refreshSidebar, loadView])
 
@@ -370,6 +413,23 @@ export default function App(): JSX.Element {
     await window.api.invoke('scan:start', {})
   }
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const inField = (e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'SELECT'
+      if (editing || lightboxIndex !== null || inField) return
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        setTray(new Map(photos.map((p) => [p.id, p])))
+      } else if (e.key === 'Escape') {
+        setTray(new Map())
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [photos, editing, lightboxIndex])
+
+  photosRef.current = photos
+  trayHideRef.current = trayHide
   addFolderRef.current = addFolder
   importRef.current = runImport
 
@@ -991,7 +1051,8 @@ export default function App(): JSX.Element {
                   >
                     {photos
                       .slice(row.index * columns, row.index * columns + columns)
-                      .map((p) => {
+                      .map((p, k) => {
+                        const gi = row.index * columns + k // index global dans `photos`
                         const inTray = tray.has(p.id)
                         return (
                           <figure key={p.id} style={{ margin: 0, position: 'relative' }}>
@@ -999,8 +1060,12 @@ export default function App(): JSX.Element {
                               photoId={p.id}
                               size={256}
                               alt={p.filename}
-                              onClick={() => toggleTray(p)}
-                              onDoubleClick={() => setEditing(p)}
+                              onClick={(e) => selectPhoto(p, gi, e)}
+                              onDoubleClick={() => setLightboxIndex(gi)}
+                              onContextMenu={() => {
+                                if (!tray.has(p.id)) selectPhoto(p, gi, { ctrlKey: false, metaKey: false, shiftKey: false } as React.MouseEvent)
+                                void window.api.invoke('context:photoMenu', { photoId: p.id, selectedCount: Math.max(1, tray.size) })
+                              }}
                               style={{
                                 width: '100%',
                                 aspectRatio: '1',
@@ -1088,6 +1153,22 @@ export default function App(): JSX.Element {
         </main>
       </div>
 
+      {lightboxIndex !== null && photos[lightboxIndex] && !editing && (
+        <Lightbox
+          photos={photos}
+          index={lightboxIndex}
+          onIndexChange={setLightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onEdit={(p) => {
+            setLightboxIndex(null)
+            setEditing(p)
+          }}
+          onRate={(photoId, rating) => {
+            void window.api.invoke('photos:setRating', { photoId, rating })
+            setPhotos((prev) => prev.map((x) => (x.id === photoId ? { ...x, rating } : x)))
+          }}
+        />
+      )}
       {editing && <Editor photo={editing} onClose={() => setEditing(null)} />}
       {slideshow && (
         <Slideshow
@@ -1129,7 +1210,7 @@ export default function App(): JSX.Element {
       <footer className="ft">
         {tray.size === 0 ? (
           <div className="ftempty">
-            <span className="hint">🧺 Clique sur des photos pour remplir le bac, puis agis dessus ici</span>
+            <span className="hint">🖱 Clic : sélectionner · Ctrl+clic : ajouter · Shift+clic : plage · Double-clic : afficher · Clic droit : actions</span>
             <button
               onClick={() => setSlideshow(true)}
               disabled={photos.length === 0}

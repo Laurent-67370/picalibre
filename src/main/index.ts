@@ -125,6 +125,15 @@ async function generateThumbOnTheFly(
 function registerThumbProtocol(): void {
   protocol.handle('thumb', async (request) => {
     const parts = new URL(request.url).pathname.split('/').filter(Boolean)
+    // Taille spéciale 'orig' : sert le fichier original (zoom 100 % de la visionneuse)
+    if (parts[0] === 'orig') {
+      const pid = parseInt(parts[1], 10)
+      const ph = getDb().prepare('SELECT filepath FROM photos WHERE id = ?').get(pid) as
+        | { filepath: string }
+        | undefined
+      if (!ph) return new Response('not found', { status: 404, headers: { 'Cache-Control': 'no-store' } })
+      return net.fetch(pathToFileURL(ph.filepath).toString())
+    }
     const size = parseInt(parts[0], 10)
     const photoId = parseInt(parts[1], 10)
     if (!Number.isFinite(size) || !Number.isFinite(photoId) || size <= 0 || photoId <= 0) {
@@ -277,6 +286,43 @@ function registerIpc(): void {
       )
       .all(folderId, limit, offset)
   )
+  ipcMain.handle('context:photoMenu', (_e, { photoId, selectedCount }) => {
+    const { Menu, shell } = require('electron') as typeof import('electron')
+    const sendAction = (action: string): void =>
+      mainWindow.webContents.send('photo:action', { action, photoId })
+    const notify = (): void => mainWindow.webContents.send('library:changed', { folderIds: [] })
+    const menu = Menu.buildFromTemplate([
+      { label: '👁 Ouvrir', click: () => sendAction('open') },
+      { label: '✎ Éditer', click: () => sendAction('edit') },
+      { type: 'separator' },
+      {
+        label: 'Noter',
+        submenu: [0, 1, 2, 3, 4, 5].map((n) => ({
+          label: n === 0 ? 'Aucune note' : '★'.repeat(n),
+          click: () => {
+            getDb().prepare('UPDATE photos SET rating = ? WHERE id = ?').run(n, photoId)
+            notify()
+          }
+        }))
+      },
+      { label: '🏷 Taguer…', click: () => sendAction('tagFocus') },
+      { type: 'separator' },
+      {
+        label: selectedCount > 1 ? `🙈 Masquer la sélection (${selectedCount})` : '🙈 Masquer',
+        click: () => sendAction('hide')
+      },
+      {
+        label: '📂 Afficher dans le dossier',
+        click: () => {
+          const ph = getDb().prepare('SELECT filepath FROM photos WHERE id = ?').get(photoId) as
+            | { filepath: string }
+            | undefined
+          if (ph) shell.showItemInFolder(ph.filepath)
+        }
+      }
+    ])
+    menu.popup({ window: mainWindow })
+  })
   ipcMain.handle('photos:setRating', (_e, { photoId, rating }) => {
     getDb().prepare('UPDATE photos SET rating = ? WHERE id = ?').run(rating, photoId)
   })
@@ -626,17 +672,21 @@ app.whenReady().then(() => {
       await mainWindow.webContents.executeJavaScript(
         `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('📁')); if (el) el.click(); })()`
       )
-      // Remplir le bac avec les 2 premières vignettes pour capturer la barre d'actions
+      // Double-clic sur la 1re vignette → capture de la LIGHTBOX
       setTimeout(() => {
         void mainWindow.webContents.executeJavaScript(
-          `(() => { [...document.querySelectorAll('main figure img')].slice(0, 2).forEach((im) => im.click()) })()`
+          `(() => { const im = document.querySelector('main figure img'); if (im) im.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })()`
         )
       }, 3000)
       setTimeout(async () => {
+        const probe = await mainWindow.webContents.executeJavaScript(
+          `({ lightbox: !!document.querySelector('img[src*="library/1024"]') && document.body.innerText.includes('Molette'), footerHint: document.querySelector('.ft')?.innerText?.slice(0, 60) ?? '' })`
+        )
+        console.log('[shot] probe:', JSON.stringify(probe))
         const img = await mainWindow.webContents.capturePage()
         await writeFile(join(shotDir, 'capture.png'), img.toPNG())
         console.log('[shot] capture écrite')
-        exitTest(0)
+        exitTest(probe.lightbox ? 0 : 1)
       }, 6000)
     }, 9000)
   }

@@ -1,14 +1,23 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-1.4.3-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.5.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
 
-## 🆕 Quoi de neuf en 1.4.0
+## 🆕 Quoi de neuf en 1.5.0
+
+- 🔍 **Visionneuse plein écran** : double-clic → navigation ←/→, zoom molette,
+  100 % pixels réels au double-clic, glisser pour explorer
+- 🖱 **Sélection naturelle** : clic, Ctrl+clic, Shift+clic, Ctrl+A — comme dans
+  l'explorateur de fichiers
+- 📋 **Clic droit** sur une photo : ouvrir, éditer, noter, taguer, masquer,
+  afficher dans le dossier
+
+## Quoi de neuf en 1.4.0
 
 - 🔄 **Mises à jour automatiques** : PicaLibre se tient à jour tout seul depuis
   les releases GitHub (Windows, macOS, Linux AppImage) — bandeau discret,

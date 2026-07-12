@@ -3,6 +3,25 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.5.0] — 2026-07-12
+
+### Ajouté
+- **Visionneuse plein écran (lightbox)** : double-clic sur une vignette →
+  grande image, flèches ←/→ (boutons + clavier), **zoom molette jusqu'à 5×**,
+  **double-clic = 100 % pixels réels** (chargement de l'original à la volée via
+  `thumb://library/orig`), glisser pour naviguer dans l'image, notation ★,
+  bouton Éditer (raccourci E), Échap pour fermer — la « loupe » Picasa du
+  cahier des charges initial.
+- **Menu contextuel clic droit** sur les vignettes : Ouvrir, Éditer, Noter
+  (sous-menu ★), Taguer, Masquer (sélection multiple gérée), **Afficher dans le
+  dossier** (explorateur système).
+
+### Modifié
+- **Sélection façon explorateur de fichiers** : clic = sélectionner, Ctrl+clic
+  = ajouter/retirer, Shift+clic = plage, **Ctrl+A** = tout, Échap = désélection.
+  La sélection alimente directement le bac d'actions. L'éditeur s'ouvre
+  désormais depuis la visionneuse ou le clic droit (le double-clic affiche).
+
 ## [1.4.3] — 2026-07-12
 
 ### Modifié
@@ -227,6 +246,7 @@ Les 5 phases du plan initial sont couvertes.
   (fichier inchangé size+mtime = jamais re-hashé).
 - Configuration de build Linux (AppImage/deb), Windows (NSIS), macOS (DMG).
 
+[1.5.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.5.0
 [1.4.3]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.3
 [1.4.2]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.2
 [1.4.1]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.1
