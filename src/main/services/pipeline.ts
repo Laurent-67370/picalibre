@@ -16,18 +16,29 @@ import { startFaceScan } from './faces'
 import type { ThumbResult } from '../../workers/thumb-worker'
 
 let running = false
+let pending = false // un autre scan a demandé un pipeline pendant que le 1er tournait
 
 export function thumbsCacheDir(): string {
   return join(app.getPath('userData'), 'cache', 'thumbs')
 }
 
 export async function runPostScanPipeline(win: BrowserWindow): Promise<void> {
-  if (running) return
+  // Correctif: file d'attente. Si l'utilisateur ajoute 2 dossiers rapidement,
+  // le 2e scan terminait pendant que le 1er pipeline tournait encore →
+  // `running` était true → le 2e pipeline était silencieusement ignoré et
+  // les miniatures du 2e lot n'étaient jamais générées.
+  if (running) {
+    pending = true
+    return
+  }
   running = true
   try {
-    await exifPhase(win)
-    await thumbsPhase(win)
-    await videoThumbsPhase(win)
+    do {
+      pending = false
+      await exifPhase(win)
+      await thumbsPhase(win)
+      await videoThumbsPhase(win)
+    } while (pending) // relance si un scan est arrivé entre-temps
     win.webContents.send('scan:progress', { phase: 'done', filesFound: 0, filesProcessed: 0 })
     win.webContents.send('library:changed', { folderIds: [] })
     // Détection de visages en tâche de fond (hors mode test headless)

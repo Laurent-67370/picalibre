@@ -13,6 +13,64 @@ declare global {
 
 const PAGE = 10000 // la virtualisation rend l'affichage indolore
 const CELL = 172 // 160px de vignette + gap
+
+/**
+ * ThumbImg — <img> qui se re-tente automatiquement si la miniature
+ * n'est pas encore disponible (scan en cours, hash en cours de calcul).
+ *
+ * Backoff: 500 ms → 1 s → 2 s → 4 s → 8 s, puis abandon.
+ */
+function ThumbImg({
+  photoId,
+  size = 256,
+  alt,
+  style,
+  onClick,
+  onDoubleClick,
+  loading = 'lazy'
+}: {
+  photoId: number
+  size?: number
+  alt?: string
+  style?: React.CSSProperties
+  onClick?: () => void
+  onDoubleClick?: () => void
+  loading?: 'lazy' | 'eager'
+}): JSX.Element {
+  const [attempt, setAttempt] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
+
+  const handleError = () => {
+    if (attempt >= 5) return // abandon après 5 essais (~15 s cumulées)
+    const delay = 500 * Math.pow(2, attempt)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => setAttempt((a) => a + 1), delay)
+  }
+
+  // Le paramètre `_retry` force Chromium à recharger l'URL même s'il l'a déjà
+  // demandée (paranoia, en complément du Cache-Control: no-store côté main).
+  const src = `thumb://library/${size}/${photoId}${attempt > 0 ? `?_retry=${attempt}` : ''}`
+
+  return (
+    <img
+      key={attempt}
+      src={src}
+      alt={alt}
+      loading={loading}
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      onError={handleError}
+      style={style}
+    />
+  )
+}
+
 const ROW_H = 214 // vignette + nom + étoiles
 
 type View =
@@ -133,8 +191,21 @@ export default function App(): JSX.Element {
       setProgress(p)
       if (p.phase === 'done') refreshSidebar()
     })
-    const off2 = window.api.on('library:changed', () => {
+    const off2 = window.api.on('library:changed', (ev: unknown) => {
       refreshSidebar()
+      const folderIds = (ev as { folderIds?: number[] } | undefined)?.folderIds ?? []
+      // Correctif: si l'utilisateur vient d'ajouter un dossier et qu'aucune vue
+      // n'est encore sélectionnée, on ouvre automatiquement le 1er dossier
+      // touché. Sinon l'utilisateur voit "Sélectionne un dossier..." alors
+      // que le scan vient de finir.
+      if (
+        !viewRef.current &&
+        Array.isArray(folderIds) &&
+        folderIds.length > 0
+      ) {
+        loadView({ type: 'folder', id: folderIds[0] })
+        return
+      }
       if (viewRef.current && viewRef.current.type !== 'map') loadView(viewRef.current)
     })
     const off3 = window.api.on('faces:progress', (p) => {
@@ -914,10 +985,10 @@ export default function App(): JSX.Element {
                         const inTray = tray.has(p.id)
                         return (
                           <figure key={p.id} style={{ margin: 0, position: 'relative' }}>
-                            <img
-                              src={`thumb://library/256/${p.id}`}
+                            <ThumbImg
+                              photoId={p.id}
+                              size={256}
                               alt={p.filename}
-                              loading="lazy"
                               onClick={() => toggleTray(p)}
                               onDoubleClick={() => setEditing(p)}
                               style={{
