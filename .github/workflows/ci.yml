@@ -104,6 +104,17 @@ jobs:
       # Packaging (sans publication) : AppImage/deb sur Linux, NSIS sur Windows
       - name: Package
         run: npx electron-builder --publish never
+
+      - name: E2E sur le binaire packagé (pile native dans l'asar.unpacked)
+        if: runner.os == 'Linux'
+        shell: bash
+        timeout-minutes: 4
+        env:
+          PICALIBRE_TEST_SCAN: ${{ runner.temp }}/photos
+        run: |
+          rm -rf ~/.config/picalibre
+          xvfb-run -a dist/linux-unpacked/picalibre --no-sandbox 2>&1 | tee e2e-packaged.log
+          grep -q "PIPELINE OK" e2e-packaged.log
       - name: Artefacts
         uses: actions/upload-artifact@v4
         with:

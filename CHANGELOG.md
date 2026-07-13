@@ -3,6 +3,26 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.8.1] — 2026-07-12
+
+### Taille des installeurs (AppImage : 274 → 123 Mo, −55 %)
+- Suppression de **ffprobe-static** : dépendance morte de 232 Mo (binaires de
+  toutes les plateformes) — la durée des vidéos est déjà lue via `ffmpeg -i`.
+- **Modèles de visages** : seuls blazeface + faceres (utilisés) sont embarqués,
+  au lieu des 20 modèles de la distribution Human (28 → 7 Mo).
+- maplibre-gl déplacé en devDependency (il est bundlé par Vite, il était
+  embarqué en double) ; variante musl de libvips exclue (−16 Mo) ; sources et
+  intermédiaires de compilation de better-sqlite3 exclus ; compression maximum.
+
+### Corrigé
+- **libvips (sharp) piégé dans l'asar** : une bibliothèque native ne peut pas
+  être chargée depuis l'archive — `asarUnpack` couvre désormais `@img`,
+  exiftool-vendored et ffmpeg-static. Bug latent invisible car l'E2E testait
+  le mode dev, jamais le paquet.
+- **Nouveau garde-fou CI** : l'E2E complet tourne aussi sur le **binaire
+  packagé** Linux (scan + EXIF + miniatures = sqlite/exiftool/sharp validés
+  dans l'asar.unpacked).
+
 ## [1.8.0] — 2026-07-12
 
 ### Performance (mesures sur bibliothèque de 50 000 photos)
@@ -304,6 +324,7 @@ Les 5 phases du plan initial sont couvertes.
   (fichier inchangé size+mtime = jamais re-hashé).
 - Configuration de build Linux (AppImage/deb), Windows (NSIS), macOS (DMG).
 
+[1.8.1]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.8.1
 [1.8.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.8.0
 [1.7.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.7.0
 [1.6.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.6.0
