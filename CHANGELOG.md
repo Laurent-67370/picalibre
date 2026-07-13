@@ -3,6 +3,27 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.6.0] — 2026-07-12
+
+### Ajouté
+- **Groupement par date** : la grille est organisée par mois avec en-têtes
+  (« juillet 2026 — 2 élément(s) ») dans toutes les vues, et une pastille
+  « 📅 mois courant » reste épinglée en haut pendant le défilement. Les photos
+  sans date EXIF sont regroupées en fin de liste.
+- **Vue Chronologie** 🕒 : toutes les photos de la bibliothèque, tous dossiers
+  confondus, de la plus récente à la plus ancienne.
+- **Curseur de taille des vignettes** (signature Picasa) en bas à droite de la
+  grille : 100 → 320 px en continu, mémorisé entre les sessions.
+- **Panneau d'informations** à droite quand une seule photo est sélectionnée :
+  date lisible, dimensions, poids, appareil/objectif, réglages de prise de vue
+  (f/, vitesse, ISO, focale), GPS avec bouton « Voir sur la carte », tags en
+  chips, albums, visages détectés. Fermable, réapparaît à la prochaine
+  sélection (préférence mémorisée).
+
+### Corrigé
+- Le mode capture d'écran (CI) écrivait son PNG dans le dossier scanné, qui se
+  faisait indexer comme une photo → capture écrite dans le dossier temporaire.
+
 ## [1.5.0] — 2026-07-12
 
 ### Ajouté
@@ -246,6 +267,7 @@ Les 5 phases du plan initial sont couvertes.
   (fichier inchangé size+mtime = jamais re-hashé).
 - Configuration de build Linux (AppImage/deb), Windows (NSIS), macOS (DMG).
 
+[1.6.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.6.0
 [1.5.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.5.0
 [1.4.3]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.3
 [1.4.2]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.2

@@ -89,6 +89,11 @@ export interface IpcInvokeMap {
   'scanRoots:remove': { req: { id: number }; res: void }
   'scan:start': { req: { rootId?: number }; res: { jobId: number } }
   'folders:tree': { req: void; res: FolderRow[] }
+  'photos:timeline': { req: { offset: number; limit: number }; res: PhotoRow[] }
+  'photos:details': {
+    req: { photoId: number }
+    res: { photo: PhotoRow; tags: string[]; faces: number; albums: string[] }
+  }
   'photos:byFolder': { req: { folderId: number; offset: number; limit: number }; res: PhotoRow[] }
   'photos:byAlbum': { req: { albumId: number; offset: number; limit: number }; res: PhotoRow[] }
   'photos:search': { req: { query: string; offset: number; limit: number }; res: PhotoRow[] }

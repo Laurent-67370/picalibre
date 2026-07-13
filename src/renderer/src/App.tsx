@@ -5,6 +5,7 @@ import MapView from './MapView'
 import Slideshow from './Slideshow'
 import Editor from './Editor'
 import Lightbox from './Lightbox'
+import InfoPanel from './InfoPanel'
 
 declare global {
   interface Window {
@@ -13,7 +14,15 @@ declare global {
 }
 
 const PAGE = 10000 // la virtualisation rend l'affichage indolore
-const CELL = 172 // 160px de vignette + gap
+
+const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre']
+const monthLabel = (t: number | null): string =>
+  t ? `${MONTHS_FR[new Date(t * 1000).getMonth()]} ${new Date(t * 1000).getFullYear()}` : 'Sans date'
+
+type GridRow =
+  | { kind: 'header'; label: string; count: number }
+  | { kind: 'photos'; label: string; items: { p: PhotoRow; gi: number }[] }
+const HEADER_H = 42
 
 /**
  * ThumbImg — <img> qui se re-tente automatiquement si la miniature
@@ -81,6 +90,7 @@ function ThumbImg({
 const ROW_H = 214 // vignette + nom + étoiles
 
 type View =
+  | { type: 'timeline' }
   | { type: 'folder'; id: number }
   | { type: 'album'; id: number }
   | { type: 'person'; id: number }
@@ -130,6 +140,15 @@ export default function App(): JSX.Element {
   const [searchInput, setSearchInput] = useState('')
   const [editing, setEditing] = useState<PhotoRow | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const [cellSize, setCellSize] = useState<number>(() => {
+    const v = Number(localStorage.getItem('picalibre.cellSize'))
+    return Number.isFinite(v) && v >= 100 && v <= 320 ? v : 160
+  })
+  const [infoOpen, setInfoOpen] = useState<boolean>(
+    localStorage.getItem('picalibre.infoOpen') !== '0'
+  )
+  useEffect(() => localStorage.setItem('picalibre.cellSize', String(cellSize)), [cellSize])
+  useEffect(() => localStorage.setItem('picalibre.infoOpen', infoOpen ? '1' : '0'), [infoOpen])
   const anchorIndex = useRef<number>(-1)
   const photosRef = useRef<PhotoRow[]>([])
   const trayHideRef = useRef<(() => Promise<void>) | null>(null)
@@ -211,6 +230,8 @@ export default function App(): JSX.Element {
     const req =
       v.type === 'folder'
         ? window.api.invoke('photos:byFolder', { folderId: v.id, offset: 0, limit: PAGE })
+        : v.type === 'timeline'
+          ? window.api.invoke('photos:timeline', { offset: 0, limit: PAGE })
         : v.type === 'album'
           ? window.api.invoke('photos:byAlbum', { albumId: v.id, offset: 0, limit: PAGE })
           : v.type === 'person'
@@ -468,14 +489,47 @@ export default function App(): JSX.Element {
     return () => ro.disconnect()
   }, [])
 
+  const CELL = cellSize + 12
+  const ROW_H = cellSize + 54
   const columns = Math.max(1, Math.floor((gridWidth - 16) / CELL))
-  const rowCount = Math.ceil(photos.length / columns)
+
+  // Lignes groupées par mois : [header, photos, photos, header, …]
+  const gridRows = useMemo<GridRow[]>(() => {
+    const rows: GridRow[] = []
+    let i = 0
+    while (i < photos.length) {
+      const label = monthLabel(photos[i].taken_at)
+      const start = i
+      while (i < photos.length && monthLabel(photos[i].taken_at) === label) i++
+      rows.push({ kind: 'header', label, count: i - start })
+      for (let j = start; j < i; j += columns) {
+        rows.push({
+          kind: 'photos',
+          label,
+          items: photos.slice(j, Math.min(j + columns, i)).map((p, k) => ({ p, gi: j + k }))
+        })
+      }
+    }
+    return rows
+  }, [photos, columns])
+
   const virtualizer = useVirtualizer({
-    count: rowCount,
+    count: gridRows.length,
     getScrollElement: () => gridRef.current,
-    estimateSize: () => ROW_H,
+    estimateSize: (i) => (gridRows[i]?.kind === 'header' ? HEADER_H : ROW_H),
     overscan: 4
   })
+  useEffect(() => {
+    virtualizer.measure()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cellSize, columns, gridRows.length])
+
+  // Mois « épinglé » = groupe de la première ligne visible
+  const firstVisible = virtualizer.getVirtualItems()[0]
+  const pinnedMonth =
+    firstVisible && gridRows[firstVisible.index]
+      ? (gridRows[firstVisible.index] as GridRow & { label: string }).label
+      : null
 
   const sidebarItem = (active: boolean): React.CSSProperties => ({
     padding: '5px 8px',
@@ -532,6 +586,12 @@ export default function App(): JSX.Element {
               Import… {importProgress.done}/{importProgress.total} ({importProgress.skipped} doublons)
             </div>
           )}
+          <div
+            onClick={() => loadView({ type: 'timeline' })}
+            style={sidebarItem(view?.type === 'timeline')}
+          >
+            🕒 Chronologie
+          </div>
           <div
             onClick={() => loadView({ type: 'map' })}
             style={sidebarItem(view?.type === 'map')}
@@ -1026,6 +1086,7 @@ export default function App(): JSX.Element {
               }}
             />
           ) : (
+          <div style={{ flex: 1, position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <div ref={gridRef} style={{ flex: 1, overflow: 'auto', padding: '8px 16px' }}>
             {view === null ? (
               <p style={{ opacity: 0.7 }}>
@@ -1035,7 +1096,35 @@ export default function App(): JSX.Element {
               <p style={{ opacity: 0.6 }}>Aucune photo ici.</p>
             ) : (
               <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
-                {virtualizer.getVirtualItems().map((row) => (
+                {virtualizer.getVirtualItems().map((row) => {
+                  const r = gridRows[row.index]
+                  if (!r) return null
+                  if (r.kind === 'header') {
+                    return (
+                      <div
+                        key={row.key}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          transform: `translateY(${row.start}px)`,
+                          height: HEADER_H,
+                          display: 'flex',
+                          alignItems: 'flex-end',
+                          gap: 8,
+                          paddingBottom: 6
+                        }}
+                      >
+                        <span style={{ fontSize: 15, fontWeight: 600, textTransform: 'capitalize' }}>
+                          {r.label}
+                        </span>
+                        <span style={{ fontSize: 12, color: '#94a3b8' }}>{r.count} élément(s)</span>
+                        <span style={{ flex: 1, height: 1, background: '#26334a', marginBottom: 5 }} />
+                      </div>
+                    )
+                  }
+                  return (
                   <div
                     key={row.key}
                     style={{
@@ -1049,10 +1138,8 @@ export default function App(): JSX.Element {
                       gap: 8
                     }}
                   >
-                    {photos
-                      .slice(row.index * columns, row.index * columns + columns)
-                      .map((p, k) => {
-                        const gi = row.index * columns + k // index global dans `photos`
+                    {r.items
+                      .map(({ p, gi }) => {
                         const inTray = tray.has(p.id)
                         return (
                           <figure key={p.id} style={{ margin: 0, position: 'relative' }}>
@@ -1145,12 +1232,72 @@ export default function App(): JSX.Element {
                         )
                       })}
                   </div>
-                ))}
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+            {/* Mois épinglé + curseur de taille, par-dessus la grille */}
+            {photos.length > 0 && pinnedMonth && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  left: 24,
+                  background: '#0f172acc',
+                  border: '1px solid #334155',
+                  borderRadius: 999,
+                  padding: '3px 12px',
+                  fontSize: 12,
+                  textTransform: 'capitalize',
+                  pointerEvents: 'none',
+                  backdropFilter: 'blur(4px)'
+                }}
+              >
+                📅 {pinnedMonth}
+              </div>
+            )}
+            {photos.length > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 10,
+                  right: 20,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  background: '#0f172acc',
+                  border: '1px solid #334155',
+                  borderRadius: 999,
+                  padding: '4px 12px',
+                  backdropFilter: 'blur(4px)'
+                }}
+                title="Taille des vignettes"
+              >
+                <span style={{ fontSize: 12 }}>🔍</span>
+                <input
+                  type="range"
+                  min={100}
+                  max={320}
+                  step={10}
+                  value={cellSize}
+                  onChange={(e) => setCellSize(Number(e.target.value))}
+                  style={{ width: 130, padding: 0 }}
+                />
               </div>
             )}
           </div>
           )}
         </main>
+
+        {tray.size === 1 && infoOpen && !editing && lightboxIndex === null && (
+          <InfoPanel
+            photoId={[...tray.keys()][0]}
+            onClose={() => setInfoOpen(false)}
+            onShowOnMap={() => loadView({ type: 'map' })}
+          />
+        )}
       </div>
 
       {lightboxIndex !== null && photos[lightboxIndex] && !editing && (

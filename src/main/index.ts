@@ -326,6 +326,38 @@ function registerIpc(): void {
   ipcMain.handle('photos:setRating', (_e, { photoId, rating }) => {
     getDb().prepare('UPDATE photos SET rating = ? WHERE id = ?').run(rating, photoId)
   })
+  ipcMain.handle('photos:timeline', (_e, { offset, limit }) =>
+    getDb()
+      .prepare(
+        `SELECT * FROM photos WHERE status = 'active' AND is_hidden = 0
+         ORDER BY taken_at IS NULL, taken_at DESC, file_mtime DESC LIMIT ? OFFSET ?`
+      )
+      .all(limit, offset)
+  )
+  ipcMain.handle('photos:details', (_e, { photoId }) => {
+    const db = getDb()
+    const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(photoId)
+    const tags = (
+      db
+        .prepare(
+          `SELECT t.name FROM tags t JOIN photo_tags pt ON pt.tag_id = t.id
+           WHERE pt.photo_id = ? ORDER BY t.name COLLATE NOCASE`
+        )
+        .all(photoId) as { name: string }[]
+    ).map((r) => r.name)
+    const faces = (
+      db.prepare('SELECT COUNT(*) c FROM faces WHERE photo_id = ?').get(photoId) as { c: number }
+    ).c
+    const albums = (
+      db
+        .prepare(
+          `SELECT a.name FROM albums a JOIN album_items ai ON ai.album_id = a.id
+           WHERE ai.photo_id = ? ORDER BY a.name COLLATE NOCASE`
+        )
+        .all(photoId) as { name: string }[]
+    ).map((r) => r.name)
+    return { photo, tags, faces, albums }
+  })
   ipcMain.handle('photos:byAlbum', (_e, { albumId, offset, limit }) =>
     getDb()
       .prepare(
@@ -675,17 +707,25 @@ app.whenReady().then(() => {
       // Double-clic sur la 1re vignette → capture de la LIGHTBOX
       setTimeout(() => {
         void mainWindow.webContents.executeJavaScript(
-          `(() => { const im = document.querySelector('main figure img'); if (im) im.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })()`
+          `(() => { const im = document.querySelector('main figure img'); if (im) im.click() })()`
         )
       }, 3000)
       setTimeout(async () => {
         const probe = await mainWindow.webContents.executeJavaScript(
-          `({ lightbox: !!document.querySelector('img[src*="library/1024"]') && document.body.innerText.includes('Molette'), footerHint: document.querySelector('.ft')?.innerText?.slice(0, 60) ?? '' })`
-        )
+        `(() => {
+          const headers = [...document.querySelectorAll('main span')].filter(e => e.style.textTransform === 'capitalize' && e.style.fontWeight === '600').map(e => e.textContent)
+          const pinned = [...document.querySelectorAll('div')].find(d => d.textContent.startsWith('📅'))
+          const slider = !!document.querySelector('input[type=range][min="100"]')
+          const info = [...document.querySelectorAll('aside strong')].some(e => e.textContent.includes('Informations'))
+          const lightbox = !!document.querySelector('video, [data-lightbox]') || [...document.querySelectorAll('button')].some(b => b.textContent.includes('Bibliothèque'))
+          return { headers, pinned: pinned ? pinned.textContent : null, slider, info, lightbox }
+        })()`
+      )
         console.log('[shot] probe:', JSON.stringify(probe))
         const img = await mainWindow.webContents.capturePage()
-        await writeFile(join(shotDir, 'capture.png'), img.toPNG())
-        console.log('[shot] capture écrite')
+        const shotOut = join(app.getPath('temp'), 'picalibre-capture.png')
+        await writeFile(shotOut, img.toPNG())
+        console.log('[shot] capture écrite:', shotOut)
         exitTest(probe.lightbox ? 0 : 1)
       }, 6000)
     }, 9000)
