@@ -3,6 +3,25 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.7.0] — 2026-07-12
+
+### Ajouté
+- **Glisser-déposer interne** : glisser une vignette (ou toute la sélection)
+  sur un album de la barre latérale l'y ajoute — l'album cible se surligne en
+  pointillés orange pendant le survol.
+- **Glisser-déposer depuis l'explorateur** : déposer des **dossiers** les
+  ajoute aux racines de scan ; déposer des **fichiers** ouvre le choix d'un
+  dossier de destination puis les importe (copie datée AAAA-MM, doublons
+  ignorés par hash). Grand voile « 📥 Dépose ici » pendant le survol.
+- **Barre de critères d'affichage** au-dessus de la grille, mémorisée :
+  - tri : plus récentes / plus anciennes / nom / note ;
+  - filtre par **note minimale** (★ cliquables) et par **type** (photos/vidéos) ;
+  - **vignettes carrées ou ratio préservé** (bouton ▣/⬒) ;
+  - compteur « affichés / total » quand un filtre est actif.
+- Le groupement par mois s'applique aux tris par date ; les autres tris
+  affichent une grille continue. Sélection (plages, Ctrl+A), lightbox et
+  diaporama suivent exactement ce qui est affiché.
+
 ## [1.6.0] — 2026-07-12
 
 ### Ajouté
@@ -267,6 +286,7 @@ Les 5 phases du plan initial sont couvertes.
   (fichier inchangé size+mtime = jamais re-hashé).
 - Configuration de build Linux (AppImage/deb), Windows (NSIS), macOS (DMG).
 
+[1.7.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.7.0
 [1.6.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.6.0
 [1.5.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.5.0
 [1.4.3]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.4.3

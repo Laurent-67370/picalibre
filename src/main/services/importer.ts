@@ -77,6 +77,18 @@ export async function importFromDevice(
   // Collecte préalable pour la progression
   const files: string[] = []
   for await (const f of walk(sourceDir)) files.push(f)
+  return importFileList(win, files, destDir)
+}
+
+/** Importe une liste explicite de fichiers (drag & drop depuis l'explorateur). */
+export async function importFileList(
+  win: BrowserWindow,
+  files: string[],
+  destDir: string
+): Promise<ImportStats> {
+  const db = getDb()
+  const hashExists = db.prepare('SELECT 1 FROM photos WHERE hash_xxh3 = ? LIMIT 1')
+  const stats: ImportStats = { found: 0, copied: 0, skippedDuplicates: 0, errors: 0 }
   stats.found = files.length
 
   const progress = (): void =>

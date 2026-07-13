@@ -123,6 +123,8 @@ export default function App(): JSX.Element {
   const [faceList, setFaceList] = useState<FaceLite[]>([])
   const [selFaces, setSelFaces] = useState<Set<number>>(new Set())
   const [mergeTarget, setMergeTarget] = useState<number | ''>('')
+  const [dragOverAlbum, setDragOverAlbum] = useState<number | null>(null)
+  const [osDragging, setOsDragging] = useState(false)
   const [dupGroups, setDupGroups] = useState<Array<{ hash: string; photos: PhotoRow[] }>>([])
   const [roots, setRoots] = useState<Array<{ id: number; path: string; mode: string }>>([])
   const [privacy, setPrivacy] = useState<{ hasPassword: boolean; unlocked: boolean }>({ hasPassword: false, unlocked: true })
@@ -144,6 +146,40 @@ export default function App(): JSX.Element {
     const v = Number(localStorage.getItem('picalibre.cellSize'))
     return Number.isFinite(v) && v >= 100 && v <= 320 ? v : 160
   })
+  type SortMode = 'date_desc' | 'date_asc' | 'name' | 'rating'
+  const [sortMode, setSortMode] = useState<SortMode>(
+    (localStorage.getItem('picalibre.sort') as SortMode) || 'date_desc'
+  )
+  const [minStars, setMinStars] = useState<number>(Number(localStorage.getItem('picalibre.minStars')) || 0)
+  const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video'>(
+    (localStorage.getItem('picalibre.typeFilter') as 'all' | 'image' | 'video') || 'all'
+  )
+  const [fitMode, setFitMode] = useState<'cover' | 'contain'>(
+    (localStorage.getItem('picalibre.fit') as 'cover' | 'contain') || 'cover'
+  )
+  useEffect(() => localStorage.setItem('picalibre.sort', sortMode), [sortMode])
+  useEffect(() => localStorage.setItem('picalibre.minStars', String(minStars)), [minStars])
+  useEffect(() => localStorage.setItem('picalibre.typeFilter', typeFilter), [typeFilter])
+  useEffect(() => localStorage.setItem('picalibre.fit', fitMode), [fitMode])
+
+  /** Photos réellement affichées : filtres + tri appliqués. */
+  const shown = useMemo(() => {
+    let list = photos
+    if (minStars > 0) list = list.filter((p) => p.rating >= minStars)
+    if (typeFilter !== 'all') list = list.filter((p) => p.media_type === typeFilter)
+    const key = (p: PhotoRow): number => p.taken_at ?? p.file_mtime
+    switch (sortMode) {
+      case 'date_asc':
+        return [...list].sort((a, b) => key(a) - key(b))
+      case 'name':
+        return [...list].sort((a, b) => a.filename.localeCompare(b.filename, 'fr'))
+      case 'rating':
+        return [...list].sort((a, b) => b.rating - a.rating || key(b) - key(a))
+      default:
+        return [...list].sort((a, b) => key(b) - key(a))
+    }
+  }, [photos, sortMode, minStars, typeFilter])
+
   const [infoOpen, setInfoOpen] = useState<boolean>(
     localStorage.getItem('picalibre.infoOpen') !== '0'
   )
@@ -168,7 +204,7 @@ export default function App(): JSX.Element {
       const [a, b] = [Math.min(anchorIndex.current, i), Math.max(anchorIndex.current, i)]
       setTray((prev) => {
         const next = e.ctrlKey || e.metaKey ? new Map(prev) : new Map<number, PhotoRow>()
-        for (let k = a; k <= b; k++) next.set(photos[k].id, photos[k])
+        for (let k = a; k <= b; k++) next.set(shown[k].id, shown[k])
         return next
       })
     } else if (e.ctrlKey || e.metaKey) {
@@ -440,7 +476,7 @@ export default function App(): JSX.Element {
       if (editing || lightboxIndex !== null || inField) return
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
         e.preventDefault()
-        setTray(new Map(photos.map((p) => [p.id, p])))
+        setTray(new Map(shown.map((p) => [p.id, p])))
       } else if (e.key === 'Escape') {
         setTray(new Map())
       }
@@ -494,24 +530,35 @@ export default function App(): JSX.Element {
   const columns = Math.max(1, Math.floor((gridWidth - 16) / CELL))
 
   // Lignes groupées par mois : [header, photos, photos, header, …]
+  const grouped = sortMode === 'date_desc' || sortMode === 'date_asc'
   const gridRows = useMemo<GridRow[]>(() => {
     const rows: GridRow[] = []
+    if (!grouped) {
+      for (let j = 0; j < shown.length; j += columns) {
+        rows.push({
+          kind: 'photos',
+          label: '',
+          items: shown.slice(j, j + columns).map((p, k) => ({ p, gi: j + k }))
+        })
+      }
+      return rows
+    }
     let i = 0
-    while (i < photos.length) {
-      const label = monthLabel(photos[i].taken_at)
+    while (i < shown.length) {
+      const label = monthLabel(shown[i].taken_at)
       const start = i
-      while (i < photos.length && monthLabel(photos[i].taken_at) === label) i++
+      while (i < shown.length && monthLabel(shown[i].taken_at) === label) i++
       rows.push({ kind: 'header', label, count: i - start })
       for (let j = start; j < i; j += columns) {
         rows.push({
           kind: 'photos',
           label,
-          items: photos.slice(j, Math.min(j + columns, i)).map((p, k) => ({ p, gi: j + k }))
+          items: shown.slice(j, Math.min(j + columns, i)).map((p, k) => ({ p, gi: j + k }))
         })
       }
     }
     return rows
-  }, [photos, columns])
+  }, [shown, columns, grouped])
 
   const virtualizer = useVirtualizer({
     count: gridRows.length,
@@ -527,7 +574,7 @@ export default function App(): JSX.Element {
   // Mois « épinglé » = groupe de la première ligne visible
   const firstVisible = virtualizer.getVirtualItems()[0]
   const pinnedMonth =
-    firstVisible && gridRows[firstVisible.index]
+    grouped && firstVisible && gridRows[firstVisible.index]
       ? (gridRows[firstVisible.index] as GridRow & { label: string }).label
       : null
 
@@ -542,8 +589,62 @@ export default function App(): JSX.Element {
     textOverflow: 'ellipsis'
   })
 
+  const onOsDrop = async (e: React.DragEvent): Promise<void> => {
+    e.preventDefault()
+    setOsDragging(false)
+    if (e.dataTransfer.types.includes('application/x-picalibre-ids')) return // drag interne
+    const paths = [...e.dataTransfer.files]
+      .map((f) => (window.api as unknown as { pathForFile: (f: File) => string }).pathForFile(f))
+      .filter(Boolean)
+    if (paths.length === 0) return
+    const r = await window.api.invoke('import:dropped', { paths })
+    const parts: string[] = []
+    if (r.addedRoots > 0) parts.push(`${r.addedRoots} dossier(s) ajouté(s) au scan`)
+    if (r.imported)
+      parts.push(
+        `${r.imported.copied} fichier(s) importé(s), ${r.imported.skippedDuplicates} doublon(s) ignoré(s)`
+      )
+    if (parts.length > 0) alert('📥 ' + parts.join(' · '))
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+    <div
+      style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault()
+          setOsDragging(true)
+        }
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget === e.target) setOsDragging(false)
+      }}
+      onDrop={onOsDrop}
+    >
+      {osDragging && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 200,
+            background: '#0f172aee',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            border: '3px dashed #f97316',
+            borderRadius: 12,
+            margin: 10
+          }}
+        >
+          <div style={{ textAlign: 'center', fontSize: 18 }}>
+            📥 Dépose ici
+            <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 6 }}>
+              Dossiers → ajoutés au scan · Fichiers → import avec choix de destination
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         {/* ---- Sidebar ---- */}
         <aside
@@ -687,7 +788,26 @@ export default function App(): JSX.Element {
             <div
               key={a.id}
               onClick={() => loadView({ type: 'album', id: a.id })}
-              style={sidebarItem(view?.type === 'album' && view.id === a.id)}
+              onDragOver={(e) => {
+                if (e.dataTransfer.types.includes('application/x-picalibre-ids')) {
+                  e.preventDefault()
+                  setDragOverAlbum(a.id)
+                }
+              }}
+              onDragLeave={() => setDragOverAlbum(null)}
+              onDrop={async (e) => {
+                e.preventDefault()
+                setDragOverAlbum(null)
+                const raw = e.dataTransfer.getData('application/x-picalibre-ids')
+                if (!raw) return
+                await window.api.invoke('albums:addPhotos', { albumId: a.id, photoIds: JSON.parse(raw) })
+                refreshSidebar()
+              }}
+              style={{
+                ...sidebarItem(view?.type === 'album' && view.id === a.id),
+                outline: dragOverAlbum === a.id ? '2px dashed #f97316' : 'none',
+                outlineOffset: -2
+              }}
             >
               🗂️ {a.name} <span style={{ opacity: 0.5 }}>({a.count})</span>
             </div>
@@ -1086,14 +1206,59 @@ export default function App(): JSX.Element {
               }}
             />
           ) : (
+          <>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '6px 16px',
+              borderBottom: '1px solid #26334a',
+              fontSize: 13,
+              flexWrap: 'wrap'
+            }}
+          >
+            <select value={sortMode} onChange={(e) => setSortMode(e.target.value as typeof sortMode)} title="Tri">
+              <option value="date_desc">📅 Plus récentes d'abord</option>
+              <option value="date_asc">📅 Plus anciennes d'abord</option>
+              <option value="name">🔤 Nom</option>
+              <option value="rating">⭐ Note</option>
+            </select>
+            <span title="Note minimale" style={{ letterSpacing: 2, cursor: 'pointer', userSelect: 'none' }}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <span
+                  key={n}
+                  onClick={() => setMinStars(minStars === n ? 0 : n)}
+                  style={{ color: n <= minStars ? '#f5c518' : '#475569', fontSize: 15 }}
+                >
+                  ★
+                </span>
+              ))}
+            </span>
+            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)} title="Type de média">
+              <option value="all">Tous</option>
+              <option value="image">🖼 Photos</option>
+              <option value="video">🎬 Vidéos</option>
+            </select>
+            <button
+              onClick={() => setFitMode(fitMode === 'cover' ? 'contain' : 'cover')}
+              title={fitMode === 'cover' ? 'Vignettes carrées (recadrées) — cliquer pour ratio préservé' : 'Ratio préservé — cliquer pour carrées'}
+              style={{ padding: '5px 10px' }}
+            >
+              {fitMode === 'cover' ? '▣ Carré' : '⬒ Ratio'}
+            </button>
+            <span style={{ color: '#64748b', marginLeft: 'auto' }}>
+              {shown.length}{shown.length !== photos.length ? ` / ${photos.length}` : ''} élément(s)
+            </span>
+          </div>
           <div style={{ flex: 1, position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <div ref={gridRef} style={{ flex: 1, overflow: 'auto', padding: '8px 16px' }}>
             {view === null ? (
               <p style={{ opacity: 0.7 }}>
                 Sélectionne un dossier ou un album, ou ajoute un dossier à indexer.
               </p>
-            ) : photos.length === 0 ? (
-              <p style={{ opacity: 0.6 }}>Aucune photo ici.</p>
+            ) : shown.length === 0 ? (
+              <p style={{ opacity: 0.6 }}>Aucune photo ici{minStars > 0 || typeFilter !== 'all' ? ' avec ces filtres' : ''}.</p>
             ) : (
               <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
                 {virtualizer.getVirtualItems().map((row) => {
@@ -1142,7 +1307,16 @@ export default function App(): JSX.Element {
                       .map(({ p, gi }) => {
                         const inTray = tray.has(p.id)
                         return (
-                          <figure key={p.id} style={{ margin: 0, position: 'relative' }}>
+                          <figure
+                            key={p.id}
+                            style={{ margin: 0, position: 'relative' }}
+                            draggable
+                            onDragStart={(e) => {
+                              const ids = tray.has(p.id) ? [...tray.keys()] : [p.id]
+                              e.dataTransfer.setData('application/x-picalibre-ids', JSON.stringify(ids))
+                              e.dataTransfer.effectAllowed = 'copy'
+                            }}
+                          >
                             <ThumbImg
                               photoId={p.id}
                               size={256}
@@ -1156,7 +1330,7 @@ export default function App(): JSX.Element {
                               style={{
                                 width: '100%',
                                 aspectRatio: '1',
-                                objectFit: 'cover',
+                                objectFit: fitMode,
                                 borderRadius: 4,
                                 background: '#14171c',
                                 display: 'block',
@@ -1239,7 +1413,7 @@ export default function App(): JSX.Element {
           </div>
 
             {/* Mois épinglé + curseur de taille, par-dessus la grille */}
-            {photos.length > 0 && pinnedMonth && (
+            {shown.length > 0 && pinnedMonth && (
               <div
                 style={{
                   position: 'absolute',
@@ -1258,7 +1432,7 @@ export default function App(): JSX.Element {
                 📅 {pinnedMonth}
               </div>
             )}
-            {photos.length > 0 && (
+            {shown.length > 0 && (
               <div
                 style={{
                   position: 'absolute',
@@ -1288,6 +1462,7 @@ export default function App(): JSX.Element {
               </div>
             )}
           </div>
+          </>
           )}
         </main>
 
@@ -1300,9 +1475,9 @@ export default function App(): JSX.Element {
         )}
       </div>
 
-      {lightboxIndex !== null && photos[lightboxIndex] && !editing && (
+      {lightboxIndex !== null && shown[lightboxIndex] && !editing && (
         <Lightbox
-          photos={photos}
+          photos={shown}
           index={lightboxIndex}
           onIndexChange={setLightboxIndex}
           onClose={() => setLightboxIndex(null)}
@@ -1319,7 +1494,7 @@ export default function App(): JSX.Element {
       {editing && <Editor photo={editing} onClose={() => setEditing(null)} />}
       {slideshow && (
         <Slideshow
-          photos={tray.size > 0 ? [...tray.values()] : photos}
+          photos={tray.size > 0 ? [...tray.values()] : shown}
           onClose={() => setSlideshow(false)}
         />
       )}
@@ -1360,7 +1535,7 @@ export default function App(): JSX.Element {
             <span className="hint">🖱 Clic : sélectionner · Ctrl+clic : ajouter · Shift+clic : plage · Double-clic : afficher · Clic droit : actions</span>
             <button
               onClick={() => setSlideshow(true)}
-              disabled={photos.length === 0}
+              disabled={shown.length === 0}
               title="Diaporama de la vue courante"
             >
               ▶ Diaporama

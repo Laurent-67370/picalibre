@@ -11,7 +11,7 @@ import { shutdownExiftool } from './services/exif'
 import { startFaceScan, isFaceScanRunning, humanModelsPath } from './services/faces'
 import { mergePersons, splitFaces, confirmFaces, rejectFaces, facesByPerson } from './services/faces/manage-core'
 import { startWatchers } from './services/watcher'
-import { importFromDevice } from './services/importer'
+import { importFromDevice, importFileList } from './services/importer'
 import { relocateLibrary } from './services/relocate'
 import { privacyStatus, setPassword, unlock, lock, isUnlocked } from './services/privacy'
 import { batchExport, exportMetadataCsv, emailShare } from './services/exporter'
@@ -502,6 +502,37 @@ function registerIpc(): void {
     })
     tx(removeIds)
   })
+  ipcMain.handle('import:dropped', async (_e, { paths }) => {
+    const { statSync } = await import('node:fs')
+    const dirs: string[] = []
+    const files: string[] = []
+    for (const p of paths) {
+      try {
+        statSync(p).isDirectory() ? dirs.push(p) : files.push(p)
+      } catch {
+        /* chemin disparu */
+      }
+    }
+    let addedRoots = 0
+    for (const d of dirs) {
+      const r = getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(d)
+      if (r.changes > 0) addedRoots++
+    }
+    let imported: { copied: number; skippedDuplicates: number; errors: number } | null = null
+    if (files.length > 0) {
+      const pick = await dialog.showOpenDialog(mainWindow, {
+        title: 'Où importer ces fichiers ?',
+        properties: ['openDirectory', 'createDirectory']
+      })
+      if (!pick.canceled && pick.filePaths[0]) {
+        const stats = await importFileList(mainWindow, files, pick.filePaths[0])
+        getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(pick.filePaths[0])
+        imported = stats
+      }
+    }
+    if (addedRoots > 0 || imported) startScan(mainWindow)
+    return { addedRoots, imported }
+  })
   ipcMain.handle('import:run', async (_e, { sourceDir, destDir }) => {
     const stats = await importFromDevice(mainWindow, sourceDir, destDir)
     startWatchers(mainWindow) // la nouvelle racine est surveillée
@@ -714,11 +745,14 @@ app.whenReady().then(() => {
         const probe = await mainWindow.webContents.executeJavaScript(
         `(() => {
           const headers = [...document.querySelectorAll('main span')].filter(e => e.style.textTransform === 'capitalize' && e.style.fontWeight === '600').map(e => e.textContent)
-          const pinned = [...document.querySelectorAll('div')].find(d => d.textContent.startsWith('📅'))
+          const pinned = [...document.querySelectorAll('div')].find(d => d.style.pointerEvents === 'none' && /^📅 /.test(d.textContent))
           const slider = !!document.querySelector('input[type=range][min="100"]')
+          const sortSel = [...document.querySelectorAll('select')].some(x => x.textContent.includes('Plus récentes'))
+          const fitBtn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('Carré') || b.textContent.includes('Ratio'))
+          const draggable = !!document.querySelector('main figure[draggable="true"]')
           const info = [...document.querySelectorAll('aside strong')].some(e => e.textContent.includes('Informations'))
           const lightbox = !!document.querySelector('video, [data-lightbox]') || [...document.querySelectorAll('button')].some(b => b.textContent.includes('Bibliothèque'))
-          return { headers, pinned: pinned ? pinned.textContent : null, slider, info, lightbox }
+          return { headers, pinned: pinned ? pinned.textContent : null, slider, info, lightbox, sortSel, fit: fitBtn ? fitBtn.textContent : null, draggable }
         })()`
       )
         console.log('[shot] probe:', JSON.stringify(probe))

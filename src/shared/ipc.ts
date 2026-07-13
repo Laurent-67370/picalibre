@@ -127,6 +127,10 @@ export interface IpcInvokeMap {
   'export:metadata': { req: { photoIds: number[]; destFile: string }; res: { rows: number } }
   'photos:print': { req: { photoIds: number[]; perPage: 1 | 2 | 4 }; res: void }
   'share:email': { req: { photoIds: number[] }; res: { dir: string } }
+  'import:dropped': {
+    req: { paths: string[] }
+    res: { addedRoots: number; imported: { copied: number; skippedDuplicates: number; errors: number } | null }
+  }
   'import:run': { req: { sourceDir: string; destDir: string }; res: { found: number; copied: number; skippedDuplicates: number; errors: number } }
   'photos:setGps': { req: { photoIds: number[]; lat: number; lon: number }; res: void }
   'edits:get': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
