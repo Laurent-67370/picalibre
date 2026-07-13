@@ -29,8 +29,7 @@ import { hashPassword, verifyPassword } from '../src/main/services/privacy-core'
 import { computeLayout, makeCollage } from '../src/main/services/collage'
 import { makeMovie } from '../src/main/services/movie'
 import ffmpegPath from 'ffmpeg-static'
-import { path as ffprobePath } from 'ffprobe-static'
-import { execFileSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 
 async function main() {
   // --- 1. DSL : upsertOp remplace, valeur neutre supprime ---
@@ -296,17 +295,17 @@ async function main() {
     ],
     { ffmpegPath: ffmpegPath as string, durationSec: 2, audioPath: null, outFile: movieOut }
   )
-  const probe = JSON.parse(
-    execFileSync(ffprobePath, [
-      '-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', movieOut
-    ]).toString()
-  )
-  const dur = parseFloat(probe.format.duration)
-  const v = probe.streams.find((st: any) => st.codec_type === 'video')
+  // Vérification via `ffmpeg -i` (sans ffprobe : dépendance de 232 Mo évitée)
+  const info = spawnSync(ffmpegPath as string, ['-i', movieOut], { encoding: 'utf8' }).stderr
+  const dm = info.match(/Duration: (\d+):(\d+):([\d.]+)/)
+  assert.ok(dm, 'durée lisible')
+  const dur = Number(dm![1]) * 3600 + Number(dm![2]) * 60 + parseFloat(dm![3])
+  const vm = info.match(/Video: (\w+).*?(\d{3,5})x(\d{3,5})/)
+  assert.ok(vm, 'flux vidéo lisible')
   assert.equal(Math.abs(dur - 6) < 0.5, true, `durée ${dur}s ≈ 3×2s`)
-  assert.equal(v.codec_name, 'h264', 'codec h264')
-  assert.deepEqual([v.width, v.height], [1280, 720], 'résolution 1280x720')
-  console.log(`✅ Movie MP4 : ${dur}s, ${v.codec_name}, ${v.width}x${v.height}`)
+  assert.equal(vm![1], 'h264', 'codec h264')
+  assert.deepEqual([Number(vm![2]), Number(vm![3])], [1280, 720], 'résolution 1280x720')
+  console.log(`✅ Movie MP4 : ${dur}s, ${vm![1]}, ${vm![2]}x${vm![3]}`)
 
   console.log('\n🎉 Tous les tests du moteur passent')
 }
