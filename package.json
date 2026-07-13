@@ -1,6 +1,6 @@
 {
   "name": "picalibre",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "description": "Gestionnaire de photos open-source inspiré de Picasa — Electron + React + TypeScript + SQLite",
   "main": "./out/main/index.js",
   "author": {
@@ -27,6 +27,9 @@
     "sharp": "^0.33.5",
     "xxhash-wasm": "^1.1.0"
   },
+  "optionalDependencies": {
+    "ffmpeg-static": "^5.3.0"
+  },
   "devDependencies": {
     "@tanstack/react-virtual": "^3.11.1",
     "@types/better-sqlite3": "^7.6.12",
@@ -47,6 +50,10 @@
   "build": {
     "appId": "fr.lhusser.picalibre",
     "productName": "PicaLibre",
+    "electronLanguages": [
+      "fr",
+      "en-US"
+    ],
     "files": [
       "out/**",
       "!**/node_modules/@img/*musl*/**",
@@ -54,6 +61,15 @@
       "**/node_modules/@vladmandic/human/models/{blazeface,faceres}.{bin,json}",
       "!**/node_modules/better-sqlite3/{src,deps,build/Release/obj.target,build/Release/obj,prebuilds}/**",
       "!**/node_modules/better-sqlite3/build/Release/{test_extension.node,*.a}",
+      "!**/node_modules/exiftool-vendored.pl/bin/{Changes,windows_exiftool.txt,README,META.*,Makefile.PL,*.spec,validate,build_*,MANIFEST,pp_build_exe.args}/**",
+      "!**/node_modules/exiftool-vendored.pl/bin/Changes",
+      "!**/node_modules/exiftool-vendored.pl/bin/windows_exiftool.txt",
+      "!**/node_modules/exiftool-vendored.pl/bin/README",
+      "!**/node_modules/exiftool-vendored.pl/bin/META.{json,yml}",
+      "!**/node_modules/exiftool-vendored.pl/bin/Makefile.PL",
+      "!**/node_modules/exiftool-vendored.pl/bin/perl-Image-ExifTool.spec",
+      "!**/node_modules/exiftool-vendored.pl/bin/{validate,build_geolocation,build_tag_lookup,MANIFEST,pp_build_exe.args}",
+      "!**/node_modules/ffmpeg-static/{example.js,install.js,ffmpeg.LICENSE,ffmpeg.README,LICENSE,README.md,types}",
       "!**/node_modules/**/{*.md,*.map,*.d.ts,*.d.mts,*.d.cts,CHANGELOG*,README*,LICENSE*,docs,doc,test,tests,__tests__,example,examples,.github}/**",
       "!**/node_modules/**/*.{md,map,d.ts}"
     ],
@@ -70,7 +86,10 @@
         "AppImage",
         "deb"
       ],
-      "category": "Graphics"
+      "category": "Graphics",
+      "files": [
+        "!**/node_modules/ffmpeg-static/**"
+      ]
     },
     "win": {
       "target": "nsis"

@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import { mkdir, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import ffmpegPath from 'ffmpeg-static'
+import { getFfmpegPath } from '../utils/ffmpeg'
 import sharp from 'sharp'
 import { getDb } from '../db'
 import { probeDuration } from './movie'
@@ -66,7 +66,7 @@ async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
     .all() as { photoId: number; filepath: string; hash: string }[]
   if (items.length === 0) return
 
-  const ff = (ffmpegPath as unknown as string) ?? 'ffmpeg'
+  const ff = getFfmpegPath()
   const insertThumb = db.prepare(
     `INSERT OR REPLACE INTO thumbnails (photo_id, size, cache_path) VALUES (?, ?, ?)`
   )

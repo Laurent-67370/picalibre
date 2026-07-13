@@ -18,7 +18,7 @@ import { batchExport, exportMetadataCsv, emailShare } from './services/exporter'
 import { printPhotos } from './services/printer'
 import { makeCollage, CollageItem } from './services/collage'
 import { makeMovie, MovieItem } from './services/movie'
-import ffmpegPath from 'ffmpeg-static'
+import { getFfmpegPath } from './utils/ffmpeg'
 import { parseStack } from '../shared/edit-engine'
 import { renderEdited } from './services/render-sharp'
 import { startScan } from './services/scanner'
@@ -672,7 +672,7 @@ function registerIpc(): void {
   ipcMain.handle('create:movie', async (_e, { photoIds, durationSec, audioPaths, transition, outFile }) => {
     const items = photosWithStacks(photoIds)
     return makeMovie(items, {
-      ffmpegPath: (ffmpegPath as unknown as string) ?? 'ffmpeg',
+      ffmpegPath: getFfmpegPath(),
       durationSec,
       audioPaths,
       transition,
