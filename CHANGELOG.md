@@ -3,6 +3,24 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.8.0] — 2026-07-12
+
+### Performance (mesures sur bibliothèque de 50 000 photos)
+- **Cache navigateur des miniatures** : réponses `immutable` avec le hash de
+  contenu en version d'URL → re-scroller la grille ne déclenche plus **aucune**
+  requête (elles partaient toutes en revalidation). C'est le gain « Picasa ».
+- **Cache mémoire des chemins de miniatures** dans le protocole `thumb://` :
+  plus de requête SQL ni de stat disque par vignette (2 000 vignettes :
+  9 ms → 1,4 ms, premier affichage).
+- **Chargement de vue 2,8× plus rapide** : colonnes de grille explicites au
+  lieu de `SELECT *` (10 000 lignes : 190 → 67 ms) et **payload IPC −45 %**.
+- **Index SQL partiels** ciblant les photos visibles (dossier+date, chronologie,
+  miniatures) — vérifiés au plan d'exécution.
+- **SQLite affûté** : 64 Mo de cache de pages, mmap 256 Mo, temp en mémoire.
+- **Rechargements coalescés pendant le scan** : au plus un rafraîchissement de
+  vue toutes les 1,2 s au lieu d'un par lot de 200 fichiers.
+- Nouveau banc de mesure `PICALIBRE_TEST_BENCH` (seed 50 k, chronos, plans SQL).
+
 ## [1.7.0] — 2026-07-12
 
 ### Ajouté
@@ -286,6 +304,7 @@ Les 5 phases du plan initial sont couvertes.
   (fichier inchangé size+mtime = jamais re-hashé).
 - Configuration de build Linux (AppImage/deb), Windows (NSIS), macOS (DMG).
 
+[1.8.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.8.0
 [1.7.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.7.0
 [1.6.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.6.0
 [1.5.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.5.0

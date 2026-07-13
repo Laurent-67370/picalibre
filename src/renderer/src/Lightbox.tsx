@@ -134,7 +134,7 @@ export default function Lightbox({
 
   const src = fullLoaded
     ? `thumb://library/orig/${photo.id}`
-    : `thumb://library/1024/${photo.id}`
+    : `thumb://library/1024/${photo.id}?v=${photo.hash_xxh3}`
 
   return (
     <div

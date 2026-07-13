@@ -149,7 +149,7 @@ export default function Editor({
       imgRef.current = img
       scheduleRender()
     }
-    img.src = `thumb://library/1024/${photo.id}`
+    img.src = `thumb://library/1024/${photo.id}?v=${photo.hash_xxh3}`
     return () => cancelAnimationFrame(rafRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photo.id])

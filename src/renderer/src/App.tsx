@@ -32,6 +32,7 @@ const HEADER_H = 42
  */
 function ThumbImg({
   photoId,
+  v,
   size = 256,
   alt,
   style,
@@ -41,6 +42,7 @@ function ThumbImg({
   loading = 'lazy'
 }: {
   photoId: number
+  v?: string
   size?: number
   alt?: string
   style?: React.CSSProperties
@@ -67,7 +69,7 @@ function ThumbImg({
 
   // Le paramètre `_retry` force Chromium à recharger l'URL même s'il l'a déjà
   // demandée (paranoia, en complément du Cache-Control: no-store côté main).
-  const src = `thumb://library/${size}/${photoId}${attempt > 0 ? `?_retry=${attempt}` : ''}`
+  const src = `thumb://library/${size}/${photoId}?v=${v ?? ''}${attempt > 0 ? `&_retry=${attempt}` : ''}`
 
   return (
     <img
@@ -1165,7 +1167,7 @@ export default function App(): JSX.Element {
                       {g.photos.map((p) => (
                         <div key={p.id} style={{ width: 180 }}>
                           <img
-                            src={`thumb://library/256/${p.id}`}
+                            src={`thumb://library/256/${p.id}?v=${p.hash_xxh3}`}
                             style={{
                               width: '100%',
                               aspectRatio: '1',
@@ -1319,6 +1321,7 @@ export default function App(): JSX.Element {
                           >
                             <ThumbImg
                               photoId={p.id}
+                              v={p.hash_xxh3}
                               size={256}
                               alt={p.filename}
                               onClick={(e) => selectPhoto(p, gi, e)}
@@ -1550,7 +1553,7 @@ export default function App(): JSX.Element {
                   <img
                     key={p.id}
                     className="traythumb"
-                    src={`thumb://library/256/${p.id}`}
+                    src={`thumb://library/256/${p.id}?v=${p.hash_xxh3}`}
                     onClick={() => toggleTray(p)}
                     title={`${p.filename} — clic pour retirer`}
                   />

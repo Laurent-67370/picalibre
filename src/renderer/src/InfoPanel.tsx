@@ -96,7 +96,7 @@ export default function InfoPanel({
       ) : (
         <>
           <img
-            src={`thumb://library/256/${p.id}`}
+            src={`thumb://library/256/${p.id}?v=${p.hash_xxh3}`}
             style={{ width: '100%', borderRadius: 8, marginBottom: 10, background: '#0f172a' }}
           />
           <div style={{ fontWeight: 600, wordBreak: 'break-all', marginBottom: 2 }}>{p.filename}</div>

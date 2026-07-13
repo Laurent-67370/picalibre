@@ -122,6 +122,11 @@ async function generateThumbOnTheFly(
   }
 }
 
+/** Cache mémoire des chemins de miniatures — évite une requête SQL + un stat disque
+ *  par vignette affichée. Les chemins sont adressés par hash de contenu, donc stables. */
+const thumbPathCache = new Map<string, string>()
+const THUMB_CACHE_MAX = 30000
+
 function registerThumbProtocol(): void {
   protocol.handle('thumb', async (request) => {
     const parts = new URL(request.url).pathname.split('/').filter(Boolean)
@@ -143,19 +148,24 @@ function registerThumbProtocol(): void {
       })
     }
 
-    // Recherche en cache SQL
-    const row = getDb()
-      .prepare('SELECT cache_path FROM thumbnails WHERE photo_id = ? AND size = ?')
-      .get(photoId, size) as { cache_path: string } | undefined
+    // Chemin rapide : cache mémoire (ni SQL, ni stat — le fichier est immuable par hash)
+    const cacheKey = `${photoId}:${size}`
+    let cachePath = thumbPathCache.get(cacheKey)
 
-    let cachePath = row?.cache_path
-
-    // Vérifier que le fichier existe vraiment (peut avoir été supprimé du disque)
-    if (cachePath) {
-      try {
-        await access(cachePath)
-      } catch {
-        cachePath = undefined
+    if (!cachePath) {
+      const row = getDb()
+        .prepare('SELECT cache_path FROM thumbnails WHERE photo_id = ? AND size = ?')
+        .get(photoId, size) as { cache_path: string } | undefined
+      cachePath = row?.cache_path
+      // Vérification disque uniquement au premier accès
+      if (cachePath) {
+        try {
+          await access(cachePath)
+          if (thumbPathCache.size >= THUMB_CACHE_MAX) thumbPathCache.clear()
+          thumbPathCache.set(cacheKey, cachePath)
+        } catch {
+          cachePath = undefined
+        }
       }
     }
 
@@ -199,7 +209,9 @@ function registerThumbProtocol(): void {
       status: resp.status,
       headers: {
         'Content-Type': resp.headers.get('Content-Type') ?? 'image/webp',
-        'Cache-Control': 'no-cache'
+        // Adressé par hash de contenu (v= dans l'URL) : cache navigateur permanent.
+        // Re-scroller la grille ne déclenche plus AUCUNE requête.
+        'Cache-Control': 'public, max-age=31536000, immutable'
       }
     })
   })
@@ -256,6 +268,14 @@ function photosWithStacks(photoIds: number[]): Array<CollageItem & MovieItem> {
   return items
 }
 
+/** Colonnes nécessaires à la grille — ~2,5× moins d'octets IPC que SELECT *.
+ *  Les métadonnées complètes passent par photos:details (panneau d'infos). */
+const GRID_COLS =
+  'id, folder_id, filename, filepath, media_type, hash_xxh3, file_size, file_mtime, ' +
+  'width, height, duration_ms, taken_at, gps_lat, gps_lon, rating, is_favorite, caption, status'
+
+const GRID_COLS_P = GRID_COLS.split(', ').map((c) => 'p.' + c).join(', ')
+
 function registerIpc(): void {
   ipcMain.handle('scanRoots:list', () =>
     getDb().prepare('SELECT id, path, mode FROM scan_roots').all()
@@ -281,7 +301,7 @@ function registerIpc(): void {
   ipcMain.handle('photos:byFolder', (_e, { folderId, offset, limit }) =>
     getDb()
       .prepare(
-        `SELECT * FROM photos WHERE folder_id = ? AND status = 'active' AND is_hidden = 0
+        `SELECT ${GRID_COLS} FROM photos WHERE folder_id = ? AND status = 'active' AND is_hidden = 0
          ORDER BY taken_at DESC, filename LIMIT ? OFFSET ?`
       )
       .all(folderId, limit, offset)
@@ -329,7 +349,7 @@ function registerIpc(): void {
   ipcMain.handle('photos:timeline', (_e, { offset, limit }) =>
     getDb()
       .prepare(
-        `SELECT * FROM photos WHERE status = 'active' AND is_hidden = 0
+        `SELECT ${GRID_COLS} FROM photos WHERE status = 'active' AND is_hidden = 0
          ORDER BY taken_at IS NULL, taken_at DESC, file_mtime DESC LIMIT ? OFFSET ?`
       )
       .all(limit, offset)
@@ -361,7 +381,7 @@ function registerIpc(): void {
   ipcMain.handle('photos:byAlbum', (_e, { albumId, offset, limit }) =>
     getDb()
       .prepare(
-        `SELECT p.* FROM photos p
+        `SELECT ${GRID_COLS_P} FROM photos p
          JOIN album_items ai ON ai.photo_id = p.id
          WHERE ai.album_id = ? AND p.status = 'active' AND p.is_hidden = 0
          ORDER BY ai.position, p.taken_at DESC LIMIT ? OFFSET ?`
@@ -372,7 +392,7 @@ function registerIpc(): void {
     const like = `%${query}%`
     return getDb()
       .prepare(
-        `SELECT DISTINCT p.* FROM photos p
+        `SELECT DISTINCT ${GRID_COLS_P} FROM photos p
          LEFT JOIN photo_tags pt ON pt.photo_id = p.id
          LEFT JOIN tags t ON t.id = pt.tag_id
          WHERE p.status = 'active' AND p.is_hidden = 0
@@ -447,7 +467,7 @@ function registerIpc(): void {
   ipcMain.handle('photos:hidden', () => {
     if (!isUnlocked()) return []
     return getDb()
-      .prepare(`SELECT * FROM photos WHERE is_hidden = 1 AND status = 'active' ORDER BY taken_at DESC`)
+      .prepare(`SELECT ${GRID_COLS} FROM photos WHERE is_hidden = 1 AND status = 'active' ORDER BY taken_at DESC`)
       .all()
   })
   ipcMain.handle('privacy:status', () => privacyStatus())
@@ -558,7 +578,7 @@ function registerIpc(): void {
   ipcMain.handle('photos:byPerson', (_e, { personId, offset, limit }) =>
     getDb()
       .prepare(
-        `SELECT DISTINCT p.* FROM photos p
+        `SELECT DISTINCT ${GRID_COLS_P} FROM photos p
          JOIN faces f ON f.photo_id = p.id
          WHERE f.person_id = ? AND p.status = 'active' AND p.is_hidden = 0
          ORDER BY p.taken_at DESC LIMIT ? OFFSET ?`
@@ -710,6 +730,50 @@ app.whenReady().then(() => {
       console.log('[test] IMPORT', JSON.stringify(stats))
       setTimeout(() => exitTest(0), 4000) // laisse le scan de la destination finir
     })
+  }
+
+  // Banc de performance : 50 000 photos synthétiques, mesures des chemins chauds.
+  if (process.env.PICALIBRE_TEST_BENCH) {
+    const db = getDb()
+    const t = (fn: () => void): number => {
+      const t0 = performance.now()
+      fn()
+      return Math.round((performance.now() - t0) * 10) / 10
+    }
+    // Seed
+    db.prepare("INSERT OR IGNORE INTO folders (id, path) VALUES (1, '/bench')").run()
+    const ins = db.prepare(
+      `INSERT INTO photos (folder_id, filename, filepath, hash_xxh3, file_size, file_mtime, taken_at, rating)
+       VALUES (1, ?, ?, ?, 1000, ?, ?, ?)`
+    )
+    const insThumb = db.prepare(
+      'INSERT OR IGNORE INTO thumbnails (photo_id, size, cache_path) VALUES (?, 256, ?)'
+    )
+    const seedMs = t(() =>
+      db.transaction(() => {
+        for (let i = 0; i < 50000; i++) {
+          const r = ins.run(`b${i}.jpg`, `/bench/b${i}.jpg`, `h${i}`, 1700000000 + i, 1700000000 + i, i % 6)
+          insThumb.run(r.lastInsertRowid, `/bench/cache/h${i}_256.webp`)
+        }
+      })()
+    )
+    // 1. Vue : SELECT * vs colonnes de grille (10 000 lignes)
+    const wide = t(() => db.prepare(`SELECT * FROM photos WHERE folder_id = 1 AND status='active' AND is_hidden=0 ORDER BY taken_at DESC LIMIT 10000`).all())
+    const slim = t(() => db.prepare(`SELECT ${GRID_COLS} FROM photos WHERE folder_id = 1 AND status='active' AND is_hidden=0 ORDER BY taken_at DESC LIMIT 10000`).all())
+    const wideBytes = JSON.stringify(db.prepare(`SELECT * FROM photos LIMIT 1000`).all()).length
+    const slimBytes = JSON.stringify(db.prepare(`SELECT ${GRID_COLS} FROM photos LIMIT 1000`).all()).length
+    // 2. Miniatures : requête SQL par vignette vs cache mémoire
+    const lookup = db.prepare('SELECT cache_path FROM thumbnails WHERE photo_id = ? AND size = 256')
+    const sqlPer2000 = t(() => { for (let i = 1; i <= 2000; i++) lookup.get(i) })
+    const mem = new Map<number, string>()
+    for (let i = 1; i <= 2000; i++) mem.set(i, (lookup.get(i) as { cache_path: string }).cache_path)
+    const memPer2000 = t(() => { for (let i = 1; i <= 2000; i++) mem.get(i) })
+    console.log('[bench] seed 50k:', seedMs, 'ms')
+    console.log('[bench] vue 10k lignes — SELECT *:', wide, 'ms | colonnes grille:', slim, 'ms')
+    console.log('[bench] payload IPC (1000 lignes) —', wideBytes, '→', slimBytes, `octets (-${Math.round((1 - slimBytes / wideBytes) * 100)}%)`)
+    console.log('[bench] 2000 vignettes — SQL:', sqlPer2000, 'ms | cache mémoire:', memPer2000, 'ms')
+    console.log('[bench] plan folder:', JSON.stringify(db.prepare(`EXPLAIN QUERY PLAN SELECT ${GRID_COLS} FROM photos WHERE folder_id=1 AND status='active' AND is_hidden=0 ORDER BY taken_at DESC LIMIT 100`).all()))
+    exitTest(0)
   }
 
   // Mode test menu : vérifie la structure du menu applicatif puis quitte.

@@ -10,12 +10,14 @@ import type { ScannedFile } from '../../workers/scan-worker'
 import migration001 from './migrations/001_init.sql?raw'
 import migration002 from './migrations/002_faces_scanned.sql?raw'
 import migration003 from './migrations/003_timeline.sql?raw'
+import migration004 from './migrations/004_perf_indexes.sql?raw'
 
 /** Migrations embarquées dans le bundle (import Vite ?raw) — ordre croissant. */
 const MIGRATIONS: Array<{ version: number; sql: string }> = [
   { version: 1, sql: migration001 },
   { version: 2, sql: migration002 },
-  { version: 3, sql: migration003 }
+  { version: 3, sql: migration003 },
+  { version: 4, sql: migration004 }
 ]
 
 let db: Database.Database
@@ -26,6 +28,9 @@ export function initDb(): Database.Database {
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   db.pragma('synchronous = NORMAL')
+  db.pragma('cache_size = -65536') // 64 Mo de cache de pages
+  db.pragma('temp_store = MEMORY')
+  db.pragma('mmap_size = 268435456') // 256 Mo en mmap : lectures sans syscall
   runMigrations()
   return db
 }

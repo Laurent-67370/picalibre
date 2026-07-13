@@ -60,7 +60,7 @@ export default function Slideshow({
       }}
     >
       <img
-        src={`thumb://library/1024/${photo.id}`}
+        src={`thumb://library/1024/${photo.id}?v=${photo.hash_xxh3}`}
         alt={photo.filename}
         style={{
           maxWidth: '100%',
