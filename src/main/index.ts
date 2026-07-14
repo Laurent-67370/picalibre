@@ -392,7 +392,7 @@ function registerIpc(): void {
   ipcMain.handle('photos:search', (_e, { query, offset, limit }) => {
     // FTS5 MATCH sur photos_fts (caption, filename, tags, persons)
     // prefix*: permet de chercher "vac" → "vacances"
-    const ftsQuery = query.trim().split(/\s+/).map((t) => `"${t.replace(/"/g, '""')}"*`).join(' ')
+    const ftsQuery = query.trim().split(/\s+/).map((t: string) => `"${t.replace(/"/g, '""')}"*`).join(' ')
     return getDb()
       .prepare(
         `SELECT DISTINCT ${GRID_COLS_P} FROM photos p
