@@ -57,6 +57,37 @@ Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 - 🧪 Mode CI `PICALIBRE_TEST_WEBGL=1` : la suite de parité tourne dans le vrai
   renderer
 
+## Quoi de neuf en 1.2.0
+
+- 🎬 **Vidéos dans les films** : mixe photos et vidéos dans un même MP4 —
+  segments normalisés puis assemblage en copie de flux (pas de double
+  ré-encodage), transitions en fondu, multi-pistes audio
+- 🖼️ **Miniatures vidéo** dans la grille (frame à 10 % de la durée) avec badge
+  🎬 + durée
+- 🧩 **timeline-core** : fondation du futur éditeur de montage (pistes, trim,
+  crossfade/wipe/slide)
+
+## Quoi de neuf en 1.1.0
+
+- 👥 **Gestion manuelle des visages** : fusion de personnes (avec transfert de
+  nom vers une cible anonyme, centroïde recalculé sur les embeddings réels),
+  scission, confirmation/rejet des rattachements automatiques
+- Panneau dédié dans la vue Personne, avatars triés par confiance croissante
+  (les cas douteux en premier), sélection multiple
+
+## Quoi de neuf en 1.0.0
+
+Les 5 phases du plan initial sont couvertes :
+
+- 🧩 **Créations** : collages (4 mises en page), diaporama plein écran, movie
+  maker MP4 avec audio
+- 🗺️ **Visages & carte** : reconnaissance faciale 100 % offline, clustering
+  automatique par similarité, géotag manuel sur carte MapLibre
+- 🔁 **Gestion avancée** : watcher temps réel, import SD/appareil photo,
+  détection et fusion de doublons
+- 📤 **Partage** : export batch avec filigrane, CSV des métadonnées,
+  impression, email, migration de bibliothèque par hash, masquage protégé
+
 Détail complet des versions : [CHANGELOG.md](CHANGELOG.md)
 
 ## Principes
@@ -113,28 +144,6 @@ schéma des processus, DSL d'édition, schéma SQL complet, plan par phases.
 - [x] Glisser-déposer (vignettes → albums, dossiers/fichiers OS → scan/import), barre de critères d'affichage (tri, filtre ★/type, ratio des vignettes) — mémorisés
 - [x] Performance : cache navigateur permanent des miniatures, colonnes IPC ciblées (−45 %), index SQL partiels, pragmas SQLite, mesuré sur 50 000 photos
 - [x] Taille des installeurs réduite de 50 à 65 % (résolveur ffmpeg à la demande, modèles de visages allégés, dépendances nettoyées) ; CI multi-OS (Linux/Windows/macOS) avec release automatique sur tag
-
-## Changelog
-
-### v1.1.0
-
-**Démarrage**
-- Démarrage propre confirmé : le watcher lit la base de données sans erreur de module
-- Le postinstall gère désormais automatiquement les soucis d'ABI liés à l'environnement local
-
-**Phase 3 — Atelier de tri des visages (Vue Personne)**
-- **Fusionner dans…** : liste déroulante + bouton dans la barre d'action
-  - Tous les visages sont re-rattachés à la personne cible
-  - Le nom est transféré automatiquement si la cible est anonyme
-  - Le centroïde est recalculé sur les embeddings réels (pas une approximation)
-  - La personne source est supprimée après fusion
-- **👥 Gérer les visages** : grille d'avatars recadrés (même technique CSS que la sidebar), triés par confiance croissante pour prioriser la vérification manuelle des cas douteux
-- **Sélection multiple** avec trois actions :
-  - ✔ Confirmer (liseré vert persistant)
-  - ✖ Pas cette personne (détaché + marqué `rejected`)
-  - ✂ Détacher vers une nouvelle personne anonyme
-- Une personne vidée de tous ses visages disparaît automatiquement de la liste
-- Cœur logique isolé dans `manage-core.ts`, testé 8/8 sur base de données en mémoire avec les migrations réelles
 
 ## Licence
 
