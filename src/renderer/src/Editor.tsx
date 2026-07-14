@@ -5,10 +5,12 @@ import {
   EditStack,
   FilterName,
   RedeyeZone,
+  TextOpParams,
   computeAutoColor,
   computeAutoContrast,
   emptyStack,
   getOp,
+  getTextOp,
   upsertOp
 } from '@shared/edit-engine'
 import { renderPreview } from './render-canvas'
@@ -617,6 +619,167 @@ export default function Editor({
                 />
               </label>
             )}
+
+            {/* ---- Texte sur photo ---- */}
+            <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>TEXTE</div>
+            {(() => {
+              const textOp = getTextOp(stack)
+              const textParams: TextOpParams = textOp?.params ?? {
+                content: '',
+                fontFamily: 'sans-serif',
+                fontSize: 0.05,
+                color: '#ffffff',
+                x: 0.5,
+                y: 0.5,
+                opacity: 1,
+                shadow: true,
+                shadowColor: '#000000',
+                shadowBlur: 0.005,
+                fontWeight: 'bold'
+              }
+              const updateText = (partial: Partial<TextOpParams>): void => {
+                applyOp(
+                  { type: 'text', params: { ...textParams, ...partial } },
+                  'text'
+                )
+              }
+              return (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Texte à incuster…"
+                    value={textParams.content}
+                    onChange={(e) => updateText({ content: e.target.value })}
+                    style={{ width: '100%', marginBottom: 8 }}
+                  />
+                  {textParams.content.trim() !== '' && (
+                    <>
+                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                        Police
+                        <select
+                          value={textParams.fontFamily}
+                          onChange={(e) => updateText({ fontFamily: e.target.value })}
+                          style={{ width: '100%', marginTop: 4 }}
+                        >
+                          <option value="sans-serif">Sans-serif</option>
+                          <option value="serif">Serif</option>
+                          <option value="monospace">Monospace</option>
+                          <option value="cursive">Cursive</option>
+                          <option value="fantasy">Fantasy</option>
+                        </select>
+                      </label>
+                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                        Graisse
+                        <select
+                          value={textParams.fontWeight}
+                          onChange={(e) => updateText({ fontWeight: e.target.value })}
+                          style={{ width: '100%', marginTop: 4 }}
+                        >
+                          <option value="normal">Normal</option>
+                          <option value="bold">Gras</option>
+                        </select>
+                      </label>
+                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                        Taille : {(textParams.fontSize * 100).toFixed(0)}% de la largeur
+                        <input
+                          type="range"
+                          min={0.01}
+                          max={0.2}
+                          step={0.005}
+                          value={textParams.fontSize}
+                          onChange={(e) => updateText({ fontSize: parseFloat(e.target.value) })}
+                          style={{ width: '100%' }}
+                        />
+                      </label>
+                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                        Couleur
+                        <input
+                          type="color"
+                          value={textParams.color}
+                          onChange={(e) => updateText({ color: e.target.value })}
+                          style={{ width: '100%', height: 30, marginTop: 4, padding: 0 }}
+                        />
+                      </label>
+                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                        Position X : {(textParams.x * 100).toFixed(0)}%
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={textParams.x}
+                          onChange={(e) => updateText({ x: parseFloat(e.target.value) })}
+                          style={{ width: '100%' }}
+                        />
+                      </label>
+                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                        Position Y : {(textParams.y * 100).toFixed(0)}%
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={textParams.y}
+                          onChange={(e) => updateText({ y: parseFloat(e.target.value) })}
+                          style={{ width: '100%' }}
+                        />
+                      </label>
+                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                        Opacité : {Math.round(textParams.opacity * 100)}%
+                        <input
+                          type="range"
+                          min={0.1}
+                          max={1}
+                          step={0.05}
+                          value={textParams.opacity}
+                          onChange={(e) => updateText({ opacity: parseFloat(e.target.value) })}
+                          style={{ width: '100%' }}
+                        />
+                      </label>
+                      <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        <input
+                          type="checkbox"
+                          checked={textParams.shadow}
+                          onChange={(e) => updateText({ shadow: e.target.checked })}
+                        />
+                        Ombre portée
+                      </label>
+                      {textParams.shadow && (
+                        <>
+                          <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                            Couleur de l'ombre
+                            <input
+                              type="color"
+                              value={textParams.shadowColor}
+                              onChange={(e) => updateText({ shadowColor: e.target.value })}
+                              style={{ width: '100%', height: 30, marginTop: 4, padding: 0 }}
+                            />
+                          </label>
+                          <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                            Flou : {(textParams.shadowBlur * 1000).toFixed(1)}‰
+                            <input
+                              type="range"
+                              min={0}
+                              max={0.02}
+                              step={0.001}
+                              value={textParams.shadowBlur}
+                              onChange={(e) => updateText({ shadowBlur: parseFloat(e.target.value) })}
+                              style={{ width: '100%' }}
+                            />
+                          </label>
+                        </>
+                      )}
+                      <button
+                        onClick={() => applyOp({ type: 'text', params: { ...textParams, content: '' } }, 'text_remove')}
+                        style={{ width: '100%', padding: 6, marginBottom: 12, fontSize: 12 }}
+                      >
+                        ✖ Retirer le texte
+                      </button>
+                    </>
+                  )}
+                </>
+              )
+            })()}
 
             <label style={{ fontSize: 13, display: 'block', marginBottom: 14 }}>
               Redressement : {angle.toFixed(1)}°

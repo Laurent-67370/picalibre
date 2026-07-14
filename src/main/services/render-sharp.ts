@@ -14,7 +14,10 @@ import {
   applyColorOps,
   applySpatialOps,
   cropRectPx,
-  straightenAngle
+  straightenAngle,
+  getTextOp,
+  escapeSvgText,
+  hexToSvgFill
 } from '../../shared/edit-engine'
 
 export interface ExportOptions {
@@ -60,6 +63,53 @@ export async function renderEdited(
   })
   if (maxSize) {
     out = out.resize(maxSize, maxSize, { fit: 'inside', withoutEnlargement: true })
+  }
+
+  // Texte sur photo : composé APRÈS le redimensionnement pour garantir
+  // que le fontSize relatif (ratio de la largeur) est identique en preview et en export.
+  // Parité preview/export : même paramètres, même position normalisée, même font.
+  const textOp = getTextOp(stack)
+  if (textOp && textOp.params.content.trim() !== '') {
+    const inter = await out.png().toBuffer()
+    const m = await sharp(inter).metadata()
+    const W = m.width ?? 100
+    const H = m.height ?? 100
+    const p = textOp.params
+    const fontSizePx = Math.round(p.fontSize * W)
+    const px = p.x * W
+    const py = p.y * H
+    const fillAttrs = hexToSvgFill(p.color, p.opacity)
+    const escaped = escapeSvgText(p.content)
+
+    // Ombre portée : filtre SVG blur
+    let shadowDef = ''
+    let shadowStyle = ''
+    if (p.shadow) {
+      const blurPx = Math.round(p.shadowBlur * W)
+      const shadowFill = hexToSvgFill(p.shadowColor, p.opacity)
+      shadowDef = `<filter id="textShadow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="${blurPx}"/>
+        <feOffset dx="0" dy="0" result="offsetblur"/>
+        <feFlood flood-color="${shadowFill.fill}" flood-opacity="${shadowFill.opacity}"/>
+        <feComposite in2="offsetblur" operator="in"/>
+        <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>`
+      shadowStyle = ' filter="url(#textShadow)"'
+    }
+
+    const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      <defs>${shadowDef}</defs>
+      <text x="${px}" y="${py}"
+        text-anchor="middle" dominant-baseline="middle"
+        font-family="${p.fontFamily}" font-size="${fontSizePx}"
+        font-weight="${p.fontWeight}"
+        fill="${fillAttrs.fill}" fill-opacity="${fillAttrs.opacity}"${shadowStyle}>${escaped}</text></svg>`
+    const composited = await sharp(inter)
+      .composite([{ input: Buffer.from(svg) }])
+      .removeAlpha()
+      .png()
+      .toBuffer()
+    out = sharp(composited)
   }
 
   // Filigrane : composé APRÈS le redimensionnement, taille relative à l'image

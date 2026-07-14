@@ -6,13 +6,17 @@
  * Les opérations COULEUR passent par le GPU (render-webgl, parité testée
  * 13/13 à ±1/255 contre applyColorOps) avec fallback CPU automatique ;
  * sans op spatiale, le chemin GPU évite même le getImageData.
+ *
+ * Le TEXTE est dessiné en dernier, par-dessus tous les autres effets,
+ * garantissant la parité avec l'export (SVG composite dans render-sharp.ts).
  */
 import {
   EditStack,
   applyColorOps,
   applySpatialOps,
   cropRectPx,
-  straightenAngle
+  straightenAngle,
+  getTextOp
 } from '@shared/edit-engine'
 import { applyColorOpsWebGL, colorOpsOf } from './render-webgl'
 
@@ -76,7 +80,14 @@ export function renderPreview(
   // --- Pixels : spatial (CPU, zones locales) puis couleur (GPU si possible) ---
   const hasSpatial = stack.ops.some((o) => o.type === 'redeye' || o.type === 'retouch')
   const hasColor = colorOpsOf(stack.ops).length > 0
-  if (!hasSpatial && !hasColor) return
+  const hasText = stack.ops.some((o) => o.type === 'text')
+  if (!hasSpatial && !hasColor && !hasText) return
+
+  // Si pas d'op pixel mais texte seul → dessiner directement
+  if (!hasSpatial && !hasColor && hasText) {
+    drawText(ctx, stack, rect.width, rect.height)
+    return
+  }
 
   if (hasSpatial) {
     const img = ctx.getImageData(0, 0, rect.width, rect.height)
@@ -86,18 +97,61 @@ export function renderPreview(
       !opts.forceCpu &&
       applyColorOpsWebGL(img, stack.ops, ctx, rect.width, rect.height)
     ) {
+      drawText(ctx, stack, rect.width, rect.height)
       return // GPU a écrit le résultat (spatial inclus via la texture ImageData)
     }
     if (hasColor) applyColorOps(img.data, 4, stack.ops)
     ctx.putImageData(img, 0, 0)
+    drawText(ctx, stack, rect.width, rect.height)
     return
   }
 
   // Chemin rapide : couleur seule → texture directe depuis le canvas, AUCUN getImageData
   if (!opts.forceCpu && applyColorOpsWebGL(target, stack.ops, ctx, rect.width, rect.height)) {
+    // Le GPU a traité la couleur, mais le texte doit être dessiné ensuite
+    drawText(ctx, stack, rect.width, rect.height)
     return
   }
   const img = ctx.getImageData(0, 0, rect.width, rect.height)
   applyColorOps(img.data, 4, stack.ops)
   ctx.putImageData(img, 0, 0)
+  drawText(ctx, stack, rect.width, rect.height)
+}
+
+/**
+ * Dessine l'opération texte sur le canvas de preview.
+ * Parité garantie avec le rendu SVG de l'export (render-sharp.ts).
+ * Coordonnées normalisées 0..1 → pixels, fontSize relatif à la largeur.
+ */
+function drawText(
+  ctx: CanvasRenderingContext2D,
+  stack: EditStack,
+  width: number,
+  height: number
+): void {
+  const textOp = getTextOp(stack)
+  if (!textOp) return
+  const { content, fontFamily, fontSize, color, x, y, opacity, shadow, shadowColor, shadowBlur, fontWeight } = textOp.params
+  if (content.trim() === '') return
+
+  const fontSizePx = Math.round(fontSize * width)
+  const px = x * width
+  const py = y * height
+
+  ctx.save()
+  ctx.globalAlpha = Math.max(0, Math.min(1, opacity))
+  ctx.font = `${fontWeight} ${fontSizePx}px ${fontFamily}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+
+  if (shadow) {
+    ctx.shadowColor = shadowColor
+    ctx.shadowBlur = Math.round(shadowBlur * width)
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 0
+  }
+
+  ctx.fillStyle = color
+  ctx.fillText(content, px, py)
+  ctx.restore()
 }

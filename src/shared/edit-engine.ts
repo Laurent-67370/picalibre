@@ -32,6 +32,21 @@ export interface RetouchStroke {
   r: number // rayon normalisé
 }
 
+/** Paramètres d'une opération de texte sur photo. */
+export interface TextOpParams {
+  content: string
+  fontFamily: string // ex: 'sans-serif', 'serif', 'monospace'
+  fontSize: number // ratio relatif à la largeur de l'image (0..1), ex: 0.05 = 5% de la largeur
+  color: string // couleur CSS hex, ex: '#ffffff'
+  x: number // position normalisée 0..1 (centre du texte)
+  y: number // position normalisée 0..1 (centre du texte)
+  opacity: number // 0..1
+  shadow: boolean // ombre portée
+  shadowColor: string // couleur de l'ombre (hex)
+  shadowBlur: number // flou de l'ombre en ratio relatif à la largeur (0..0.02)
+  fontWeight: string // 'normal' | 'bold'
+}
+
 export type EditOp =
   | { type: 'crop'; params: { x: number; y: number; w: number; h: number } }
   | { type: 'straighten'; params: { angle: number } } // degrés, -15..15
@@ -40,6 +55,7 @@ export type EditOp =
   | { type: 'filter'; params: { name: FilterName; intensity: number } } // 0..1
   | { type: 'redeye'; params: { zones: RedeyeZone[] } }
   | { type: 'retouch'; params: { strokes: RetouchStroke[] } }
+  | { type: 'text'; params: TextOpParams }
   | { type: ColorOpType; params: { value: number } } // -1..1 (fill_light : 0..1)
 
 export interface EditStack {
@@ -69,7 +85,8 @@ export function upsertOp(stack: EditStack, op: EditOp): EditStack {
     (op.type === 'wb' && op.params.r === 1 && op.params.g === 1 && op.params.b === 1) ||
     (op.type === 'filter' && op.params.intensity === 0) ||
     (op.type === 'redeye' && op.params.zones.length === 0) ||
-    (op.type === 'retouch' && op.params.strokes.length === 0)
+    (op.type === 'retouch' && op.params.strokes.length === 0) ||
+    (op.type === 'text' && op.params.content.trim() === '')
   if (!isNeutral) ops.push(op)
   return { version: 1, ops }
 }
@@ -100,7 +117,11 @@ export function applyColorOps(
 ): void {
   const colorOps = ops.filter(
     (o) =>
-      o.type !== 'crop' && o.type !== 'straighten' && o.type !== 'redeye' && o.type !== 'retouch'
+      o.type !== 'crop' &&
+      o.type !== 'straighten' &&
+      o.type !== 'redeye' &&
+      o.type !== 'retouch' &&
+      o.type !== 'text'
   )
   if (colorOps.length === 0) return
 
@@ -392,4 +413,40 @@ export function stackHash(stack: EditStack): string {
   h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
   h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
   return (h2 >>> 0).toString(16) + (h1 >>> 0).toString(16)
+}
+
+/**
+ * Récupère l'opération text du stack, le cas échéant.
+ * Une seule instance de texte est autorisée (modèle upsert).
+ */
+export function getTextOp(
+  stack: EditStack
+): Extract<EditOp, { type: 'text' }> | undefined {
+  return getOp(stack, 'text')
+}
+
+/**
+ * Échappe le texte pour l'inclusion dans un SVG (export sharp).
+ * Échappe & < > " et les apostrophes.
+ */
+export function escapeSvgText(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+/**
+ * Convertit une couleur hex (#rrggbb) en attributs SVG fill + opacity.
+ * Retourne { fill, opacity } où fill est 'rgb(r,g,b)' et opacity est 0..1.
+ */
+export function hexToSvgFill(hex: string, opacity: number): { fill: string; opacity: number } {
+  const m = /^#?([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/.exec(hex)
+  if (!m) return { fill: hex, opacity }
+  const r = parseInt(m[1], 16)
+  const g = parseInt(m[2], 16)
+  const b = parseInt(m[3], 16)
+  return { fill: `rgb(${r},${g},${b})`, opacity }
 }
