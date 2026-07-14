@@ -7,3 +7,4 @@ release/
 .env
 *.local
 web-server/data/
+.git-credentials-temp

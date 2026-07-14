@@ -162,6 +162,13 @@ export default function App(): JSX.Element {
   const [watermark, setWatermark] = useState('')
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
   const [slideshow, setSlideshow] = useState(false)
+  const [screensaverActive, setScreensaverActive] = useState(false)
+  const [screensaverEnabled, setScreensaverEnabled] = useState<boolean>(
+    () => localStorage.getItem('picalibre.screensaver.enabled') === 'true'
+  )
+  const [screensaverMinutes, setScreensaverMinutes] = useState<number>(
+    () => Number(localStorage.getItem('picalibre.screensaver.minutes')) || 5
+  )
   const [collageLayout, setCollageLayout] = useState<CollageLayout>('grid')
   const [collagePreview, setCollagePreview] = useState(false)
   const [collageFormat, setCollageFormat] = useState<CollageFormat>('jpeg')
@@ -194,6 +201,8 @@ export default function App(): JSX.Element {
   useEffect(() => localStorage.setItem('picalibre.minStars', String(minStars)), [minStars])
   useEffect(() => localStorage.setItem('picalibre.typeFilter', typeFilter), [typeFilter])
   useEffect(() => localStorage.setItem('picalibre.fit', fitMode), [fitMode])
+  useEffect(() => localStorage.setItem('picalibre.screensaver.enabled', String(screensaverEnabled)), [screensaverEnabled])
+  useEffect(() => localStorage.setItem('picalibre.screensaver.minutes', String(screensaverMinutes)), [screensaverMinutes])
 
   /** Photos réellement affichées : le filtrage (minStars, typeFilter) et le tri
    *  (sortMode) sont maintenant effectués côté SQL par les handlers IPC.
@@ -212,6 +221,30 @@ export default function App(): JSX.Element {
   const addFolderRef = useRef<(() => Promise<void>) | null>(null)
   const importRef = useRef<(() => Promise<void>) | null>(null)
   const [update, setUpdate] = useState<{ status: string; version?: string; percent?: number } | null>(null)
+
+  // ---- Screensaver (écran de veille photo) ----
+  // Détection d'inactivité : mousemove, keydown, scroll, click resetent le timer.
+  // Après N minutes d'inactivité, lance le diaporama plein écran.
+  // N'importe quelle interaction quitte le screensaver.
+  const screensaverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!screensaverEnabled || screensaverActive) return
+    const resetTimer = (): void => {
+      if (screensaverTimerRef.current) clearTimeout(screensaverTimerRef.current)
+      screensaverTimerRef.current = setTimeout(() => {
+        if (photosRef.current.length > 0) {
+          setScreensaverActive(true)
+        }
+      }, screensaverMinutes * 60 * 1000)
+    }
+    resetTimer()
+    const events = ['mousemove', 'keydown', 'scroll', 'click', 'wheel', 'touchstart']
+    events.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }))
+    return () => {
+      if (screensaverTimerRef.current) clearTimeout(screensaverTimerRef.current)
+      events.forEach((ev) => window.removeEventListener(ev, resetTimer))
+    }
+  }, [screensaverEnabled, screensaverMinutes, screensaverActive])
 
   // ---- Tray (bac Picasa) ----
   const [tray, setTray] = useState<Map<number, PhotoRow>>(new Map())
@@ -1211,6 +1244,34 @@ export default function App(): JSX.Element {
               </p>
               <button onClick={relocate}>📦 Relier vers un nouveau dossier…</button>
 
+              <h3 style={{ marginTop: 24 }}>🖼️ Écran de veille (diaporama)</h3>
+              <p style={{ fontSize: 13, opacity: 0.7 }}>
+                Lance automatiquement un diaporama plein écran après une période d'inactivité.
+                N'importe quelle interaction (souris, clavier) quitte l'écran de veille.
+              </p>
+              <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={screensaverEnabled}
+                  onChange={(e) => setScreensaverEnabled(e.target.checked)}
+                />
+                Activer l'écran de veille photo
+              </label>
+              {screensaverEnabled && (
+                <label style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
+                  Délai d'inactivité : {screensaverMinutes} minute(s)
+                  <input
+                    type="range"
+                    min={1}
+                    max={30}
+                    step={1}
+                    value={screensaverMinutes}
+                    onChange={(e) => setScreensaverMinutes(Number(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                </label>
+              )}
+
               <h3 style={{ marginTop: 24 }}>Photos masquées — mot de passe</h3>
               <p style={{ fontSize: 13, opacity: 0.7 }}>
                 {privacy.hasPassword
@@ -1699,11 +1760,25 @@ export default function App(): JSX.Element {
         />
       )}
       {editing && <Editor photo={editing} onClose={() => setEditing(null)} />}
-      {slideshow && (
+      {slideshow && !screensaverActive && (
         <Slideshow
           photos={tray.size > 0 ? [...tray.values()] : shown}
           onClose={() => setSlideshow(false)}
         />
+      )}
+
+      {screensaverActive && (
+        <div
+          onMouseMove={() => setScreensaverActive(false)}
+          onClick={() => setScreensaverActive(false)}
+          onKeyDown={() => setScreensaverActive(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 300, cursor: 'none' }}
+        >
+          <Slideshow
+            photos={photosRef.current}
+            onClose={() => setScreensaverActive(false)}
+          />
+        </div>
       )}
 
       {collagePreview && (
