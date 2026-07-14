@@ -13,6 +13,7 @@ import migration003 from './migrations/003_timeline.sql?raw'
 import migration004 from './migrations/004_perf_indexes.sql?raw'
 import migration005 from './migrations/005_web_sync.sql?raw'
 import migration006 from './migrations/006_fts_triggers.sql?raw'
+import migration007 from './migrations/007_fts_folder_column.sql?raw'
 
 /** Migrations embarquées dans le bundle (import Vite ?raw) — ordre croissant. */
 const MIGRATIONS: Array<{ version: number; sql: string }> = [
@@ -21,7 +22,8 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
   { version: 3, sql: migration003 },
   { version: 4, sql: migration004 },
   { version: 5, sql: migration005 },
-  { version: 6, sql: migration006 }
+  { version: 6, sql: migration006 },
+  { version: 7, sql: migration007 }
 ]
 
 let db: Database.Database

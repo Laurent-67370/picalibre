@@ -448,8 +448,9 @@ function registerIpc(): void {
       .all(albumId, ...fc.params, limit, offset)
   })
   ipcMain.handle('photos:search', (_e, { query, offset, limit, minStars, typeFilter, sortMode }) => {
-    // FTS5 MATCH sur photos_fts (caption, filename, tags, persons)
+    // FTS5 MATCH sur photos_fts (caption, filename, tags, persons, folder)
     // prefix*: permet de chercher "vac" → "vacances"
+    // 'folder' permet de chercher par nom de dossier (ex: "vacances 2023")
     const ftsQuery = query.trim().split(/\s+/).map((t: string) => `"${t.replace(/"/g, '""')}"*`).join(' ')
     const fc = buildFilterClauses({ minStars, typeFilter })
     // Pour la recherche, le tri par pertinence FTS (rank) reste prioritaire
