@@ -85,21 +85,6 @@ jobs:
             npx electron out/main/index.js 2>&1 | tee e2e-webgl.log
           fi
 
-      - name: Publier les logs E2E en commentaire (diagnostic)
-        if: always()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          {
-            echo "**E2E $RUNNER_OS** — run ${{ github.run_id }}"
-            for f in e2e-scan.log e2e-webgl.log e2e-packaged.log package.log; do
-              echo; echo "\`$f\` :"; echo '```'
-              tail -c 1500 "$f" 2>/dev/null | tr -d '\r' || echo '(absent)'
-              echo '```'
-            done
-          } > comment.md
-          gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" -f body="$(cat comment.md)" || true
 
       # Packaging (sans publication) : AppImage/deb sur Linux, NSIS sur Windows
       - name: Package
@@ -116,6 +101,22 @@ jobs:
           rm -rf ~/.config/picalibre
           xvfb-run -a dist/linux-unpacked/picalibre --no-sandbox 2>&1 | tee e2e-packaged.log
           grep -q "PIPELINE OK" e2e-packaged.log
+      - name: Publier les logs E2E en commentaire (diagnostic)
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "**E2E $RUNNER_OS** — run ${{ github.run_id }}"
+            for f in e2e-scan.log e2e-webgl.log e2e-packaged.log package.log; do
+              echo; echo "\`$f\` :"; echo '```'
+              tail -c 1500 "$f" 2>/dev/null | tr -d '\r' || echo '(absent)'
+              echo '```'
+            done
+          } > comment.md
+          gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" -f body="$(cat comment.md)" || true
+
       - name: Artefacts
         uses: actions/upload-artifact@v4
         with:
