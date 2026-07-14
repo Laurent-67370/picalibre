@@ -982,6 +982,38 @@ app.whenReady().then(() => {
     exitTest(aideItems.length >= 5 ? 0 : 1)
   }
 
+  // Mode capture CARTE : scanne, ouvre la vue Carte, capture, quitte.
+  const geoShotDir = process.env.PICALIBRE_TEST_GEO_SCREENSHOT
+  if (geoShotDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(geoShotDir)
+    startScan(mainWindow)
+    setTimeout(async () => {
+      const clicked = await mainWindow.webContents.executeJavaScript(
+        `(() => {
+          const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Carte'))
+          if (el) { el.click(); return true }
+          return false
+        })()`
+      )
+      console.log('[geo-test] clic Carte:', clicked)
+      setTimeout(async () => {
+        const probe = await mainWindow.webContents.executeJavaScript(
+          `(() => ({
+            leafletContainer: !!document.querySelector('.leaflet-container'),
+            markerCount: document.querySelectorAll('.leaflet-marker-icon, .marker-cluster').length,
+            tilesLoaded: document.querySelectorAll('.leaflet-tile-loaded, .leaflet-tile').length,
+            errorText: document.body.textContent.includes('hors ligne') || document.body.textContent.includes('connexion') ? 'message offline présent' : null
+          }))()`
+        )
+        console.log('[geo-test] probe:', JSON.stringify(probe))
+        const img = await mainWindow.webContents.capturePage()
+        await writeFile(join(app.getPath('temp'), 'picalibre-geo.png'), img.toPNG())
+        console.log('[geo-test] capture écrite')
+        exitTest(0)
+      }, 5000)
+    }, 6000)
+  }
+
   // Mode capture : scanne, sélectionne le 1er dossier, capture la fenêtre en PNG, quitte.
   const shotDir = process.env.PICALIBRE_TEST_SCREENSHOT
   if (shotDir) {

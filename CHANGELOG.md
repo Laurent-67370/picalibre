@@ -3,6 +3,35 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.3.1] — 2026-07-14
+
+### Corrigé — vérification approfondie des fonctionnalités 2.0.0→2.3.0
+- **Bug critique : le scan plantait entièrement sur les machines à 1-2 cœurs
+  logiques.** Le partitionnement multi-worker du scanner (`partitionRoots`)
+  faisait un modulo par zéro (`partitions.length - 1 === 0`) lors de la
+  répartition round-robin des sous-dossiers quand un seul worker était
+  disponible → `TypeError: Cannot read properties of undefined (reading
+  'roots')`, scan totalement bloqué (aucune photo jamais indexée). Corrigé :
+  sur machine mono/bi-cœur, un seul worker pleinement récursif scanne tout,
+  sans partitionnement shallow/récursif qui n'a pas de sens à un seul worker.
+- **Fallback RAW/PSD jamais déclenché** : `sharp(...).metadata()` lève une
+  exception sur un format non supporté par libvips (RAW propriétaire, PSD
+  sans plugin) au lieu de renvoyer `{width: undefined}` comme le supposait le
+  code — l'exception remontait directement au bloc catch englobant, court-
+  circuitant le fallback `exiftool.extractPreview()`. Corrigé avec un
+  try/catch dédié autour de `.metadata()`. **Limite structurelle à connaître**
+  (pas un bug) : le fallback ne peut réussir que si le fichier RAW/PSD a une
+  preview JPEG intégrée — quasi systématique pour les RAW d'appareils photo,
+  variable pour les PSD selon l'option « Maximiser la compatibilité ».
+- Nouveau script de non-régression `scripts/test-raw-psd-fallback.ts`.
+
+### Vérifié — tests réels effectués (pas de simulation)
+- Bordures/cadres (DSL `border`) : dimensions exactes, couleur pixel-parfaite,
+  variante polaroid, déterminisme — validé sur export sharp réel.
+- Géolocalisation : 3 photos avec vraies coordonnées EXIF GPS (Tour Eiffel,
+  Strasbourg, Nice) → extraction EXIF correcte, carte Leaflet rendue avec les
+  3 marqueurs et 20 tuiles OSM chargées (sonde DOM + capture d'écran réelle).
+
 ## [2.3.0] — 2026-07-14
 
 ### Ajouté — Géolocalisation et carte interactive

@@ -96,9 +96,20 @@ async function processItem(item: ThumbItem, cacheDir: string): Promise<ThumbResu
   try {
     // .rotate() sans argument applique l'orientation EXIF
     let base = sharp(sourcePath, { failOn: 'none' }).rotate()
-    let meta = await base.metadata()
+    let meta: sharp.Metadata
+    try {
+      meta = await base.metadata()
+    } catch (metaErr) {
+      // sharp/libvips ne sait pas du tout décoder ce format (RAW propriétaire,
+      // PSD sans plugin) : il lève une exception ici plutôt que de renvoyer
+      // {width: undefined}. C'est le cas RÉEL le plus fréquent pour RAW/PSD
+      // avec la distribution npm standard de sharp (sans libvips-raw/psd).
+      if (!needsFallback) throw metaErr
+      meta = {} as sharp.Metadata
+    }
 
-    // Si sharp ne peut pas lire les dimensions, c'est qu'il ne supporte
+    // Si sharp ne peut pas lire les dimensions (exception ci-dessus, ou objet
+    // vide silencieux selon la version de libvips), c'est qu'il ne supporte
     // pas ce format → fallback exiftool pour extraire la preview embarquée
     if ((!meta.width || !meta.height) && needsFallback) {
       tmpPreview = await extractEmbeddedPreview(sourcePath, item.photoId)
