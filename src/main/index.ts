@@ -390,17 +390,18 @@ function registerIpc(): void {
       .all(albumId, limit, offset)
   )
   ipcMain.handle('photos:search', (_e, { query, offset, limit }) => {
-    const like = `%${query}%`
+    // FTS5 MATCH sur photos_fts (caption, filename, tags, persons)
+    // prefix*: permet de chercher "vac" → "vacances"
+    const ftsQuery = query.trim().split(/\s+/).map((t) => `"${t.replace(/"/g, '""')}"*`).join(' ')
     return getDb()
       .prepare(
         `SELECT DISTINCT ${GRID_COLS_P} FROM photos p
-         LEFT JOIN photo_tags pt ON pt.photo_id = p.id
-         LEFT JOIN tags t ON t.id = pt.tag_id
+         JOIN photos_fts ON photos_fts.rowid = p.id
          WHERE p.status = 'active' AND p.is_hidden = 0
-           AND (p.filename LIKE ? OR p.caption LIKE ? OR t.name LIKE ?)
-         ORDER BY p.taken_at DESC LIMIT ? OFFSET ?`
+           AND photos_fts MATCH ?
+         ORDER BY rank, p.taken_at DESC LIMIT ? OFFSET ?`
       )
-      .all(like, like, like, limit, offset)
+      .all(ftsQuery, limit, offset)
   })
   ipcMain.handle('albums:list', () =>
     getDb()
