@@ -101,6 +101,7 @@
       ],
       "category": "public.app-category.photography"
     },
+    "afterPack": "scripts/afterPack.js",
     "publish": {
       "provider": "github",
       "owner": "Laurent-67370",
