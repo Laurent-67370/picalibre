@@ -3,6 +3,23 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.9.4] — 2026-07-14
+
+### Performance — Rendu Canvas pour les vignettes
+- Remplacement des éléments `<img>` par des `<canvas>` natifs pour le rendu
+  des vignettes de la grille.
+- Nouveau composant `ThumbCanvas` (228 lignes) :
+  - Chargement via `createImageBitmap()` (décodage off-main-thread) avec
+    fallback sur `Image()` classique.
+  - Dessin sur canvas via `drawImage()` avec calcul manuel cover/contain.
+  - Gestion du `devicePixelRatio` pour un rendu net sur écrans HiDPI (Retina).
+  - `ResizeObserver` pour suivre la taille du conteneur et redessiner.
+  - Retry exponentiel conservé : 500ms → 1s → 2s → 4s → 8s.
+  - Annulation du chargement en cours si la photo change.
+  - Protocole `thumb://` et cache navigateur immutable inchangés.
+- Remplace le composant `ThumbImg` dans `App.tsx` pour le rendu de la grille.
+- Réduit la pression DOM (moins d'éléments = moins de React reconciliation).
+
 ## [1.9.3] — 2026-07-14
 
 ### Performance — Pagination incrémentale (infinite scroll)

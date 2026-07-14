@@ -1,12 +1,22 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-1.9.3-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.9.4-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 1.9.4
+
+- 🎨 **Rendu Canvas pour les vignettes** : les vignettes de la grille ne sont
+  plus des éléments `<img>` DOM mais des `<canvas>` natifs — dessinés via
+  `drawImage()` avec `createImageBitmap()` (décodage hors main thread).
+  Moins de pression DOM, moins de reflow/layout, scroll plus fluide sur les
+  très grandes bibliothèques. Gère le HiDPI (Retina), le redimensionnement
+  dynamique (ResizeObserver), et conserve le retry exponentiel et le cache
+  navigateur immutable. Se rapproche du rendu natif DirectX de Picasa 3.
 
 ## 🆕 Quoi de neuf en 1.9.3
 
