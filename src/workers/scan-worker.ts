@@ -37,6 +37,11 @@ interface ScanRequest {
   type: 'scan'
   roots: string[]
   knownFiles: Record<string, { size: number; mtime: number }>
+  /** When true, walk() recurses into sub-directories normally (default).
+   *  When false, walk() yields only files directly inside `dir` — used when
+   *  the main process partitions a single root by its first-level sub-dirs
+   *  to avoid double-scanning the top-level files. */
+  shallow?: boolean
 }
 
 const port = (process as any).parentPort
@@ -69,7 +74,7 @@ function mediaTypeOf(ext: string): 'image' | 'video' | null {
   return null
 }
 
-async function* walk(dir: string): AsyncGenerator<string> {
+async function* walk(dir: string, shallow: boolean): AsyncGenerator<string> {
   let handle
   try {
     handle = await opendir(dir)
@@ -79,8 +84,8 @@ async function* walk(dir: string): AsyncGenerator<string> {
   for await (const entry of handle) {
     const full = join(dir, entry.name)
     if (entry.isDirectory()) {
-      if (!entry.name.startsWith('.') && !IGNORED_DIRS.has(entry.name)) {
-        yield* walk(full)
+      if (!shallow && !entry.name.startsWith('.') && !IGNORED_DIRS.has(entry.name)) {
+        yield* walk(full, false)
       }
     } else if (entry.isFile()) {
       yield full
@@ -101,8 +106,9 @@ async function runScan(req: ScanRequest): Promise<void> {
     }
   }
 
+  const shallow = req.shallow === true
   for (const root of req.roots) {
-    for await (const filepath of walk(root)) {
+    for await (const filepath of walk(root, shallow)) {
       const ext = extname(filepath).toLowerCase()
       const mediaType = mediaTypeOf(ext)
       if (!mediaType) continue
