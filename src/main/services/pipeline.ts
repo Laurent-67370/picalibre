@@ -41,6 +41,22 @@ export async function runPostScanPipeline(win: BrowserWindow): Promise<void> {
     } while (pending) // relance si un scan est arrivé entre-temps
     win.webContents.send('scan:progress', { phase: 'done', filesFound: 0, filesProcessed: 0 })
     win.webContents.send('library:changed', { folderIds: [] })
+
+    // Optimisation 12 : ANALYZE périodique pour optimiser le query planner.
+    // Met à jour les statistiques sur la distribution des données dans les
+    // tables et index. SQLite utilise ces stats pour choisir les meilleurs
+    // plans de requête (index scan vs table scan, ordre des jointures, etc.).
+    // Lancé après un scan complet car les données ont potentiellement changé
+    // (nouvelles photos, suppressions, mises à jour de mtime/size).
+    try {
+      const db = getDb()
+      const t0 = Date.now()
+      db.exec('ANALYZE')
+      console.log(`[db] ANALYZE terminé en ${Date.now() - t0} ms`)
+    } catch (err) {
+      console.error('[db] ANALYZE échoué:', (err as Error).message)
+    }
+
     // Détection de visages en tâche de fond (hors mode test headless)
     if (!process.env.PICALIBRE_TEST_SCAN) void startFaceScan(win)
   } finally {
