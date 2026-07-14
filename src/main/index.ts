@@ -24,7 +24,7 @@ import { parseStack } from '../shared/edit-engine'
 import { renderEdited } from './services/render-sharp'
 import { startScan } from './services/scanner'
 import { thumbsCacheDir } from './services/pipeline'
-import type { GridFilters, SortMode } from '../shared/ipc'
+import type { GridFilters, SortMode, BoundingBox, ReverseGeocodeResult } from '../shared/ipc'
 
 app.setName('picalibre')
 
@@ -747,6 +747,59 @@ function registerIpc(): void {
     })
     tx(photoIds)
   })
+  // Photos géolocalisées dans une bounding box (filtré par les filtres grille aussi)
+  ipcMain.handle('photos:withGeo', (_e: Electron.IpcMainInvokeEvent, { bbox, minStars, typeFilter }: { bbox: BoundingBox; minStars?: number; typeFilter?: 'all' | 'image' | 'video' }) => {
+    const conditions = [
+      'gps_lat IS NOT NULL AND gps_lon IS NOT NULL',
+      'status = \'active\' AND is_hidden = 0',
+      'gps_lat >= ? AND gps_lat <= ?',
+      'gps_lon >= ? AND gps_lon <= ?'
+    ]
+    const params: (string | number)[] = [
+      bbox.south, bbox.north, bbox.west, bbox.east
+    ]
+    if (minStars && minStars > 0) {
+      conditions.push('rating >= ?')
+      params.push(minStars)
+    }
+    if (typeFilter && typeFilter !== 'all') {
+      conditions.push('media_type = ?')
+      params.push(typeFilter)
+    }
+    return getDb()
+      .prepare(
+        `SELECT id, filename, gps_lat, gps_lon FROM photos
+         WHERE ${conditions.join(' AND ')}
+         ORDER BY taken_at DESC`
+      )
+      .all(...params)
+  })
+  // Géocoding inverse via Nominatim (OpenStreetMap)
+  ipcMain.handle(
+    'photos:reverseGeocode',
+    async (_e, { lat, lon }): Promise<ReverseGeocodeResult | null> => {
+      try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=14&addressdetails=1`
+        const resp = await net.fetch(url, {
+          headers: { 'User-Agent': 'PicaLibre/2.2.0 (photo manager)' }
+        })
+        if (!resp.ok) return null
+        const data = (await resp.json()) as {
+          display_name?: string
+          address?: { city?: string; town?: string; village?: string; country?: string }
+        }
+        if (!data.display_name) return null
+        const city = data.address?.city ?? data.address?.town ?? data.address?.village
+        return {
+          displayName: data.display_name,
+          city: city ?? undefined,
+          country: data.address?.country ?? undefined
+        }
+      } catch {
+        return null
+      }
+    }
+  )
   ipcMain.handle('edits:get', (_e, { photoId }) => getEditState(photoId))
   ipcMain.handle('edits:save', (_e, { photoId, stack, action }) => {
     const s = saveStack(photoId, stack, action)

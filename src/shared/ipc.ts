@@ -90,6 +90,21 @@ export interface GpsPhoto {
   gps_lon: number
 }
 
+/** Bounding box pour le filtrage géographique. */
+export interface BoundingBox {
+  south: number // lat min
+  west: number  // lon min
+  north: number // lat max
+  east: number  // lon max
+}
+
+/** Résultat du géocoding inverse (Nominatim). */
+export interface ReverseGeocodeResult {
+  displayName: string
+  city?: string
+  country?: string
+}
+
 export interface TagRow {
   id: number
   name: string
@@ -127,6 +142,8 @@ export interface IpcInvokeMap {
   'photos:byPerson': { req: { personId: number; offset: number; limit: number } & GridFilters; res: PhotoRow[] }
   'faces:scan': { req: void; res: { started: boolean } }
   'photos:withGps': { req: void; res: GpsPhoto[] }
+  'photos:withGeo': { req: { bbox: BoundingBox } & GridFilters; res: GpsPhoto[] }
+  'photos:reverseGeocode': { req: { lat: number; lon: number }; res: ReverseGeocodeResult | null }
   'duplicates:list': { req: void; res: Array<{ hash: string; photos: PhotoRow[] }> }
   'duplicates:merge': { req: { keepId: number; removeIds: number[] }; res: void }
   'scanRoots:setMode': { req: { id: number; mode: 'watch' | 'once' | 'excluded' }; res: void }

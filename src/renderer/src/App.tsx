@@ -1514,6 +1514,30 @@ export default function App(): JSX.Element {
           ) : view?.type === 'map' ? (
             <MapView
               trayIds={trayIds}
+              filters={{ minStars, typeFilter, sortMode }}
+              onPhotoClick={async (photoId: number) => {
+                // Charger les photos géolocalisées pour la lightbox
+                const geoPhotos = await window.api.invoke('photos:withGps', undefined)
+                if (geoPhotos.length === 0) return
+                // Récupérer les PhotoRow complètes via byFolder n'est pas idéal ;
+                // on charge les photos dans `shown` pour la lightbox
+                const ids = geoPhotos.map((p) => p.id)
+                // Charger les photos par IDs — on utilise photos:search vide
+                // qui retourne tout, puis on filtre. Plus simple : on charge
+                // la timeline complète et on filtre sur les IDs géolocalisés.
+                const all = await window.api.invoke('photos:timeline', {
+                  offset: 0,
+                  limit: 100000,
+                  minStars,
+                  typeFilter,
+                  sortMode
+                })
+                const geoIds = new Set(ids)
+                const filtered = all.filter((p) => geoIds.has(p.id))
+                setPhotos(filtered)
+                const idx = filtered.findIndex((p) => p.id === photoId)
+                if (idx >= 0) setLightboxIndex(idx)
+              }}
               onGeotagged={() => {
                 /* les marqueurs se rechargent dans MapView */
               }}
