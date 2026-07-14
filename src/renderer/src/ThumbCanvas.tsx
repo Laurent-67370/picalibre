@@ -3,7 +3,7 @@
  *
  * Avantages par rapport à <img> :
  * - Pas de layout/reflow DOM pour les images (canvas = taille fixe)
- * - Décodage image off-main-thread possible (createImageBitmap si dispo)
+ * - Décodage image off-main-thread via Web Worker (createImageBitmap)
  * - Moins d'éléments DOM = moins de pressure sur React reconciliation
  * - Le canvas peut être réutilisé (clear + redraw) au scroll
  *
@@ -13,8 +13,15 @@
  * - Protocole thumb://library/{size}/{photoId}?v={hash}
  * - Cache navigateur immutable (Image() charge depuis le cache)
  * - Lazy loading via la virtualisation TanStack Virtual
+ *
+ * Optimisation 8 : Web Worker pour le décodage des miniatures.
+ * Le worker reçoit l'URL thumb://, fait fetch + createImageBitmap, et
+ * renvoie l'ImageBitmap au main thread (transférable, zero-copy).
+ * Si le protocole thumb:// n'est pas accessible depuis le worker, on
+ * bascule sur createImageBitmap + requestIdleCallback dans le main thread.
  */
 import { useCallback, useEffect, useRef } from 'react'
+import { thumbCache } from './thumb-cache'
 
 interface ThumbCanvasProps {
   photoId: number
@@ -30,6 +37,51 @@ interface ThumbCanvasProps {
 }
 
 const MAX_RETRIES = 5
+
+/** Web Worker pour le décodage off-main-thread. */
+let thumbWorker: Worker | null = null
+let workerFailed = false
+
+function getThumbWorker(): Worker | null {
+  if (workerFailed) return null
+  if (thumbWorker) return thumbWorker
+  try {
+    thumbWorker = new Worker(new URL('./thumb-decoder.worker.ts', import.meta.url), {
+      type: 'module'
+    })
+    thumbWorker.onerror = (): void => {
+      console.warn('[ThumbCanvas] Web Worker indisponible, fallback requestIdleCallback')
+      workerFailed = true
+      thumbWorker = null
+    }
+  } catch {
+    workerFailed = true
+    return null
+  }
+  return thumbWorker
+}
+
+/** requestIdleCallback — non standard sur tous les navigateurs, polyfill minimal. */
+type IdleCallbackHandle = number
+interface IdleDeadline {
+  timeRemaining: () => number
+  didTimeout: boolean
+}
+type IdleCallback = (deadline: IdleDeadline) => void
+const _ric: typeof requestIdleCallback | undefined =
+  typeof requestIdleCallback === 'function' ? requestIdleCallback : undefined
+const _cic: typeof cancelIdleCallback | undefined =
+  typeof cancelIdleCallback === 'function' ? cancelIdleCallback : undefined
+
+function requestIdleCallbackCompat(cb: IdleCallback): IdleCallbackHandle {
+  if (_ric) return _ric(cb)
+  return setTimeout((): void => cb({ timeRemaining: () => 50, didTimeout: false }), 0) as unknown as IdleCallbackHandle
+}
+
+function cancelIdleCallbackCompat(handle: IdleCallbackHandle): void {
+  if (_cic) return _cic(handle)
+  clearTimeout(handle)
+}
 
 export default function ThumbCanvas({
   photoId,
@@ -50,6 +102,8 @@ export default function ThumbCanvas({
   const attemptRef = useRef(0)
   const sizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 })
   const loadingUrlRef = useRef<string>('')
+  const idleHandleRef = useRef<IdleCallbackHandle | null>(null)
+  const workerRequestUrlRef = useRef<string>('')
 
   const buildSrc = useCallback((attempt: number): string => {
     return `thumb://library/${size}/${photoId}?v=${v ?? ''}${attempt > 0 ? `&_retry=${attempt}` : ''}`
@@ -114,8 +168,11 @@ export default function ThumbCanvas({
   }, [fitMode])
 
   /**
-   * Charge l'image depuis thumb://. Tente createImageBitmap (décodage
-   * off-main-thread) si disponible, sinon fallback sur Image().
+   * Charge l'image depuis thumb://.
+   * Tente d'abord le cache LRU (ImageBitmap déjà décodé).
+   * Puis tente le Web Worker (décodage off-main-thread).
+   * Si le worker échoue (protocole custom inaccessible), fallback sur
+   * createImageBitmap + requestIdleCallback dans le main thread.
    * Retry exponentiel en cas d'échec (miniature pas encore prête).
    */
   const loadImage = useCallback((attempt: number): void => {
@@ -125,6 +182,12 @@ export default function ThumbCanvas({
     const onSuccess = (img: HTMLImageElement | ImageBitmap): void => {
       // Ignore si l'URL a changé entre-temps (changement de photo)
       if (loadingUrlRef.current !== src) return
+
+      // Stocke dans le cache LRU si c'est un ImageBitmap
+      if (img instanceof ImageBitmap) {
+        thumbCache.set(photoId, size, img)
+      }
+
       imgRef.current = img
       draw()
     }
@@ -141,29 +204,78 @@ export default function ThumbCanvas({
       }
     }
 
-    // createImageBitmap : décodage hors du main thread (si supporté)
-    if (typeof createImageBitmap === 'function') {
-      fetch(src)
-        .then((res) => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`)
-          return res.blob()
-        })
-        .then((blob) => createImageBitmap(blob))
-        .then(onSuccess)
-        .catch(() => {
-          // Fallback sur Image() si createImageBitmap échoue
-          const img = new Image()
-          img.onload = () => onSuccess(img)
-          img.onerror = onError
-          img.src = src
-        })
-    } else {
-      const img = new Image()
-      img.onload = () => onSuccess(img)
-      img.onerror = onError
-      img.src = src
+    // 1. Vérifier le cache LRU en mémoire
+    const cached = thumbCache.get(photoId, size)
+    if (cached) {
+      imgRef.current = cached
+      draw()
+      return
     }
-  }, [buildSrc, draw])
+
+    // 2. Tenter le Web Worker pour le décodage off-main-thread
+    const worker = getThumbWorker()
+    if (worker && !workerFailed) {
+      const handler = (e: MessageEvent<{ bitmap?: ImageBitmap; error?: string; url: string }>): void => {
+        if (e.data.url !== src) return // réponse d'une requête obsolète
+        worker.removeEventListener('message', handler)
+
+        if (e.data.bitmap) {
+          onSuccess(e.data.bitmap)
+        } else {
+          // Le worker n'a pas pu accéder à thumb:// — fallback main thread
+          fallbackMainThreadDecode(src, onSuccess, onError)
+        }
+      }
+      worker.addEventListener('message', handler)
+      workerRequestUrlRef.current = src
+      worker.postMessage({ url: src })
+      return
+    }
+
+    // 3. Fallback : createImageBitmap + requestIdleCallback dans le main thread
+    fallbackMainThreadDecode(src, onSuccess, onError)
+  }, [buildSrc, draw, photoId, size])
+
+  /**
+   * Fallback main thread : fetch blob + createImageBitmap avec requestIdleCallback
+   * pour éviter de bloquer le main thread pendant le décodage.
+   */
+  const fallbackMainThreadDecode = useCallback((
+    src: string,
+    onSuccess: (img: HTMLImageElement | ImageBitmap) => void,
+    onError: () => void
+  ): void => {
+    const doDecode = (): void => {
+      if (typeof createImageBitmap === 'function') {
+        fetch(src)
+          .then((res: Response) => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            return res.blob()
+          })
+          .then((blob: Blob) => createImageBitmap(blob))
+          .then(onSuccess)
+          .catch(() => {
+            // Fallback sur Image() si createImageBitmap échoue
+            const img = new Image()
+            img.onload = () => onSuccess(img)
+            img.onerror = onError
+            img.src = src
+          })
+      } else {
+        const img = new Image()
+        img.onload = () => onSuccess(img)
+        img.onerror = onError
+        img.src = src
+      }
+    }
+
+    // Programme le décodage pendant une période d'inactivité du main thread
+    if (idleHandleRef.current) cancelIdleCallbackCompat(idleHandleRef.current)
+    idleHandleRef.current = requestIdleCallbackCompat((): void => {
+      idleHandleRef.current = null
+      doDecode()
+    })
+  }, [])
 
   // Chargement initial + cleanup
   useEffect(() => {
@@ -173,6 +285,10 @@ export default function ThumbCanvas({
       if (retryTimerRef.current) {
         clearTimeout(retryTimerRef.current)
         retryTimerRef.current = null
+      }
+      if (idleHandleRef.current) {
+        cancelIdleCallbackCompat(idleHandleRef.current)
+        idleHandleRef.current = null
       }
       // Annule le chargement en cours en réinitialisant l'URL
       loadingUrlRef.current = ''
