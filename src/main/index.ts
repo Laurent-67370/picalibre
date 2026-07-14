@@ -24,6 +24,7 @@ import { parseStack } from '../shared/edit-engine'
 import { renderEdited } from './services/render-sharp'
 import { startScan } from './services/scanner'
 import { thumbsCacheDir } from './services/pipeline'
+import type { GridFilters, SortMode } from '../shared/ipc'
 
 app.setName('picalibre')
 
@@ -277,6 +278,57 @@ const GRID_COLS =
 
 const GRID_COLS_P = GRID_COLS.split(', ').map((c) => 'p.' + c).join(', ')
 
+/**
+ * Construit la clause SQL WHERE supplémentaire pour les filtres minStars et
+ * typeFilter. Retourne un objet avec le fragment SQL (sans le mot-clé WHERE)
+ * et les paramètres bind correspondants.
+ *
+ * Les index partiels idx_photos_grid_folder et idx_photos_grid_timeline
+ * filtrent déjà status='active' AND is_hidden=0. Les conditions minStars et
+ * typeFilter sont ajoutées après ces conditions existantes.
+ */
+function buildFilterClauses(filters: GridFilters): { sql: string; params: (string | number)[] } {
+  const conditions: string[] = []
+  const params: (string | number)[] = []
+
+  if (filters.minStars && filters.minStars > 0) {
+    conditions.push('rating >= ?')
+    params.push(filters.minStars)
+  }
+
+  if (filters.typeFilter && filters.typeFilter !== 'all') {
+    conditions.push('media_type = ?')
+    params.push(filters.typeFilter)
+  }
+
+  if (conditions.length === 0) return { sql: '', params: [] }
+
+  return { sql: ' AND ' + conditions.join(' AND '), params }
+}
+
+/**
+ * Construit la clause ORDER BY SQL pour le mode de tri demandé.
+ * Déporte le tri du renderer (Array.sort en JS sur 10k photos) vers SQLite
+ * qui utilise les index partiels (idx_photos_grid_timeline sur taken_at DESC).
+ *
+ * @param sortMode Mode de tri (défaut: 'date_desc')
+ * @param prefix   Préfixe de colonne pour les tables aliasées (ex: 'p.')
+ */
+function buildOrderBy(sortMode: SortMode | undefined, prefix = ''): string {
+  const col = (name: string): string => prefix + name
+  switch (sortMode) {
+    case 'date_asc':
+      return `ORDER BY ${col('taken_at')} IS NULL, ${col('taken_at')} ASC, ${col('file_mtime')} ASC`
+    case 'name':
+      return `ORDER BY ${col('filename')} COLLATE NOCASE ASC`
+    case 'rating':
+      return `ORDER BY ${col('rating')} DESC, ${col('taken_at')} DESC`
+    // date_desc (défaut) — même ordre que l'index partiel idx_photos_grid_timeline
+    default:
+      return `ORDER BY ${col('taken_at')} IS NULL, ${col('taken_at')} DESC, ${col('file_mtime')} DESC`
+  }
+}
+
 function registerIpc(): void {
   ipcMain.handle('scanRoots:list', () =>
     getDb().prepare('SELECT id, path, mode FROM scan_roots').all()
@@ -299,14 +351,16 @@ function registerIpc(): void {
   ipcMain.handle('folders:tree', () =>
     getDb().prepare('SELECT id, path, parent_id, is_hidden FROM folders ORDER BY path').all()
   )
-  ipcMain.handle('photos:byFolder', (_e, { folderId, offset, limit }) =>
-    getDb()
+  ipcMain.handle('photos:byFolder', (_e, { folderId, offset, limit, minStars, typeFilter, sortMode }) => {
+    const fc = buildFilterClauses({ minStars, typeFilter })
+    const orderBy = buildOrderBy(sortMode)
+    return getDb()
       .prepare(
-        `SELECT ${GRID_COLS} FROM photos WHERE folder_id = ? AND status = 'active' AND is_hidden = 0
-         ORDER BY taken_at DESC, filename LIMIT ? OFFSET ?`
+        `SELECT ${GRID_COLS} FROM photos WHERE folder_id = ? AND status = 'active' AND is_hidden = 0${fc.sql}
+         ${orderBy} LIMIT ? OFFSET ?`
       )
-      .all(folderId, limit, offset)
-  )
+      .all(folderId, ...fc.params, limit, offset)
+  })
   ipcMain.handle('context:photoMenu', (_e, { photoId, selectedCount }) => {
     const { Menu, shell } = require('electron') as typeof import('electron')
     const sendAction = (action: string): void =>
@@ -347,14 +401,16 @@ function registerIpc(): void {
   ipcMain.handle('photos:setRating', (_e, { photoId, rating }) => {
     getDb().prepare('UPDATE photos SET rating = ? WHERE id = ?').run(rating, photoId)
   })
-  ipcMain.handle('photos:timeline', (_e, { offset, limit }) =>
-    getDb()
+  ipcMain.handle('photos:timeline', (_e, { offset, limit, minStars, typeFilter, sortMode }) => {
+    const fc = buildFilterClauses({ minStars, typeFilter })
+    const orderBy = buildOrderBy(sortMode)
+    return getDb()
       .prepare(
-        `SELECT ${GRID_COLS} FROM photos WHERE status = 'active' AND is_hidden = 0
-         ORDER BY taken_at IS NULL, taken_at DESC, file_mtime DESC LIMIT ? OFFSET ?`
+        `SELECT ${GRID_COLS} FROM photos WHERE status = 'active' AND is_hidden = 0${fc.sql}
+         ${orderBy} LIMIT ? OFFSET ?`
       )
-      .all(limit, offset)
-  )
+      .all(...fc.params, limit, offset)
+  })
   ipcMain.handle('photos:details', (_e, { photoId }) => {
     const db = getDb()
     const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(photoId)
@@ -379,29 +435,38 @@ function registerIpc(): void {
     ).map((r) => r.name)
     return { photo, tags, faces, albums }
   })
-  ipcMain.handle('photos:byAlbum', (_e, { albumId, offset, limit }) =>
-    getDb()
+  ipcMain.handle('photos:byAlbum', (_e, { albumId, offset, limit, minStars, typeFilter, sortMode }) => {
+    const fc = buildFilterClauses({ minStars, typeFilter })
+    const orderBy = buildOrderBy(sortMode, 'p.')
+    return getDb()
       .prepare(
         `SELECT ${GRID_COLS_P} FROM photos p
          JOIN album_items ai ON ai.photo_id = p.id
-         WHERE ai.album_id = ? AND p.status = 'active' AND p.is_hidden = 0
-         ORDER BY ai.position, p.taken_at DESC LIMIT ? OFFSET ?`
+         WHERE ai.album_id = ? AND p.status = 'active' AND p.is_hidden = 0${fc.sql}
+         ${orderBy} LIMIT ? OFFSET ?`
       )
-      .all(albumId, limit, offset)
-  )
-  ipcMain.handle('photos:search', (_e, { query, offset, limit }) => {
+      .all(albumId, ...fc.params, limit, offset)
+  })
+  ipcMain.handle('photos:search', (_e, { query, offset, limit, minStars, typeFilter, sortMode }) => {
     // FTS5 MATCH sur photos_fts (caption, filename, tags, persons)
     // prefix*: permet de chercher "vac" → "vacances"
     const ftsQuery = query.trim().split(/\s+/).map((t: string) => `"${t.replace(/"/g, '""')}"*`).join(' ')
+    const fc = buildFilterClauses({ minStars, typeFilter })
+    // Pour la recherche, le tri par pertinence FTS (rank) reste prioritaire
+    // sauf si l'utilisateur a explicitement demandé un autre tri.
+    const orderBy =
+      sortMode && sortMode !== 'date_desc'
+        ? buildOrderBy(sortMode, 'p.')
+        : 'ORDER BY rank, p.taken_at DESC'
     return getDb()
       .prepare(
         `SELECT DISTINCT ${GRID_COLS_P} FROM photos p
          JOIN photos_fts ON photos_fts.rowid = p.id
          WHERE p.status = 'active' AND p.is_hidden = 0
-           AND photos_fts MATCH ?
-         ORDER BY rank, p.taken_at DESC LIMIT ? OFFSET ?`
+           AND photos_fts MATCH ?${fc.sql}
+         ${orderBy} LIMIT ? OFFSET ?`
       )
-      .all(ftsQuery, limit, offset)
+      .all(ftsQuery, ...fc.params, limit, offset)
   })
   ipcMain.handle('albums:list', () =>
     getDb()
@@ -577,16 +642,18 @@ function registerIpc(): void {
   ipcMain.handle('persons:rename', (_e, { personId, name }) => {
     getDb().prepare('UPDATE persons SET name = ? WHERE id = ?').run(name.trim() || null, personId)
   })
-  ipcMain.handle('photos:byPerson', (_e, { personId, offset, limit }) =>
-    getDb()
+  ipcMain.handle('photos:byPerson', (_e, { personId, offset, limit, minStars, typeFilter, sortMode }) => {
+    const fc = buildFilterClauses({ minStars, typeFilter })
+    const orderBy = buildOrderBy(sortMode, 'p.')
+    return getDb()
       .prepare(
         `SELECT DISTINCT ${GRID_COLS_P} FROM photos p
          JOIN faces f ON f.photo_id = p.id
-         WHERE f.person_id = ? AND p.status = 'active' AND p.is_hidden = 0
-         ORDER BY p.taken_at DESC LIMIT ? OFFSET ?`
+         WHERE f.person_id = ? AND p.status = 'active' AND p.is_hidden = 0${fc.sql}
+         ${orderBy} LIMIT ? OFFSET ?`
       )
-      .all(personId, limit, offset)
-  )
+      .all(personId, ...fc.params, limit, offset)
+  })
   ipcMain.handle('persons:merge', (_e, { targetId, sourceIds }) => {
     mergePersons(getDb(), targetId, sourceIds)
     mainWindow.webContents.send('persons:changed', {})

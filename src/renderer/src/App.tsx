@@ -173,23 +173,11 @@ export default function App(): JSX.Element {
   useEffect(() => localStorage.setItem('picalibre.typeFilter', typeFilter), [typeFilter])
   useEffect(() => localStorage.setItem('picalibre.fit', fitMode), [fitMode])
 
-  /** Photos réellement affichées : filtres + tri appliqués. */
-  const shown = useMemo(() => {
-    let list = photos
-    if (minStars > 0) list = list.filter((p) => p.rating >= minStars)
-    if (typeFilter !== 'all') list = list.filter((p) => p.media_type === typeFilter)
-    const key = (p: PhotoRow): number => p.taken_at ?? p.file_mtime
-    switch (sortMode) {
-      case 'date_asc':
-        return [...list].sort((a, b) => key(a) - key(b))
-      case 'name':
-        return [...list].sort((a, b) => a.filename.localeCompare(b.filename, 'fr'))
-      case 'rating':
-        return [...list].sort((a, b) => b.rating - a.rating || key(b) - key(a))
-      default:
-        return [...list].sort((a, b) => key(b) - key(a))
-    }
-  }, [photos, sortMode, minStars, typeFilter])
+  /** Photos réellement affichées : le filtrage (minStars, typeFilter) et le tri
+   *  (sortMode) sont maintenant effectués côté SQL par les handlers IPC.
+   *  Le renderer reçoit directement les photos dans le bon ordre — plus de
+   *  Array.filter ni Array.sort sur 10k lignes en JS. */
+  const shown = photos
 
   const [infoOpen, setInfoOpen] = useState<boolean>(
     localStorage.getItem('picalibre.infoOpen') !== '0'
@@ -247,6 +235,16 @@ export default function App(): JSX.Element {
     window.api.invoke('persons:list', undefined).then(setPersons)
   }, [])
 
+  // Refs pour les filtres — permettent à loadView de rester stable ( useCallback
+  // sans dépendances) tout en passant les filtres courants aux requêtes SQL.
+  // Les filtres sont maintenant appliqués côté SQL (main) au lieu de JS (renderer).
+  const minStarsRef = useRef(minStars)
+  const typeFilterRef = useRef(typeFilter)
+  const sortModeRef = useRef(sortMode)
+  minStarsRef.current = minStars
+  typeFilterRef.current = typeFilter
+  sortModeRef.current = sortMode
+
   const loadView = useCallback((v: View) => {
     setView(v)
     setManageFaces(false)
@@ -274,21 +272,35 @@ export default function App(): JSX.Element {
       })
       return
     }
+    // Filtres passés au main pour filtrage SQL (minStars, typeFilter) et tri (sortMode)
+    const filters = {
+      minStars: minStarsRef.current,
+      typeFilter: typeFilterRef.current,
+      sortMode: sortModeRef.current
+    }
     const req =
       v.type === 'folder'
-        ? window.api.invoke('photos:byFolder', { folderId: v.id, offset: 0, limit: PAGE })
+        ? window.api.invoke('photos:byFolder', { folderId: v.id, offset: 0, limit: PAGE, ...filters })
         : v.type === 'timeline'
-          ? window.api.invoke('photos:timeline', { offset: 0, limit: PAGE })
+          ? window.api.invoke('photos:timeline', { offset: 0, limit: PAGE, ...filters })
         : v.type === 'album'
-          ? window.api.invoke('photos:byAlbum', { albumId: v.id, offset: 0, limit: PAGE })
+          ? window.api.invoke('photos:byAlbum', { albumId: v.id, offset: 0, limit: PAGE, ...filters })
           : v.type === 'person'
-            ? window.api.invoke('photos:byPerson', { personId: v.id, offset: 0, limit: PAGE })
-            : window.api.invoke('photos:search', { query: v.query, offset: 0, limit: PAGE })
+            ? window.api.invoke('photos:byPerson', { personId: v.id, offset: 0, limit: PAGE, ...filters })
+            : window.api.invoke('photos:search', { query: v.query, offset: 0, limit: PAGE, ...filters })
     req.then(setPhotos)
   }, [])
 
   const viewRef = useRef<View | null>(null)
   viewRef.current = view
+
+  // Recharger la vue courante quand les filtres/tri changent — les filtres
+  // étant maintenant appliqués côté SQL, il faut refaire la requête IPC.
+  useEffect(() => {
+    if (viewRef.current && !['map', 'duplicates', 'settings', 'hidden'].includes(viewRef.current.type)) {
+      loadView(viewRef.current)
+    }
+  }, [minStars, typeFilter, sortMode, loadView])
 
   useEffect(() => {
     refreshSidebar()

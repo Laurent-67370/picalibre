@@ -1,5 +1,19 @@
 import type { EditStack } from './edit-engine'
 
+/** Mode de tri commun aux requêtes de grille photos. */
+export type SortMode = 'date_desc' | 'date_asc' | 'name' | 'rating'
+
+/** Filtre de type média commun aux requêtes de grille photos. */
+export type TypeFilter = 'all' | 'image' | 'video'
+
+/** Paramètres de filtrage/tri optionnels pour les requêtes de grille photos.
+ *  Déportés du renderer (Array.filter + Array.sort en JS) vers SQL côté main. */
+export interface GridFilters {
+  minStars?: number
+  typeFilter?: TypeFilter
+  sortMode?: SortMode
+}
+
 /**
  * Contrat IPC typé — source de vérité unique entre main, preload et renderer.
  * Chaque canal déclare son payload de requête et sa réponse.
@@ -89,14 +103,14 @@ export interface IpcInvokeMap {
   'scanRoots:remove': { req: { id: number }; res: void }
   'scan:start': { req: { rootId?: number }; res: { jobId: number } }
   'folders:tree': { req: void; res: FolderRow[] }
-  'photos:timeline': { req: { offset: number; limit: number }; res: PhotoRow[] }
+  'photos:timeline': { req: { offset: number; limit: number } & GridFilters; res: PhotoRow[] }
   'photos:details': {
     req: { photoId: number }
     res: { photo: PhotoRow; tags: string[]; faces: number; albums: string[] }
   }
-  'photos:byFolder': { req: { folderId: number; offset: number; limit: number }; res: PhotoRow[] }
-  'photos:byAlbum': { req: { albumId: number; offset: number; limit: number }; res: PhotoRow[] }
-  'photos:search': { req: { query: string; offset: number; limit: number }; res: PhotoRow[] }
+  'photos:byFolder': { req: { folderId: number; offset: number; limit: number } & GridFilters; res: PhotoRow[] }
+  'photos:byAlbum': { req: { albumId: number; offset: number; limit: number } & GridFilters; res: PhotoRow[] }
+  'photos:search': { req: { query: string; offset: number; limit: number } & GridFilters; res: PhotoRow[] }
   'photos:setRating': { req: { photoId: number; rating: number }; res: void }
   'albums:list': { req: void; res: AlbumRow[] }
   'albums:create': { req: { name: string }; res: { id: number } }
@@ -110,7 +124,7 @@ export interface IpcInvokeMap {
   'faces:confirm': { req: { faceIds: number[] }; res: void }
   'faces:split': { req: { faceIds: number[] }; res: { newPersonId: number | null } }
   'faces:reject': { req: { faceIds: number[] }; res: { newPersonId: number | null } }
-  'photos:byPerson': { req: { personId: number; offset: number; limit: number }; res: PhotoRow[] }
+  'photos:byPerson': { req: { personId: number; offset: number; limit: number } & GridFilters; res: PhotoRow[] }
   'faces:scan': { req: void; res: { started: boolean } }
   'photos:withGps': { req: void; res: GpsPhoto[] }
   'duplicates:list': { req: void; res: Array<{ hash: string; photos: PhotoRow[] }> }
