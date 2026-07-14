@@ -4,7 +4,13 @@
 -- content='photos_fts_data' avec triggers de synchronisation automatique.
 
 -- 1. Supprimer l'ancienne table FTS (vide, jamais utilisée)
+--    FTS5 crée des shadow tables (photos_fts_data, photos_fts_idx, photos_fts_config, etc.)
+--    Il faut aussi nettoyer ces tables pour éviter "table already exists"
 DROP TABLE IF EXISTS photos_fts;
+DROP TABLE IF EXISTS photos_fts_data;
+DROP TABLE IF EXISTS photos_fts_idx;
+DROP TABLE IF EXISTS photos_fts_config;
+DROP TABLE IF EXISTS photos_fts_content;
 
 -- 2. Table de contenu externe pour FTS5
 --    Stocke les valeurs indexées pour chaque photo ; FTS5 lit
