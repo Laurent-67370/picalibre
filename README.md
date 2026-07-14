@@ -1,12 +1,27 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.1.0-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.2.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 2.2.0
+
+- 🎬 **Face Movies** : diaporama spécial centré sur un visage. La caméra
+  zoome sur la bounding box du visage détecté au lieu de la photo entière,
+  avec un effet Ken Burns adapté. Lancé depuis la vue d'une personne.
+- 🖨️ **Impression** : layouts d'impression prédéfinis (planche contact,
+  plein page, grille 2×3, grille 3×3), choix du format papier (A4, A3,
+  Letter, Legal), marges configurables. Prévisualisation avant impression
+  avec CSS print dédié (`@media print`).
+- 📷 **RAW natif** : support des fichiers `.CR2`, `.NEF`, `.ARW`, `.RAF`,
+  `.ORF`, `.DNG`. Miniatures via sharp (libvips) avec fallback exiftool pour
+  extraire la preview JPEG embarquée. Métadonnées EXIF via exiftool-vendored.
+- 🎨 **PSD** : support des fichiers Photoshop `.psd`. Sharp/libvips extrait
+  le calque fusionné, fallback exiftool si besoin.
 
 ## 🆕 Quoi de neuf en 2.1.0
 

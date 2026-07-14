@@ -3,6 +3,36 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.2.0] — 2026-07-14
+
+### Ajouté — Face Movies
+- Diaporama spécial centré sur un visage spécifique.
+- Zoom sur la bounding box du visage (coordonnées normalisées 0-1).
+- Ken Burns adapté : amplitude de pan réduite, zoom de base calculé pour
+  que le visage occupe ~60% de l'écran.
+- Crossfade entre photos (deux calques).
+- Bouton « Face Movie » dans la vue d'une personne.
+
+### Ajouté — Impression
+- Layouts : planche contact (5×7), plein page, grille 2×3, grille 3×3.
+- Formats papier : A4, A3, Letter, Legal (dimensions @page en mm).
+- Marges configurables (slider 0-30mm).
+- Prévisualisation avant impression (dialogue avec miniatures).
+- CSS `@media print` dédié.
+- Bouton Imprimer dans la barre d'outils.
+
+### Ajouté — RAW natif
+- Extensions supportées : .CR2, .NEF, .ARW, .RAF, .ORF, .DNG.
+- Miniatures via sharp (libvips) avec fallback exiftool (extractJpgFromRaw
+  puis extractPreview) si sharp ne peut pas décoder.
+- Métadonnées EXIF via exiftool-vendored (lit nativement les RAW).
+- Hash xxh3 sur le fichier RAW entier.
+
+### Ajouté — PSD
+- Extension .psd ajoutée aux images supportées.
+- Sharp/libvips extrait le calque fusionné.
+- Fallback exiftool (extractPreview) si sharp échoue.
+
 ## [2.1.0] — 2026-07-14
 
 ### Ajouté — Cadres et bordures
