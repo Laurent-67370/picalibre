@@ -3,6 +3,36 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.0.0] — 2026-07-14
+
+### Ajouté — Diaporama avec transitions Ken Burns
+- Mode plein écran qui enchaîne les photos filtrées de la grille.
+- Effet Ken Burns : zoom/pan progressif déterministe (seed par photo ID).
+- Transitions fondus (crossfade) entre les photos — deux calques alternent.
+- Durée configurable : 2-15s par photo (5s par défaut), slider dans l'UI.
+- Contrôles : lecture/pause, flèches gauche/droite, espace, échap.
+- Barre de progression visuelle en bas.
+- Utilise `thumb://library/1024/{photoId}` pour la qualité.
+
+### Ajouté — Collages
+- Layouts prédéfinis : grille, mosaïque, bande horizontale, bande verticale.
+- Aperçu canvas en temps réel avec rendu cover-fit.
+- Export multi-format : JPEG, WebP, PNG (sélecteur dans l'UI).
+- Composant `CollagePreview` (220 lignes) avec `computePreviewLayout()`.
+- IPC étendu avec paramètre `format` optionnel sur `create:collage`.
+
+### Ajouté — Texte sur photo (opération DSL EditStack)
+- Nouveau type `TextOpParams` et opération `text` dans le DSL EditStack.
+- Paramètres : contenu, police, graisse, taille, couleur, position X/Y
+  (normalisés 0-1), opacité, ombre (couleur + flou).
+- Rendu Canvas 2D (`drawText()`) pour la preview.
+- Composite SVG pour l'export sharp (filtre `feGaussianBlur` pour l'ombre).
+- Parité preview/export garantie (mêmes coordonnées, même fontSize relatif,
+  même positionnement centre).
+- Texte vide = opération neutre (suppression automatique).
+- Dessiné/composé en dernier, après toutes les opérations couleur et spatiales.
+- UI complète dans l'éditeur.
+
 ## [1.9.6] — 2026-07-14
 
 ### Performance — Préchargement prédictif des miniatures

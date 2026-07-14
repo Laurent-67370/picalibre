@@ -1,12 +1,27 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-1.9.6-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 2.0.0
+
+- 🎬 **Diaporama avec transitions Ken Burns** : mode plein écran qui enchaîne
+  les photos avec un effet de zoom/pan progressif et des transitions fondus
+  (crossfade). Durée configurable (2-15s par photo), lecture/pause, navigation
+  clavier (flèches, espace, échap). Barre de progression visuelle.
+- 🖼️ **Collages** : assemble plusieurs photos dans une composition avec des
+  layouts prédéfinis (grille, mosaïque, bande horizontale/verticale). Aperçu
+  canvas en temps réel, export en JPEG/WebP/PNG.
+- 🔤 **Texte sur photo** : ajoute du texte directement sur une photo dans
+  l'éditeur. Police, graisse, taille, couleur, position (X/Y), opacité et
+  ombre (couleur + flou). Parité preview/export garantie (même rendu Canvas
+  et sharp SVG composite). Le texte est une opération du DSL EditStack —
+  non-destructive, éditable à tout moment.
 
 ## 🆕 Quoi de neuf en 1.9.6
 
