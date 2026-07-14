@@ -162,7 +162,7 @@ export interface IpcInvokeMap {
   'dialog:pickFolder': { req: void; res: string | null }
   'dialog:pickFile': { req: { name: string; extensions: string[] }; res: string | null }
   'dialog:saveFile': { req: { defaultName: string; name: string; extensions: string[] }; res: string | null }
-  'create:collage': { req: { photoIds: number[]; layout: 'grid' | 'row' | 'column' | 'mosaic'; outFile: string }; res: { width: number; height: number } }
+  'create:collage': { req: { photoIds: number[]; layout: 'grid' | 'row' | 'column' | 'mosaic'; outFile: string; format?: 'jpeg' | 'webp' | 'png' }; res: { width: number; height: number } }
   'create:movie': { req: { photoIds: number[]; durationSec: number; audioPaths: string[]; transition: 'none' | 'fade'; outFile: string }; res: { totalDuration: number; segments: number } }
 }
 

@@ -103,7 +103,8 @@ export interface CollageItem {
 export async function makeCollage(
   items: CollageItem[],
   layout: CollageLayout,
-  outFile: string
+  outFile: string,
+  format: 'jpeg' | 'webp' | 'png' = 'jpeg'
 ): Promise<{ width: number; height: number }> {
   const plan = computeLayout(items.length, layout)
   const composites: sharp.OverlayOptions[] = []
@@ -122,12 +123,23 @@ export async function makeCollage(
     composites.push({ input: fitted, left: cell.x, top: cell.y })
   }
 
-  await sharp({
+  let pipeline = sharp({
     create: { width: plan.W, height: plan.H, channels: 3, background: BG }
-  })
-    .composite(composites)
-    .jpeg({ quality: 92, mozjpeg: true })
-    .toFile(outFile)
+  }).composite(composites)
+
+  switch (format) {
+    case 'webp':
+      pipeline = pipeline.webp({ quality: 92 })
+      break
+    case 'png':
+      pipeline = pipeline.png()
+      break
+    default:
+      pipeline = pipeline.jpeg({ quality: 92, mozjpeg: true })
+      break
+  }
+
+  await pipeline.toFile(outFile)
 
   return { width: plan.W, height: plan.H }
 }

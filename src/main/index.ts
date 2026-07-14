@@ -735,9 +735,9 @@ function registerIpc(): void {
     })
     return r.canceled || !r.filePath ? null : r.filePath
   })
-  ipcMain.handle('create:collage', async (_e, { photoIds, layout, outFile }) => {
+  ipcMain.handle('create:collage', async (_e, { photoIds, layout, outFile, format }) => {
     const items = photosWithStacks(photoIds)
-    return makeCollage(items, layout, outFile)
+    return makeCollage(items, layout, outFile, format ?? 'jpeg')
   })
   ipcMain.handle('create:movie', async (_e, { photoIds, durationSec, audioPaths, transition, outFile }) => {
     const items = photosWithStacks(photoIds)

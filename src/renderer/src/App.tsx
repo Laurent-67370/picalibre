@@ -7,6 +7,7 @@ import Editor from './Editor'
 import Lightbox from './Lightbox'
 import InfoPanel from './InfoPanel'
 import ThumbCanvas from './ThumbCanvas'
+import CollagePreview, { type CollageLayout, type CollageFormat } from './CollagePreview'
 import { prefetchBidirectionalThumbs, cleanupPrefetch } from './thumb-prefetch'
 
 declare global {
@@ -161,7 +162,9 @@ export default function App(): JSX.Element {
   const [watermark, setWatermark] = useState('')
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
   const [slideshow, setSlideshow] = useState(false)
-  const [collageLayout, setCollageLayout] = useState<'grid' | 'row' | 'column' | 'mosaic'>('grid')
+  const [collageLayout, setCollageLayout] = useState<CollageLayout>('grid')
+  const [collagePreview, setCollagePreview] = useState(false)
+  const [collageFormat, setCollageFormat] = useState<CollageFormat>('jpeg')
   const [movieBusy, setMovieBusy] = useState(false)
   const [importProgress, setImportProgress] = useState<{ done: number; total: number; copied: number; skipped: number } | null>(null)
   const [view, setView] = useState<View | null>(null)
@@ -499,18 +502,26 @@ export default function App(): JSX.Element {
 
   const trayCollage = async () => {
     if (trayIds.length === 0) return
+    setCollagePreview(true)
+  }
+
+  const doCollageExport = async (format: CollageFormat): Promise<void> => {
+    if (trayIds.length === 0) return
+    const ext = format === 'jpeg' ? 'jpg' : format
     const outFile = await window.api.invoke('dialog:saveFile', {
-      defaultName: 'collage.jpg',
-      name: 'JPEG',
-      extensions: ['jpg']
+      defaultName: `collage.${ext}`,
+      name: format.toUpperCase(),
+      extensions: [ext]
     })
     if (!outFile) return
     const r = await window.api.invoke('create:collage', {
       photoIds: trayIds,
       layout: collageLayout,
-      outFile
+      outFile,
+      format
     })
-    alert(`🧩 Collage ${r.width}x${r.height} créé : ${outFile}`)
+    setCollageFormat(format)
+    alert(`🧩 Collage ${r.width}×${r.height} créé : ${outFile}`)
   }
 
   const trayMovie = async () => {
@@ -1692,6 +1703,15 @@ export default function App(): JSX.Element {
         <Slideshow
           photos={tray.size > 0 ? [...tray.values()] : shown}
           onClose={() => setSlideshow(false)}
+        />
+      )}
+
+      {collagePreview && (
+        <CollagePreview
+          photos={tray.size > 0 ? [...tray.values()] : shown}
+          layout={collageLayout}
+          onClose={() => setCollagePreview(false)}
+          onExport={doCollageExport}
         />
       )}
 
