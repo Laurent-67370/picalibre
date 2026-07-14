@@ -1,12 +1,20 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.3.2-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.3.3-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 2.3.3
+
+- ▶️ **Lecture vidéo dans la visionneuse plein écran** : le double-clic sur
+  une vidéo ouvrait jusqu'ici une visionneuse image-only, incapable
+  d'afficher un flux `.mp4`. Ajout d'un lecteur natif avec contrôles
+  (lecture, pause, volume, plein écran), navigation ← → conservée entre
+  vidéos et photos d'une même sélection.
 
 ## 🆕 Quoi de neuf en 2.3.2
 

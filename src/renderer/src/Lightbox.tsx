@@ -2,11 +2,14 @@
  * Lightbox — visionneuse plein écran.
  * Clic simple = sélection dans la grille ; double-clic = ici.
  *
- * - ← / → : navigation (boutons + clavier), Échap : fermer, E : éditer
- * - Molette : zoom continu (jusqu'à 5×) centré sous le curseur
+ * - ← / → : navigation (boutons + clavier), Échap : fermer, E : éditer (images)
+ * - Molette : zoom continu (jusqu'à 5×) centré sous le curseur (images)
  * - Double-clic : bascule ajusté ↔ 100 % (pixels réels, via thumb://library/orig)
  * - Glisser : déplacement dans l'image zoomée
- * - Notation ★ directe, bouton Éditer, compteur position/total
+ * - Notation ★ directe, bouton Éditer (images), compteur position/total
+ * - Vidéos (media_type='video') : lecteur natif avec contrôles, pas de
+ *   zoom/pan/édition — thumb://library/orig/{id} sert le fichier original,
+ *   quel que soit le média.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PhotoRow, RendererApi } from '@shared/ipc'
@@ -33,6 +36,7 @@ export default function Lightbox({
   onRate: (photoId: number, rating: number) => void
 }): JSX.Element | null {
   const photo = photos[index]
+  const isVideo = photo?.media_type === 'video'
   const [zoom, setZoom] = useState(1) // 1 = ajusté à l'écran
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [fullLoaded, setFullLoaded] = useState(false)
@@ -62,11 +66,11 @@ export default function Lightbox({
       if (e.key === 'Escape') onClose()
       else if (e.key === 'ArrowLeft') go(-1)
       else if (e.key === 'ArrowRight') go(1)
-      else if (e.key.toLowerCase() === 'e' && photo) onEdit(photo)
+      else if (e.key.toLowerCase() === 'e' && photo && !isVideo) onEdit(photo)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [go, onClose, onEdit, photo])
+  }, [go, onClose, onEdit, photo, isVideo])
 
   if (!photo) return null
 
@@ -90,6 +94,7 @@ export default function Lightbox({
   }
 
   const onWheel = (e: React.WheelEvent): void => {
+    if (isVideo) return
     e.preventDefault()
     const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15
     const next = Math.min(5, Math.max(1, zoom * factor))
@@ -106,6 +111,7 @@ export default function Lightbox({
   }
 
   const onDoubleClick = (): void => {
+    if (isVideo) return
     if (zoom > 1.01) {
       setZoom(1)
       setPan({ x: 0, y: 0 })
@@ -116,7 +122,7 @@ export default function Lightbox({
   }
 
   const onMouseDown = (e: React.MouseEvent): void => {
-    if (zoom <= 1.01) return
+    if (isVideo || zoom <= 1.01) return
     drag.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y }
   }
   const onMouseMove = (e: React.MouseEvent): void => {
@@ -177,71 +183,116 @@ export default function Lightbox({
           ))}
         </span>
         <span style={{ flex: 1 }} />
-        {zoom > 1.01 && (
+        {!isVideo && zoom > 1.01 && (
           <span style={{ fontSize: 12, color: '#94a3b8' }}>{Math.round(zoom * 100)} % — glisser pour naviguer</span>
         )}
-        <button className="primary" onClick={() => onEdit(photo)} title="Ouvrir dans l'éditeur (E)">
-          ✎ Éditer
-        </button>
+        {!isVideo && (
+          <button className="primary" onClick={() => onEdit(photo)} title="Ouvrir dans l'éditeur (E)">
+            ✎ Éditer
+          </button>
+        )}
       </div>
 
-      {/* Image */}
-      <div
-        ref={boxRef}
-        onWheel={onWheel}
-        onDoubleClick={onDoubleClick}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={endDrag}
-        onMouseLeave={endDrag}
-        style={{
-          flex: 1,
-          overflow: 'hidden',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: zoom > 1.01 ? (drag.current ? 'grabbing' : 'grab') : 'zoom-in',
-          position: 'relative'
-        }}
-      >
-        <img
-          ref={imgRef}
-          src={src}
-          alt={photo.filename}
-          draggable={false}
+      {/* Média : vidéo (lecteur natif) ou image (zoom/pan) */}
+      {isVideo ? (
+        <div
           style={{
-            maxWidth: '96%',
-            maxHeight: '96%',
-            objectFit: 'contain',
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-            transition: drag.current ? 'none' : 'transform 0.12s ease',
-            userSelect: 'none',
-            boxShadow: '0 8px 40px #000a'
+            flex: 1,
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+            background: '#000'
           }}
-        />
-        {/* Flèches */}
-        {index > 0 && (
-          <button
-            onClick={() => go(-1)}
-            style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 20, padding: '14px 16px', borderRadius: 12 }}
-            title="Précédente (←)"
-          >
-            ‹
-          </button>
-        )}
-        {index < photos.length - 1 && (
-          <button
-            onClick={() => go(1)}
-            style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 20, padding: '14px 16px', borderRadius: 12 }}
-            title="Suivante (→)"
-          >
-            ›
-          </button>
-        )}
-      </div>
+        >
+          <video
+            key={photo.id}
+            src={`thumb://library/orig/${photo.id}`}
+            controls
+            autoPlay
+            style={{ maxWidth: '96%', maxHeight: '96%', boxShadow: '0 8px 40px #000a' }}
+          />
+          {/* Flèches */}
+          {index > 0 && (
+            <button
+              onClick={() => go(-1)}
+              style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 20, padding: '14px 16px', borderRadius: 12 }}
+              title="Précédente (←)"
+            >
+              ‹
+            </button>
+          )}
+          {index < photos.length - 1 && (
+            <button
+              onClick={() => go(1)}
+              style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 20, padding: '14px 16px', borderRadius: 12 }}
+              title="Suivante (→)"
+            >
+              ›
+            </button>
+          )}
+        </div>
+      ) : (
+        <div
+          ref={boxRef}
+          onWheel={onWheel}
+          onDoubleClick={onDoubleClick}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={endDrag}
+          onMouseLeave={endDrag}
+          style={{
+            flex: 1,
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: zoom > 1.01 ? (drag.current ? 'grabbing' : 'grab') : 'zoom-in',
+            position: 'relative'
+          }}
+        >
+          <img
+            ref={imgRef}
+            src={src}
+            alt={photo.filename}
+            draggable={false}
+            style={{
+              maxWidth: '96%',
+              maxHeight: '96%',
+              objectFit: 'contain',
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transition: drag.current ? 'none' : 'transform 0.12s ease',
+              userSelect: 'none',
+              boxShadow: '0 8px 40px #000a'
+            }}
+          />
+          {/* Flèches */}
+          {index > 0 && (
+            <button
+              onClick={() => go(-1)}
+              style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 20, padding: '14px 16px', borderRadius: 12 }}
+              title="Précédente (←)"
+            >
+              ‹
+            </button>
+          )}
+          {index < photos.length - 1 && (
+            <button
+              onClick={() => go(1)}
+              style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 20, padding: '14px 16px', borderRadius: 12 }}
+              title="Suivante (→)"
+            >
+              ›
+            </button>
+          )}
+        </div>
+      )}
 
       <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', padding: '6px 0', background: '#0f172a' }}>
-        Molette : zoom · Double-clic : 100 % · ← → : naviguer · E : éditer · Échap : fermer
+        {isVideo
+          ? '← → : naviguer · Échap : fermer'
+          : 'Molette : zoom · Double-clic : 100 % · ← → : naviguer · E : éditer · Échap : fermer'}
       </div>
     </div>
   )

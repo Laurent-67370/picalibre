@@ -3,6 +3,25 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.3.3] — 2026-07-15
+
+### Ajouté
+- **Lecture vidéo dans la visionneuse plein écran** : `Lightbox.tsx` ne
+  contenait aucune balise `<video>` — le double-clic sur un fichier vidéo
+  ouvrait la même visionneuse que pour les images, qui tentait d'afficher
+  le flux `.mp4` (servi par `thumb://library/orig/{id}`) dans une balise
+  `<img>`, incapable de le lire. Résultat : rien ne s'affichait et aucune
+  lecture n'était possible. Ajout d'un lecteur `<video controls autoPlay>`
+  natif dédié pour `media_type === 'video'`, avec navigation ← → conservée
+  et zoom/pan/molette/édition désactivés (non pertinents pour une vidéo).
+
+### Connu — vignette vidéo dans la grille
+- La génération de miniature vidéo (frame ffmpeg → cache webp) reste
+  déléguée au pipeline de fond (`videoThumbsPhase`) ; ses erreurs ne sont
+  loggées qu'en console (jamais remontées à l'UI). Si une vignette reste
+  vide durablement, lancer l'app depuis un terminal pour capturer le
+  message `[video-thumb] ...` exact.
+
 ## [2.3.2] — 2026-07-15
 
 ### Corrigé
