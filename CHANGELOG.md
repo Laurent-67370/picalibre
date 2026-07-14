@@ -3,6 +3,23 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.3.4] — 2026-07-15
+
+### Corrigé
+- **Lecture vidéo toujours impossible malgré le lecteur ajouté en 2.3.3** :
+  le schéma `thumb://` était enregistré sans le privilège **`stream: true`**
+  (`protocol.registerSchemesAsPrivileged`). Sans lui, Chromium refuse de
+  traiter `thumb://library/orig/{id}` comme une source média valide pour
+  `<video>` — échec entièrement silencieux, aucune erreur visible côté
+  renderer. C'est la cause racine confirmée en testant sur machine réelle
+  (Mac mini M4) : le lecteur ajouté en 2.3.3 ne se déclenchait jamais.
+- **Seek vidéo cassé (corollaire)** : le handler `orig` refaisait un
+  `net.fetch` neuf sans transmettre les en-têtes `Range` de la requête
+  d'origine — chaque déplacement dans la barre de progression aurait
+  re-téléchargé le fichier depuis le début (`currentTime` revenant
+  toujours à 0, bug documenté d'Electron sur ce pattern). Les en-têtes de
+  la requête entrante sont désormais transmis à `net.fetch`.
+
 ## [2.3.3] — 2026-07-15
 
 ### Ajouté

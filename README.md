@@ -1,12 +1,20 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.3.3-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.3.4-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 2.3.4
+
+- 🎬 **Lecture vidéo enfin fonctionnelle** : le lecteur ajouté en 2.3.3 ne
+  se déclenchait jamais — il manquait le privilège `stream: true` sur le
+  schéma `thumb://`, sans lequel Electron/Chromium refuse silencieusement
+  de traiter une source vidéo personnalisée. Le seek (barre de
+  progression) est également corrigé au passage.
 
 ## 🆕 Quoi de neuf en 2.3.3
 

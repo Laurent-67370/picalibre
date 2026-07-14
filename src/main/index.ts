@@ -32,7 +32,12 @@ let mainWindow: BrowserWindow
 
 // Doit être appelé AVANT app.whenReady()
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'thumb', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+  // stream:true est indispensable pour que <video src="thumb://.../orig/{id}">
+  // puisse lire un fichier vidéo — sans lui, Chromium refuse de traiter le
+  // schéma comme une source média valide (échec silencieux, aucune erreur
+  // visible côté renderer). Les miniatures webp (images) n'en ont pas besoin
+  // mais le privilège est sans effet négatif pour elles.
+  { scheme: 'thumb', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
   { scheme: 'faceres', privileges: { standard: true, secure: true, supportFetchAPI: true } }
 ])
 
@@ -139,7 +144,11 @@ function registerThumbProtocol(): void {
         | { filepath: string }
         | undefined
       if (!ph) return new Response('not found', { status: 404, headers: { 'Cache-Control': 'no-store' } })
-      return net.fetch(pathToFileURL(ph.filepath).toString())
+      // Transmet Range (et autres en-têtes pertinents) : sans ça, chaque
+      // requête (y compris un seek vidéo) re-fetch le fichier entier depuis
+      // le début — la barre de progression d'un <video> resterait cassée
+      // (currentTime revient toujours à 0).
+      return net.fetch(pathToFileURL(ph.filepath).toString(), { headers: request.headers })
     }
     const size = parseInt(parts[0], 10)
     const photoId = parseInt(parts[1], 10)
