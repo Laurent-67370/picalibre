@@ -7,7 +7,21 @@
  * n'est pas garanti, on retombe sur ffmpeg-static embarqué.
  */
 import { execFileSync } from 'node:child_process'
-import ffmpegStatic from 'ffmpeg-static'
+
+/**
+ * Chargement PARESSEUX et OPTIONNEL de ffmpeg-static : le module est exclu
+ * du paquet Linux (économie de 77 Mo) — un import au niveau module ferait
+ * planter l'app au démarrage (« Cannot find module 'ffmpeg-static' »).
+ */
+function loadFfmpegStatic(): string | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const p = require('ffmpeg-static') as string | null
+    return p ?? null
+  } catch {
+    return null
+  }
+}
 
 /** Cache du résultat : la résolution ne se fait qu'une fois au démarrage. */
 let _resolved: string | null = null
@@ -43,8 +57,9 @@ export function getFfmpegPath(): string {
   }
 
   // 2. Fallback : binaire ffmpeg-static embarqué (Windows/macOS principalement)
-  if (ffmpegStatic) {
-    _resolved = ffmpegStatic as unknown as string
+  const bundled = loadFfmpegStatic()
+  if (bundled) {
+    _resolved = bundled
     return _resolved
   }
 

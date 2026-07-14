@@ -3,6 +3,24 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.8.2] — 2026-07-14
+
+### Performance (taille des applications, suite)
+- **AppImage 123 → ~96 Mo** (−65 % cumulé depuis la v1.8.0 à 274 Mo) :
+  compression maximum, locales Electron réduites (fr/en), nettoyage des
+  fichiers annexes des dépendances (docs, types, exemples).
+- Nouvelle étape CI : **E2E sur le binaire réellement packagé** (pile native
+  dans `app.asar.unpacked`) — attrape les régressions de packaging que le
+  build de dev ne voit pas.
+
+### Corrigé
+- **Crash au démarrage du paquet Linux** (« Cannot find module
+  'ffmpeg-static' ») : le module, volontairement exclu du paquet Linux
+  (−77 Mo, ffmpeg système utilisé en priorité), était encore importé au
+  niveau module → chargement paresseux et optionnel dans le résolveur, et
+  dépendance dédoublonnée (elle figurait en dependencies **et**
+  devDependencies). Validé sur le binaire packagé : pipeline complet OK.
+
 ## [1.8.1] — 2026-07-12
 
 ### Taille des installeurs (AppImage : 274 → 123 Mo, −55 %)
@@ -324,6 +342,7 @@ Les 5 phases du plan initial sont couvertes.
   (fichier inchangé size+mtime = jamais re-hashé).
 - Configuration de build Linux (AppImage/deb), Windows (NSIS), macOS (DMG).
 
+[1.8.2]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.8.2
 [1.8.1]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.8.1
 [1.8.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.8.0
 [1.7.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.7.0
