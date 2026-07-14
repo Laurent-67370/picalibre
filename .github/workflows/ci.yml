@@ -93,7 +93,7 @@ jobs:
         run: |
           {
             echo "**E2E $RUNNER_OS** — run ${{ github.run_id }}"
-            for f in e2e-scan.log e2e-webgl.log; do
+            for f in e2e-scan.log e2e-webgl.log e2e-packaged.log; do
               echo; echo "\`$f\` :"; echo '```'
               tail -c 1500 "$f" 2>/dev/null | tr -d '\r' || echo '(absent)'
               echo '```'
