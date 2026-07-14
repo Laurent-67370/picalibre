@@ -3,6 +3,32 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.9.5] — 2026-07-14
+
+### Performance — Web Worker pour le décodage des miniatures
+- Nouveau Web Worker (`thumb-decoder.worker.ts`) qui reçoit une URL `thumb://`,
+  fait `fetch` + `createImageBitmap`, et renvoie l'`ImageBitmap` au main thread
+  (transférable, zero-copy).
+- `ThumbCanvas` tente le Web Worker en priorité. Si le protocole custom n'est
+  pas accessible depuis le worker (Electron), fallback sur `createImageBitmap`
+  + `requestIdleCallback` dans le main thread (polyfill inclus).
+- Le main thread reste fluide pendant le chargement des vignettes.
+
+### Performance — Cache LRU des miniatures en mémoire
+- Classe `ThumbLRUCache` avec Map ordonnée (ordre d'insertion = ordre LRU).
+- `get()` met à jour l'accès LRU (delete + re-insert), compte hits/misses.
+- `set()` éviction automatique avec `bitmap.close()` pour libérer la mémoire GPU.
+- Taille max 200 entrées (~50 Mo avec des 256px WebP).
+- Au scroll back, les vignettes s'affichent instantanément sans re-décodage.
+
+### Ajouté — Recherche par nom de dossier (FTS5)
+- Migration 007 : ajoute la colonne `folder` à la table `photos_search_content`
+  et à l'index FTS5 `photos_fts`.
+- Triggers de synchronisation mis à jour pour peupler `folder` depuis la table
+  `folders` (LEFT JOIN).
+- La recherche FTS5 `MATCH` interroge automatiquement toutes les colonnes —
+  chercher « vacances 2023 » trouve les photos dans `/Photos/Vacances 2023/`.
+
 ## [1.9.4] — 2026-07-14
 
 ### Performance — Rendu Canvas pour les vignettes

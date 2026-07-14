@@ -1,12 +1,27 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-1.9.4-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.9.5-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 1.9.5
+
+- 🧵 **Web Worker pour le décodage des miniatures** : le décodage des images
+  se fait hors du main thread via `createImageBitmap()` dans un Web Worker
+  (transfert zero-copy). Fallback sur `requestIdleCallback` si le protocole
+  `thumb://` n'est pas accessible depuis le worker. Le main thread reste
+  fluide pendant le chargement des vignettes.
+- ♻️ **Cache LRU des miniatures** : les miniatures déjà décodées sont gardées
+  en mémoire (cache LRU, 200 entrées max). Au scroll back, les vignettes
+  s'affichent instantanément sans re-décodage. Éviction automatique avec
+  `bitmap.close()` pour libérer la mémoire GPU.
+- 📁 **Recherche par nom de dossier** : l'index FTS5 inclut désormais le
+  chemin du dossier. Chercher « vacances 2023 » trouve les photos dans
+  `/Photos/Vacances 2023/`. Migration 007 ajoutée.
 
 ## 🆕 Quoi de neuf en 1.9.4
 
