@@ -3,6 +3,28 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.9.1] — 2026-07-14
+
+### Ajouté — Recherche plein texte FTS5
+- **Index FTS5 SQLite** : la recherche photos passe d'un `LIKE` SQL sur
+  colonnes à une table virtuelle **FTS5** indexant `filename`, `caption`,
+  `tags` et `persons` — une seule requête MATCH intercepte tous les champs.
+- **Insensible aux accents** : un tokenizer personnalisé (`remove_diacritics`)
+  normalise `café` → `cafe`, `école` → `ecole` ; on peut chercher dans les
+  deux sens sans se soucier des accents.
+- **15 triggers SQL** synchronisent l'index FTS5 automatiquement en temps réel
+  sur `INSERT` / `UPDATE` / `DELETE` des tables `photos`, `tags`,
+  `photo_tags` et `persons` — aucune réindexation manuelle, aucune maintenance.
+- Handler IPC `photos:search` réécrit pour tirer parti du FTS5 : support des
+  opérateurs `AND` / `OR` / `NOT`, préfixe `*` pour les suffixes, classement
+  par pertinence (`bm25`), fallback automatique si la requête est vide.
+- Migration 006 créée et testée.
+
+### Performance
+- La recherche est désormais quasi-instantanée même sur des dizaines de
+  milliers de photos, là où les `LIKE '%terme%'` devenus lents devaient
+  parcourir toute la table.
+
 ## [1.9.0] — 2026-07-14
 
 ### Ajouté — Galerie mobile (« vue web depuis le VPS »)
@@ -368,6 +390,7 @@ Les 5 phases du plan initial sont couvertes.
   (fichier inchangé size+mtime = jamais re-hashé).
 - Configuration de build Linux (AppImage/deb), Windows (NSIS), macOS (DMG).
 
+[1.9.1]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.9.1
 [1.9.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.9.0
 [1.8.2]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.8.2
 [1.8.1]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.8.1

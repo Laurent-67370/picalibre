@@ -1,14 +1,23 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-1.9.0-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.9.1-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
 
-## 🆕 Quoi de neuf en 1.9.0
+## 🆕 Quoi de neuf en 1.9.1
+
+- 🔍 **Recherche plein texte FTS5** : la recherche passe sur un index SQLite
+  **FTS5** ultra-rapide — une seule requête intercepte le nom de fichier, la
+  légende, les tags et les personnes reconnues. Insensible aux accents (café,
+  ecole, etc.), préfixe `*` pour les suffixes, opérateurs `AND` / `OR` / `NOT`.
+  15 triggers SQL synchronisent l'index en temps réel (insert, update, delete)
+  — aucune réindexation manuelle à gérer.
+
+## Quoi de neuf en 1.9.0
 
 - 📱 **Galerie mobile** : consulte ta bibliothèque depuis ton téléphone via un
   petit serveur que tu héberges toi-même (`web-server/`, prêt pour Coolify).
