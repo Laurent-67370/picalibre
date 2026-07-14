@@ -7,6 +7,7 @@ import { initDb, getDb } from './db'
 import { getEditState, saveStack, undo, redo } from './services/edits'
 import { initAutoUpdate, installUpdate } from './services/updater'
 import { buildAppMenu } from './menu'
+import { getConfigForUi, setConfig, testConnection, runWebSync } from './services/websync'
 import { shutdownExiftool } from './services/exif'
 import { startFaceScan, isFaceScanRunning, humanModelsPath } from './services/faces'
 import { mergePersons, splitFaces, confirmFaces, rejectFaces, facesByPerson } from './services/faces/manage-core'
@@ -681,6 +682,12 @@ function registerIpc(): void {
     })
   })
   ipcMain.handle('update:install', () => installUpdate())
+  ipcMain.handle('websync:getConfig', () => getConfigForUi())
+  ipcMain.handle('websync:setConfig', (_e, cfg) => setConfig(cfg))
+  ipcMain.handle('websync:test', (_e, cfg) => testConnection(cfg))
+  ipcMain.handle('websync:run', () =>
+    runWebSync(mainWindow, (p) => mainWindow.webContents.send('websync:progress', p))
+  )
   ipcMain.handle('dialog:pickFiles', async (_e, { name, extensions }) => {
     const r = await dialog.showOpenDialog(mainWindow, {
       properties: ['openFile', 'multiSelections'],
@@ -774,6 +781,20 @@ app.whenReady().then(() => {
     console.log('[bench] 2000 vignettes — SQL:', sqlPer2000, 'ms | cache mémoire:', memPer2000, 'ms')
     console.log('[bench] plan folder:', JSON.stringify(db.prepare(`EXPLAIN QUERY PLAN SELECT ${GRID_COLS} FROM photos WHERE folder_id=1 AND status='active' AND is_hidden=0 ORDER BY taken_at DESC LIMIT 100`).all()))
     exitTest(0)
+  }
+
+  // Mode test synchro web : configure + synchronise vers un serveur cible, quitte.
+  // Format : "http://host:port|token" — utilisé par la CI pour valider le
+  // cycle complet desktop → picalibre-web sans intervention manuelle.
+  if (process.env.PICALIBRE_TEST_WEBSYNC) {
+    const [url, token] = process.env.PICALIBRE_TEST_WEBSYNC.split('|')
+    setConfig({ url, token })
+    runWebSync(mainWindow, (p) => console.log('[websync-test]', JSON.stringify(p)))
+      .then(() => exitTest(0))
+      .catch((err) => {
+        console.error('[websync-test] erreur:', err.message)
+        exitTest(1)
+      })
   }
 
   // Mode test menu : vérifie la structure du menu applicatif puis quitte.

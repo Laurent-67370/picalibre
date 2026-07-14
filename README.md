@@ -1,14 +1,21 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-1.8.2-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.9.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
 
-## 🆕 Quoi de neuf en 1.8.2
+## 🆕 Quoi de neuf en 1.9.0
+
+- 📱 **Galerie mobile** : consulte ta bibliothèque depuis ton téléphone via un
+  petit serveur que tu héberges toi-même (`web-server/`, prêt pour Coolify).
+  Seules les miniatures et métadonnées sont envoyées — **zéro original dans
+  le cloud**. Synchronisation incrémentale en un clic depuis les Réglages.
+
+## Quoi de neuf en 1.8.2
 
 - 📦 **Taille des installeurs divisée par 2 à 3** (suite) : AppImage ~96 Mo,
   compression maximum, locales Electron réduites (fr/en)
@@ -157,6 +164,7 @@ schéma des processus, DSL d'édition, schéma SQL complet, plan par phases.
 - [x] Glisser-déposer (vignettes → albums, dossiers/fichiers OS → scan/import), barre de critères d'affichage (tri, filtre ★/type, ratio des vignettes) — mémorisés
 - [x] Performance : cache navigateur permanent des miniatures, colonnes IPC ciblées (−45 %), index SQL partiels, pragmas SQLite, mesuré sur 50 000 photos
 - [x] Taille des installeurs réduite de 50 à 65 % (résolveur ffmpeg à la demande, modèles de visages allégés, dépendances nettoyées) ; CI multi-OS (Linux/Windows/macOS) avec release automatique sur tag
+- [x] Galerie mobile (`web-server/`) : miroir léger miniatures+métadonnées, synchronisation incrémentale desktop→VPS, déploiement Coolify documenté
 
 ## Licence
 

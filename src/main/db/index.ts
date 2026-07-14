@@ -11,13 +11,15 @@ import migration001 from './migrations/001_init.sql?raw'
 import migration002 from './migrations/002_faces_scanned.sql?raw'
 import migration003 from './migrations/003_timeline.sql?raw'
 import migration004 from './migrations/004_perf_indexes.sql?raw'
+import migration005 from './migrations/005_web_sync.sql?raw'
 
 /** Migrations embarquées dans le bundle (import Vite ?raw) — ordre croissant. */
 const MIGRATIONS: Array<{ version: number; sql: string }> = [
   { version: 1, sql: migration001 },
   { version: 2, sql: migration002 },
   { version: 3, sql: migration003 },
-  { version: 4, sql: migration004 }
+  { version: 4, sql: migration004 },
+  { version: 5, sql: migration005 }
 ]
 
 let db: Database.Database

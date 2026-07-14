@@ -131,6 +131,15 @@ export default function App(): JSX.Element {
   const [roots, setRoots] = useState<Array<{ id: number; path: string; mode: string }>>([])
   const [privacy, setPrivacy] = useState<{ hasPassword: boolean; unlocked: boolean }>({ hasPassword: false, unlocked: true })
   const [pwInput, setPwInput] = useState('')
+  const [websyncUrl, setWebsyncUrl] = useState('')
+  const [websyncToken, setWebsyncToken] = useState('')
+  const [websyncMsg, setWebsyncMsg] = useState('')
+  const [websyncProgress, setWebsyncProgress] = useState<{
+    phase: 'checking' | 'metadata' | 'thumbnails' | 'done' | 'error'
+    done: number
+    total: number
+    message?: string
+  } | null>(null)
   const [exportPreset, setExportPreset] = useState<number | 0>(0)
   const [watermark, setWatermark] = useState('')
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
@@ -316,6 +325,13 @@ export default function App(): JSX.Element {
       if (action === 'tagFocus') document.querySelector<HTMLInputElement>('.ft input')?.focus()
       if (action === 'hide') void trayHideRef.current?.()
     })
+    window.api.invoke('websync:getConfig', undefined).then((cfg) => {
+      if (cfg) {
+        setWebsyncUrl(cfg.url)
+        setWebsyncToken(cfg.token)
+      }
+    })
+    const offWS = window.api.on('websync:progress', setWebsyncProgress)
     const offM = window.api.on('menu:action', ({ action }) => {
       if (action === 'addFolder') void addFolderRef.current?.()
       if (action === 'import') void importRef.current?.()
@@ -339,6 +355,7 @@ export default function App(): JSX.Element {
       off4()
       offU()
       offM()
+      offWS()
       offP()
     }
   }, [refreshSidebar, loadView])
@@ -1123,6 +1140,63 @@ export default function App(): JSX.Element {
                     </button>
                   </>
                 )}
+              </div>
+
+              <h3 style={{ marginTop: 24 }}>📱 Galerie mobile (web)</h3>
+              <p style={{ fontSize: 13, opacity: 0.7 }}>
+                Consulte tes photos depuis ton téléphone via un serveur que tu héberges (VPS).
+                Seules les miniatures et les métadonnées sont envoyées — jamais les originaux.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 420 }}>
+                <input
+                  placeholder="https://photos.mondomaine.fr"
+                  value={websyncUrl}
+                  onChange={(e) => setWebsyncUrl(e.target.value)}
+                  style={{ padding: 6, background: '#14171c', border: '1px solid #333', borderRadius: 4, color: '#d7dae0' }}
+                />
+                <input
+                  type="password"
+                  placeholder="Jeton d'accès (SYNC_TOKEN du serveur)"
+                  value={websyncToken}
+                  onChange={(e) => setWebsyncToken(e.target.value)}
+                  style={{ padding: 6, background: '#14171c', border: '1px solid #333', borderRadius: 4, color: '#d7dae0' }}
+                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={async () => {
+                      setWebsyncMsg('Test en cours…')
+                      const r = await window.api.invoke('websync:test', { url: websyncUrl, token: websyncToken })
+                      setWebsyncMsg(r.message)
+                    }}
+                    disabled={!websyncUrl || !websyncToken}
+                  >
+                    Tester la connexion
+                  </button>
+                  <button
+                    className="primary"
+                    onClick={async () => {
+                      await window.api.invoke('websync:setConfig', { url: websyncUrl, token: websyncToken })
+                      await window.api.invoke('websync:run', undefined)
+                    }}
+                    disabled={!websyncUrl || !websyncToken || websyncProgress?.phase === 'thumbnails' || websyncProgress?.phase === 'metadata'}
+                  >
+                    🔄 Synchroniser maintenant
+                  </button>
+                </div>
+                {websyncMsg && <p style={{ fontSize: 12, opacity: 0.8 }}>{websyncMsg}</p>}
+                {websyncProgress && (
+                  <p style={{ fontSize: 12, opacity: 0.8 }}>
+                    {websyncProgress.phase === 'checking' && 'Vérification…'}
+                    {websyncProgress.phase === 'thumbnails' && `Envoi des miniatures… ${websyncProgress.done}/${websyncProgress.total}`}
+                    {websyncProgress.phase === 'metadata' && `Envoi des métadonnées… ${websyncProgress.done}/${websyncProgress.total}`}
+                    {websyncProgress.phase === 'done' && `✅ ${websyncProgress.message ?? `${websyncProgress.done} photo(s) synchronisée(s)`}`}
+                    {websyncProgress.phase === 'error' && `❌ ${websyncProgress.message}`}
+                  </p>
+                )}
+                <p style={{ fontSize: 11, opacity: 0.5 }}>
+                  Instructions de déploiement du serveur : dossier <code>web-server/</code> du
+                  dépôt (Coolify, Docker, ou Node nu).
+                </p>
               </div>
             </div>
           ) : view?.type === 'hidden' && !privacy.unlocked ? (

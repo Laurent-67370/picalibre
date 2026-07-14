@@ -140,6 +140,10 @@ export interface IpcInvokeMap {
   'edits:export': { req: { photoId: number; format?: 'jpeg' | 'webp' | 'png'; maxSize?: number }; res: { outPath: string | null } }
   'update:install': { req: void; res: void }
   'context:photoMenu': { req: { photoId: number; selectedCount: number }; res: void }
+  'websync:getConfig': { req: void; res: { url: string; token: string } | null }
+  'websync:setConfig': { req: { url: string; token: string }; res: void }
+  'websync:test': { req: { url: string; token: string }; res: { ok: boolean; message: string } }
+  'websync:run': { req: void; res: void }
   'dialog:pickFiles': { req: { name: string; extensions: string[] }; res: string[] }
   'dialog:pickFolder': { req: void; res: string | null }
   'dialog:pickFile': { req: { name: string; extensions: string[] }; res: string | null }
@@ -150,6 +154,12 @@ export interface IpcInvokeMap {
 
 /** Canaux d'événements main → renderer */
 export interface IpcEventMap {
+  'websync:progress': {
+    phase: 'checking' | 'metadata' | 'thumbnails' | 'done' | 'error'
+    done: number
+    total: number
+    message?: string
+  }
   'photo:action': { action: 'open' | 'edit' | 'tagFocus' | 'hide'; photoId: number }
   'menu:action': { action: 'addFolder' | 'import' }
   'update:status': {

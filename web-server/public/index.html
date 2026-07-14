@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>PicaLibre</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --border:#334155; --text:#e2e8f0; --muted:#94a3b8; --accent:#f97316; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,system-ui,sans-serif; }
+  #login { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; padding:24px; gap:14px; }
+  #login h1 { color:var(--accent); }
+  #login input { width:100%; max-width:320px; padding:12px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:16px; }
+  #login button, .btn { padding:12px 16px; border-radius:10px; border:1px solid var(--accent); background:var(--accent); color:#0f172a; font-weight:700; font-size:15px; cursor:pointer; }
+  #app { display:none; flex-direction:column; height:100vh; }
+  header { padding:12px 14px; border-bottom:1px solid var(--border); display:flex; gap:8px; align-items:center; position:sticky; top:0; background:var(--bg); z-index:5; }
+  header h1 { font-size:16px; margin:0; color:var(--accent); flex-shrink:0; }
+  header input { flex:1; min-width:0; padding:9px 12px; border-radius:999px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:14px; }
+  nav { display:flex; gap:6px; padding:8px 12px; overflow-x:auto; border-bottom:1px solid var(--border); }
+  nav button { flex-shrink:0; padding:6px 12px; border-radius:999px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:12.5px; }
+  nav button.active { border-color:var(--accent); color:var(--accent); }
+  #list { flex:1; overflow:auto; -webkit-overflow-scrolling:touch; }
+  .side-item { padding:10px 16px; border-bottom:1px solid #1a2436; font-size:14px; }
+  .side-item .count { color:var(--muted); font-size:12px; }
+  #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:3px; padding:6px; }
+  #grid img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:4px; background:var(--card); display:block; }
+  .load-more { grid-column:1/-1; padding:16px; text-align:center; color:var(--muted); font-size:13px; }
+  #viewer { position:fixed; inset:0; background:#000d; display:none; align-items:center; justify-content:center; z-index:20; touch-action:pan-y; }
+  #viewer img { max-width:100%; max-height:90vh; object-fit:contain; }
+  #viewer .close { position:absolute; top:14px; right:14px; font-size:26px; color:#fff; background:none; border:none; }
+  #viewer .cap { position:absolute; bottom:14px; left:14px; right:14px; color:#cbd5e1; font-size:13px; text-align:center; }
+  .empty { padding:40px 20px; text-align:center; color:var(--muted); }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <h1>📸 PicaLibre</h1>
+  <input id="url" placeholder="URL du serveur (https://…)" />
+  <input id="token" type="password" placeholder="Jeton d'accès" />
+  <button onclick="doLogin()">Se connecter</button>
+  <div id="loginError" style="color:#f87171;font-size:13px"></div>
+</div>
+
+<div id="app">
+  <header>
+    <h1 id="libName">📸</h1>
+    <input id="search" placeholder="Rechercher…" oninput="onSearch()" />
+  </header>
+  <nav>
+    <button class="active" onclick="setView('timeline',this)">🕒 Tout</button>
+    <button onclick="setView('folders',this)">📁 Dossiers</button>
+    <button onclick="setView('albums',this)">🗂️ Albums</button>
+  </nav>
+  <div id="list"></div>
+</div>
+
+<div id="viewer" onclick="closeViewer(event)">
+  <button class="close" onclick="closeViewer(event)">✕</button>
+  <img id="viewerImg" />
+  <div class="cap" id="viewerCap"></div>
+</div>
+
+<script>
+let API = '', TOKEN = '', offset = 0, loading = false, currentFilter = {}, mode = 'timeline'
+const $ = (id) => document.getElementById(id)
+
+function saved() {
+  try { return JSON.parse(localStorage.getItem('picalibre-web') || 'null') } catch { return null }
+}
+function doLogin() {
+  API = $('url').value.trim().replace(/\/$/, '')
+  TOKEN = $('token').value.trim()
+  if (!API || !TOKEN) return
+  fetchConfig().then((ok) => {
+    if (ok) {
+      localStorage.setItem('picalibre-web', JSON.stringify({ API, TOKEN }))
+      $('login').style.display = 'none'
+      $('app').style.display = 'flex'
+      loadList(true)
+    } else {
+      $('loginError').textContent = 'Connexion impossible — vérifie l\'URL et le jeton.'
+    }
+  })
+}
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { ...(opts.headers||{}), Authorization: 'Bearer ' + TOKEN } })
+  if (!r.ok) throw new Error('http ' + r.status)
+  return r.json()
+}
+async function fetchConfig() {
+  try {
+    const c = await api('/api/config')
+    $('libName').textContent = '📸 ' + c.libraryName
+    return true
+  } catch { return false }
+}
+
+function setView(m, btn) {
+  mode = m; currentFilter = {}
+  document.querySelectorAll('nav button').forEach((b) => b.classList.remove('active'))
+  btn.classList.add('active')
+  loadList(true)
+}
+function onSearch() {
+  const q = $('search').value.trim()
+  currentFilter = q ? { q } : {}
+  mode = 'timeline'
+  loadList(true)
+}
+
+async function loadList(reset) {
+  if (reset) { offset = 0; $('list').innerHTML = '' }
+  if (loading) return
+  loading = true
+
+  if ((mode === 'folders' || mode === 'albums') && reset) {
+    const items = mode === 'folders' ? await api('/api/folders') : (await api('/api/albums')).map((a) => ({ folder_path: a, count: null, name: a }))
+    const el = document.createElement('div')
+    items.forEach((it) => {
+      const row = document.createElement('div')
+      row.className = 'side-item'
+      row.innerHTML = `${mode === 'folders' ? '📁' : '🗂️'} ${it.name || it.folder_path} ${it.count != null ? `<span class="count">(${it.count})</span>` : ''}`
+      row.onclick = () => {
+        currentFilter = mode === 'folders' ? { folder: it.folder_path } : { album: it.folder_path }
+        mode = 'timeline'
+        loadList(true)
+      }
+      el.appendChild(row)
+    })
+    $('list').innerHTML = ''
+    $('list').appendChild(items.length ? el : emptyMsg('Rien ici pour l\'instant.'))
+    loading = false
+    return
+  }
+
+  const params = new URLSearchParams({ ...currentFilter, offset, limit: 200 })
+  const photos = await api('/api/photos?' + params.toString())
+  if (reset) {
+    $('list').innerHTML = ''
+    const grid = document.createElement('div')
+    grid.id = 'grid'
+    $('list').appendChild(grid)
+  }
+  const grid = $('grid') || (() => { const g = document.createElement('div'); g.id='grid'; $('list').appendChild(g); return g })()
+  if (photos.length === 0 && offset === 0) {
+    $('list').innerHTML = ''
+    $('list').appendChild(emptyMsg('Aucune photo synchronisée pour l\'instant.'))
+  }
+  photos.forEach((p) => {
+    const img = document.createElement('img')
+    img.loading = 'lazy'
+    img.src = `${API}/thumb/${p.hash}/256.webp`
+    img.onclick = () => openViewer(p)
+    grid.appendChild(img)
+  })
+  offset += photos.length
+  loading = false
+  if (photos.length === 200) {
+    const more = document.createElement('div')
+    more.className = 'load-more'
+    more.textContent = 'Charger plus…'
+    more.onclick = () => { more.remove(); loadList(false) }
+    $('list').appendChild(more)
+  }
+}
+function emptyMsg(t) {
+  const d = document.createElement('div'); d.className = 'empty'; d.textContent = t; return d
+}
+function openViewer(p) {
+  $('viewerImg').src = `${API}/thumb/${p.hash}/1024.webp`
+  $('viewerCap').textContent = `${p.filename}${p.takenAt ? ' · ' + new Date(p.takenAt*1000).toLocaleDateString('fr-FR') : ''}${'★'.repeat(p.rating)}`
+  $('viewer').style.display = 'flex'
+}
+function closeViewer(e) {
+  if (e.target.id === 'viewer' || e.target.classList.contains('close')) $('viewer').style.display = 'none'
+}
+document.getElementById('list').addEventListener('scroll', () => {
+  const el = $('list')
+  if (mode === 'timeline' && el.scrollTop + el.clientHeight > el.scrollHeight - 400) loadList(false)
+})
+
+const s = saved()
+if (s) { API = s.API; TOKEN = s.TOKEN; $('url').value = API; $('token').value = TOKEN
+  fetchConfig().then((ok) => { if (ok) { $('login').style.display='none'; $('app').style.display='flex'; loadList(true) } })
+}
+</script>
+</body>
+</html>

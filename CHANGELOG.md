@@ -3,6 +3,25 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.9.0] — 2026-07-14
+
+### Ajouté — Galerie mobile (« vue web depuis le VPS »)
+- **`web-server/`** : nouveau service Node/Express déployable sur ton propre
+  VPS (Dockerfile fourni, compatible Coolify — même pattern que tes autres
+  apps sur Oracle Cloud). Miroir **léger** : miniatures 256/1024 webp +
+  métadonnées seulement, **aucun fichier original ne quitte le poste**.
+  Protégé par un jeton `Bearer` obligatoire sur toute l'API.
+- Page mobile en HTML/JS vanilla (zéro framework, thème navy/orange) :
+  connexion par URL + jeton, navigation Chronologie/Dossiers/Albums,
+  recherche, défilement infini, visionneuse plein écran.
+- **Synchronisation desktop → serveur** (Réglages → « 📱 Galerie mobile ») :
+  incrémentale via une table `web_sync` (photo_id → hash déjà envoyé), ne
+  renvoie que le nouveau ou le modifié ; vérifie aussi les miniatures déjà
+  présentes côté serveur avant upload (reprise propre après coupure) ; bouton
+  « Tester la connexion » et barre de progression par phase.
+- Nouveau job CI dédié : lance le serveur, synchronise une vraie bibliothèque
+  scannée par l'app desktop, vérifie les photos et miniatures côté serveur.
+
 ## [1.8.2] — 2026-07-14
 
 ### Performance (taille des applications, suite)
@@ -349,6 +368,7 @@ Les 5 phases du plan initial sont couvertes.
   (fichier inchangé size+mtime = jamais re-hashé).
 - Configuration de build Linux (AppImage/deb), Windows (NSIS), macOS (DMG).
 
+[1.9.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.9.0
 [1.8.2]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.8.2
 [1.8.1]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.8.1
 [1.8.0]: https://github.com/Laurent-67370/picalibre/releases/tag/v1.8.0
