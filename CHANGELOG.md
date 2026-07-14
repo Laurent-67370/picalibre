@@ -14,6 +14,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versio
   build de dev ne voit pas.
 
 ### Corrigé
+- **Miniatures vidéo impossibles sur les systèmes sans ffmpeg** (dont les
+  runners GitHub ubuntu-24.04, contrairement à l'hypothèse initiale) : le
+  résolveur **télécharge désormais le binaire officiel une seule fois** vers
+  `userData/bin` (même source que le paquet npm), le vérifie (`-version`) et le
+  met en cache — validé sur le binaire packagé sans ffmpeg système
+  (téléchargement → installation → miniature vidéo → pipeline OK).
+  ffmpeg-static réellement dédoublonné (dependencies uniquement).
 - **Crash au démarrage du paquet Linux** (« Cannot find module
   'ffmpeg-static' ») : le module, volontairement exclu du paquet Linux
   (−77 Mo, ffmpeg système utilisé en priorité), était encore importé au

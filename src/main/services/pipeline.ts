@@ -66,7 +66,7 @@ async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
     .all() as { photoId: number; filepath: string; hash: string }[]
   if (items.length === 0) return
 
-  const ff = getFfmpegPath()
+  const ff = await getFfmpegPath()
   const insertThumb = db.prepare(
     `INSERT OR REPLACE INTO thumbnails (photo_id, size, cache_path) VALUES (?, ?, ?)`
   )

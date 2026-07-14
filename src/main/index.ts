@@ -672,7 +672,7 @@ function registerIpc(): void {
   ipcMain.handle('create:movie', async (_e, { photoIds, durationSec, audioPaths, transition, outFile }) => {
     const items = photosWithStacks(photoIds)
     return makeMovie(items, {
-      ffmpegPath: getFfmpegPath(),
+      ffmpegPath: await getFfmpegPath(),
       durationSec,
       audioPaths,
       transition,
