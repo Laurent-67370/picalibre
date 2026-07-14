@@ -16,6 +16,11 @@ Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
   ecole, etc.), préfixe `*` pour les suffixes, opérateurs `AND` / `OR` / `NOT`.
   15 triggers SQL synchronisent l'index en temps réel (insert, update, delete)
   — aucune réindexation manuelle à gérer.
+- ⚡ **Scan multi-worker** : le scan de la bibliothèque exploite désormais
+  tous les cœurs du CPU. Un pool de `cpus − 1` workers scanne les dossiers
+  en parallèle — un worker par racine, ou partition par sous-dossiers du
+  premier niveau si une seule racine. La progression est agrégée et le
+  pipeline post-scan n'est lancé qu'une fois tous les workers terminés.
 
 ## Quoi de neuf en 1.9.0
 

@@ -25,6 +25,23 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versio
   milliers de photos, là où les `LIKE '%terme%'` devenus lents devaient
   parcourir toute la table.
 
+### Ajouté — Scan multi-worker (parallélisation)
+- **Pool de workers** : le scan de la bibliothèque lance désormais
+  `cpus − 1` workers en parallèle au lieu d'un seul. Chaque worker parcourt
+  sa partition de dossiers de manière indépendante.
+- **Multi-racines** : les racines configurées sont réparties en round-robin
+  sur les workers disponibles.
+- **Racine unique** : la racine est partitionnée par sous-dossiers de premier
+  niveau — un worker « shallow » scanne les fichiers à la racine, les autres
+  scannent récursivement chacun un sous-dossier.
+- **Progression agrégée** : le main process somme les compteurs de tous les
+  workers et envoie une progression unifiée au renderer.
+- **Pipeline post-scan** : lancé une seule fois après la terminaison de tous
+  les workers (compteur `workersDone` + flag `pipelineStarted`).
+- Protocole IPC inchangé : chaque worker envoie `batch` / `progress` / `done`
+  / `error` exactement comme avant. Les transactions SQLite étant synchrones,
+  les batches parallèles ne créent pas de conflit.
+
 ## [1.9.0] — 2026-07-14
 
 ### Ajouté — Galerie mobile (« vue web depuis le VPS »)
