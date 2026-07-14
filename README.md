@@ -1,12 +1,25 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-1.9.5-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.9.6-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 1.9.6
+
+- 🔮 **Préchargement prédictif** : les miniatures des 20 prochaines lignes
+  sont pré-décodées en arrière-plan (via le Web Worker) avant même d'être
+  visibles. Intercalage avant/après — priorise les lignes les plus proches du
+  viewport. Au scroll, les vignettes apparaissent instantanément depuis le
+  cache LRU, sans décodage à la demande. Debounce de 150 ms pour éviter la
+  surcharge.
+- 📊 **SQLite ANALYZE automatique** : après chaque scan complet, `ANALYZE`
+  met à jour les statistiques du query planner SQLite. Les plans de requête
+  sont optimisés selon la distribution réelle des données — les requêtes de
+  grille et de recherche restent rapides sur le long terme.
 
 ## 🆕 Quoi de neuf en 1.9.5
 

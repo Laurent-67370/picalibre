@@ -3,6 +3,26 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.9.6] — 2026-07-14
+
+### Performance — Préchargement prédictif des miniatures
+- Nouveau module `thumb-prefetch.ts` : pré-décode les miniatures des lignes
+  avant et après le viewport via le Web Worker existant.
+- Limite stricte à 20 miniatures en avance (`PREFETCH_LIMIT`).
+- Intercalage avant/après : priorise les lignes les plus proches du viewport.
+- Insère les `ImageBitmap` décodés dans le cache LRU → dessin instantané.
+- Ensemble `inFlight` (Set) pour éviter les décodages dupliqués.
+- Vérifie `thumbCache.has()` avant de lancer un décodage.
+- Debounce de 150 ms sur le scroll listener pour éviter la surcharge.
+- `cleanupPrefetch()` au démontage.
+
+### Performance — SQLite ANALYZE automatique
+- `ANALYZE` exécuté après chaque scan complet dans `pipeline.ts`.
+- Met à jour les statistiques du query planner SQLite sur la distribution des
+  données dans les tables et index.
+- Les plans de requête sont optimisés selon les données réelles — les requêtes
+  de grille et de recherche FTS5 restent rapides sur le long terme.
+
 ## [1.9.5] — 2026-07-14
 
 ### Performance — Web Worker pour le décodage des miniatures
