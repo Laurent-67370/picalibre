@@ -8,6 +8,26 @@
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
 
+## 🆕 Quoi de neuf en 2.3.1
+
+- 🐛 **Bug critique corrigé : scan bloqué sur machines à 1-2 cœurs** : le
+  partitionnement multi-worker du scanner (`partitionRoots`) provoquait une
+  division par zéro (`partitions.length - 1 === 0`) lors de la répartition
+  round-robin sur les machines mono/bi-cœur, bloquant tout scan
+  (`TypeError`, aucune photo jamais indexée). Corrigé : un seul worker
+  pleinement récursif scanne désormais tout sur ces machines, sans
+  partitionnement inutile.
+- 📷 **Fallback RAW/PSD réparé** : `sharp(...).metadata()` levait une
+  exception sur les formats non supportés par libvips (RAW propriétaire,
+  PSD sans plugin) au lieu de déclencher le fallback
+  `exiftool.extractPreview()`. Corrigé avec un try/catch dédié — le
+  fallback fonctionne dès que le fichier a une preview JPEG intégrée
+  (quasi systématique pour les RAW d'appareils photo).
+- ✅ **Vérification approfondie des fonctionnalités 2.0.0→2.3.0** : tests
+  réels (pas de simulation) sur les bordures/cadres (export sharp
+  pixel-parfait) et la géolocalisation (3 photos avec vraies coordonnées
+  EXIF GPS, carte Leaflet rendue avec ses marqueurs et tuiles OSM).
+
 ## 🆕 Quoi de neuf en 2.3.0
 
 - 🗺️ **Géolocalisation et carte interactive** : les photos avec coordonnées
