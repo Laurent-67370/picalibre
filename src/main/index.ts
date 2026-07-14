@@ -15,7 +15,7 @@ import { startWatchers } from './services/watcher'
 import { importFromDevice, importFileList } from './services/importer'
 import { relocateLibrary } from './services/relocate'
 import { privacyStatus, setPassword, unlock, lock, isUnlocked } from './services/privacy'
-import { batchExport, exportMetadataCsv, emailShare } from './services/exporter'
+import { batchExport, exportMetadataCsv, emailShare, setWallpaper } from './services/exporter'
 import { printPhotos } from './services/printer'
 import { makeCollage, CollageItem } from './services/collage'
 import { makeMovie, MovieItem } from './services/movie'
@@ -393,6 +393,17 @@ function registerIpc(): void {
             | { filepath: string }
             | undefined
           if (ph) shell.showItemInFolder(ph.filepath)
+        }
+      },
+      { type: 'separator' },
+      {
+        label: "🖥️ Définir comme fond d'écran",
+        click: () => {
+          void setWallpaper(photoId).then((r) => {
+            if (!r.ok) {
+              dialog.showErrorBox('Fond d\'écran', `Échec: ${r.error ?? 'erreur inconnue'}`)
+            }
+          })
         }
       }
     ])

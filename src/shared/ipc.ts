@@ -141,6 +141,7 @@ export interface IpcInvokeMap {
   'export:metadata': { req: { photoIds: number[]; destFile: string }; res: { rows: number } }
   'photos:print': { req: { photoIds: number[]; perPage: 1 | 2 | 4 }; res: void }
   'share:email': { req: { photoIds: number[] }; res: { dir: string } }
+  'photos:setWallpaper': { req: { photoId: number }; res: { ok: boolean; error?: string } }
   'import:dropped': {
     req: { paths: string[] }
     res: { addedRoots: number; imported: { copied: number; skippedDuplicates: number; errors: number } | null }

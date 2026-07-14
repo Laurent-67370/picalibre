@@ -123,3 +123,54 @@ export async function emailShare(
   )
   return { dir }
 }
+
+/**
+ * Définit une photo (avec éditions appliquées) comme fond d'écran.
+ * Adaptation selon l'OS :
+ *  - Linux : gsettings set org.gnome.desktop.background picture-uri file://path
+ *  - Windows : powershell SystemParametersInfo
+ *  - macOS : osascript -e 'tell application "System Events" to set picture ...'
+ *
+ * La photo est exportée vers un fichier temporaire avant d'être appliquée.
+ */
+export async function setWallpaper(
+  photoId: number
+): Promise<{ ok: boolean; error?: string }> {
+  const { exec } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const execAsync = promisify(exec)
+
+  const db = getDb()
+  const photo = db.prepare('SELECT filepath, filename FROM photos WHERE id = ?').get(photoId) as
+    | { filepath: string; filename: string }
+    | undefined
+  if (!photo) return { ok: false, error: 'Photo introuvable' }
+
+  const { stack } = getEditState(photoId)
+  const buffer = await renderEdited(photo.filepath, stack, { format: 'jpeg', quality: 95 })
+
+  const base = photo.filename.replace(/\.[^.]+$/, '')
+  const tmpFile = join(app.getPath('temp'), `picalibre-wallpaper-${base}.jpg`)
+  await writeFile(tmpFile, buffer)
+
+  const platform = process.platform
+  try {
+    if (platform === 'linux') {
+      // GNOME : gsettings ; KDE : pas de commande universelle, on essaie gsettings
+      await execAsync(`gsettings set org.gnome.desktop.background picture-uri "file://${tmpFile}"`)
+      await execAsync(`gsettings set org.gnome.desktop.background picture-uri-dark "file://${tmpFile}"`)
+    } else if (platform === 'win32') {
+      // PowerShell : SystemParametersInfo SPIF_SETDESKWALLPAPER
+      const psScript = `Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class W{[DllImport("user32.dll",CharSet=CharSet.Auto)]public static extern int SystemParametersInfo(int uAction,int uParam,string lpvParam,int fuWinIni);}'; [W]::SystemParametersInfo(20,0,"${tmpFile.replace(/\\/g, '\\\\')}",3)`
+      await execAsync(`powershell -NoProfile -Command "${psScript.replace(/"/g, '\\"')}"`)
+    } else if (platform === 'darwin') {
+      // macOS : osascript
+      await execAsync(`osascript -e 'tell application "System Events" to set picture of every desktop to "${tmpFile}"'`)
+    } else {
+      return { ok: false, error: `OS non supporté: ${platform}` }
+    }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: (err as Error).message }
+  }
+}
