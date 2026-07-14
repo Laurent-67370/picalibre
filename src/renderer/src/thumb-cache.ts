@@ -9,8 +9,10 @@
  * API :
  * - get(photoId, size) → ImageBitmap | null
  * - set(photoId, size, bitmap)
- * - evict() — force l'éviction manuelle (utile pour les tests)
+ * - has(photoId, size) → boolean
+ * - evict(photoId, size) — force l'éviction manuelle
  * - clear() — vide tout le cache
+ * - stats() → { hits, misses, size, maxEntries }
  */
 
 interface CacheEntry {
@@ -26,9 +28,18 @@ function makeKey(photoId: number, size: number): string {
 
 const DEFAULT_MAX_ENTRIES = 200
 
+export interface CacheStats {
+  hits: number
+  misses: number
+  size: number
+  maxEntries: number
+}
+
 export class ThumbLRUCache {
   private readonly maxEntries: number
   private readonly map: Map<string, CacheEntry> = new Map()
+  private hits = 0
+  private misses = 0
 
   constructor(maxEntries: number = DEFAULT_MAX_ENTRIES) {
     this.maxEntries = maxEntries
@@ -42,7 +53,12 @@ export class ThumbLRUCache {
   get(photoId: number, size: number): ImageBitmap | null {
     const key = makeKey(photoId, size)
     const entry = this.map.get(key)
-    if (!entry) return null
+    if (!entry) {
+      this.misses++
+      return null
+    }
+
+    this.hits++
 
     // Met à jour l'accès LRU : supprime puis ré-insère en fin de Map
     // (Map conserve l'ordre d'insertion en JS)
@@ -50,6 +66,13 @@ export class ThumbLRUCache {
     entry.lastAccess = Date.now()
     this.map.set(key, entry)
     return entry.bitmap
+  }
+
+  /**
+   * Vérifie si une entrée existe dans le cache sans mettre à jour le LRU.
+   */
+  has(photoId: number, size: number): boolean {
+    return this.map.has(makeKey(photoId, size))
   }
 
   /**
@@ -105,6 +128,19 @@ export class ThumbLRUCache {
   /** Nombre d'entrées actuellement dans le cache. */
   get size(): number {
     return this.map.size
+  }
+
+  /**
+   * Retourne les statistiques du cache (hits, misses, taille).
+   * Utile pour le debug et le monitoring des performances.
+   */
+  stats(): CacheStats {
+    return {
+      hits: this.hits,
+      misses: this.misses,
+      size: this.map.size,
+      maxEntries: this.maxEntries
+    }
   }
 }
 
