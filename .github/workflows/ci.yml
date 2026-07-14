@@ -93,7 +93,7 @@ jobs:
         run: |
           {
             echo "**E2E $RUNNER_OS** — run ${{ github.run_id }}"
-            for f in e2e-scan.log e2e-webgl.log e2e-packaged.log; do
+            for f in e2e-scan.log e2e-webgl.log e2e-packaged.log package.log; do
               echo; echo "\`$f\` :"; echo '```'
               tail -c 1500 "$f" 2>/dev/null | tr -d '\r' || echo '(absent)'
               echo '```'
@@ -103,7 +103,8 @@ jobs:
 
       # Packaging (sans publication) : AppImage/deb sur Linux, NSIS sur Windows
       - name: Package
-        run: npx electron-builder --publish never
+        shell: bash
+        run: npx electron-builder --publish never 2>&1 | tee package.log
 
       - name: E2E sur le binaire packagé (pile native dans l'asar.unpacked)
         if: runner.os == 'Linux'
