@@ -3,6 +3,44 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.1.0] — 2026-07-14
+
+### Ajouté — Cadres et bordures
+- Opération `border` dans le DSL EditStack (non-destructive, parité preview/export).
+- Styles : `solid` (bordure uniforme) et `polaroid` (bord bas 4× plus épais).
+- Paramètres : épaisseur (% de la largeur), couleur.
+- UI complète dans l'éditeur : checkbox, select style, slider, color picker.
+
+### Ajouté — Écran de veille photo (screensaver)
+- Diaporama plein écran après N minutes d'inactivité (configurable 1-30 min).
+- Réutilise le moteur Ken Burns (Slideshow.tsx).
+- Détection d'inactivité : mousemove, keydown, scroll, click, wheel, touchstart.
+- N'importe quelle interaction quitte le screensaver (curseur masqué).
+- Persistance des préférences dans localStorage.
+
+### Ajouté — Fond d'écran (wallpaper setter)
+- « Définir comme fond d'écran » dans le menu contextuel d'une photo.
+- Linux : `gsettings set org.gnome.desktop.background picture-uri`.
+- Windows : PowerShell `SystemParametersInfo SPIF_SETDESKWALLPAPER`.
+- macOS : `osascript` System Events.
+- Exporte la photo avec éditions appliquées vers un fichier temporaire.
+
+### Ajouté — Envoi par email
+- « Envoyer par email » dans le menu contextuel.
+- Export JPEG 1600px vers fichier temporaire.
+- Ouvre le dossier + lance le client mail (mailto:).
+
+### Ajouté — Export vers blog
+- « Exporter vers blog » dans le menu contextuel.
+- Redimensionne à 1024px, JPEG qualité 88.
+- Copie le chemin dans le presse-papiers, ouvre le navigateur.
+
+### Ajouté — Export groupé (batch export)
+- Handler IPC `photos:batchExport` : liste de photoIds, dossier, taille, format, qualité.
+- Tailles : original, 1920px, 1024px, 800px. Formats : JPEG, WebP, PNG.
+- Barre de progression via IPC (`batch:progress`).
+- Bouton « Export groupé » dans l'UI avec dialogue d'options.
+
 ## [2.0.0] — 2026-07-14
 
 ### Ajouté — Diaporama avec transitions Ken Burns

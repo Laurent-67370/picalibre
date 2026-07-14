@@ -1,12 +1,32 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.0.0-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.1.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 2.1.0
+
+- 🖼️ **Cadres et bordures** : ajoute des cadres à tes photos directement dans
+  l'éditeur. Style solid (bordure uniforme) ou polaroid (bord bas plus large).
+  Épaisseur et couleur configurables. Opération non-destructive du DSL EditStack
+  avec parité preview/export.
+- 🛌 **Écran de veille photo** : diaporama plein écran qui se lance
+  automatiquement après N minutes d'inactivité. Réutilise le moteur Ken Burns.
+  Activable et configurable dans les Réglages (1-30 min).
+- 🖥️ **Fond d'écran** : « Définir comme fond d'écran » dans le menu contextuel
+  d'une photo. Adaptation automatique selon l'OS (gsettings sur Linux,
+  SystemParametersInfo sur Windows, osascript sur macOS).
+- ✉️ **Envoi par email** : exporte la photo (éditions appliquées) en JPEG 1600px
+  et ouvre le client email par défaut.
+- 📝 **Export vers blog** : redimensionne à 1024px, copie le chemin dans le
+  presse-papiers, ouvre le navigateur vers ton blog.
+- 📤 **Export groupé** : sélectionne plusieurs photos et exporte-les en lot.
+  Choix de la taille (original/1920/1024/800), du format (JPEG/WebP/PNG) et de
+  la qualité. Barre de progression en temps réel.
 
 ## 🆕 Quoi de neuf en 2.0.0
 
