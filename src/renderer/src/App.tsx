@@ -13,7 +13,7 @@ declare global {
   }
 }
 
-const PAGE = 10000 // la virtualisation rend l'affichage indolore
+const PAGE_SIZE = 500 // chargement incrémental : page initiale, puis scroll
 
 const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre']
 const monthLabel = (t: number | null): string =>
@@ -149,6 +149,8 @@ export default function App(): JSX.Element {
   const [importProgress, setImportProgress] = useState<{ done: number; total: number; copied: number; skipped: number } | null>(null)
   const [view, setView] = useState<View | null>(null)
   const [photos, setPhotos] = useState<PhotoRow[]>([])
+  const [hasMore, setHasMore] = useState(false)
+  const loadingMoreRef = useRef(false)
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [editing, setEditing] = useState<PhotoRow | null>(null)
@@ -249,6 +251,7 @@ export default function App(): JSX.Element {
     setView(v)
     setManageFaces(false)
     setSelFaces(new Set())
+    setHasMore(false)
     if (v.type === 'map') {
       setPhotos([])
       return
@@ -280,16 +283,51 @@ export default function App(): JSX.Element {
     }
     const req =
       v.type === 'folder'
-        ? window.api.invoke('photos:byFolder', { folderId: v.id, offset: 0, limit: PAGE, ...filters })
+        ? window.api.invoke('photos:byFolder', { folderId: v.id, offset: 0, limit: PAGE_SIZE, ...filters })
         : v.type === 'timeline'
-          ? window.api.invoke('photos:timeline', { offset: 0, limit: PAGE, ...filters })
+          ? window.api.invoke('photos:timeline', { offset: 0, limit: PAGE_SIZE, ...filters })
         : v.type === 'album'
-          ? window.api.invoke('photos:byAlbum', { albumId: v.id, offset: 0, limit: PAGE, ...filters })
+          ? window.api.invoke('photos:byAlbum', { albumId: v.id, offset: 0, limit: PAGE_SIZE, ...filters })
           : v.type === 'person'
-            ? window.api.invoke('photos:byPerson', { personId: v.id, offset: 0, limit: PAGE, ...filters })
-            : window.api.invoke('photos:search', { query: v.query, offset: 0, limit: PAGE, ...filters })
-    req.then(setPhotos)
+            ? window.api.invoke('photos:byPerson', { personId: v.id, offset: 0, limit: PAGE_SIZE, ...filters })
+            : window.api.invoke('photos:search', { query: v.query, offset: 0, limit: PAGE_SIZE, ...filters })
+    req.then((result) => {
+      setPhotos(result)
+      setHasMore(result.length >= PAGE_SIZE)
+    })
   }, [])
+
+  /** Charge la page suivante de photos pour la vue courante et les concatène. */
+  const loadMore = useCallback(() => {
+    const v = viewRef.current
+    if (!v || loadingMoreRef.current || !hasMore) return
+    const filters = {
+      minStars: minStarsRef.current,
+      typeFilter: typeFilterRef.current,
+      sortMode: sortModeRef.current
+    }
+    const offset = photosRef.current.length
+    let req: Promise<PhotoRow[]>
+    if (v.type === 'folder') {
+      req = window.api.invoke('photos:byFolder', { folderId: v.id, offset, limit: PAGE_SIZE, ...filters })
+    } else if (v.type === 'timeline') {
+      req = window.api.invoke('photos:timeline', { offset, limit: PAGE_SIZE, ...filters })
+    } else if (v.type === 'album') {
+      req = window.api.invoke('photos:byAlbum', { albumId: v.id, offset, limit: PAGE_SIZE, ...filters })
+    } else if (v.type === 'person') {
+      req = window.api.invoke('photos:byPerson', { personId: v.id, offset, limit: PAGE_SIZE, ...filters })
+    } else if (v.type === 'search') {
+      req = window.api.invoke('photos:search', { query: v.query, offset, limit: PAGE_SIZE, ...filters })
+    } else {
+      return
+    }
+    loadingMoreRef.current = true
+    req.then((result) => {
+      setPhotos((prev) => prev.concat(result))
+      setHasMore(result.length >= PAGE_SIZE)
+      loadingMoreRef.current = false
+    })
+  }, [hasMore])
 
   const viewRef = useRef<View | null>(null)
   viewRef.current = view
@@ -601,6 +639,18 @@ export default function App(): JSX.Element {
     virtualizer.measure()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cellSize, columns, gridRows.length])
+
+  // ---- Infinite scroll : charger la page suivante quand on approche du bas ----
+  useEffect(() => {
+    const el = gridRef.current
+    if (!el) return
+    const onScroll = (): void => {
+      const remaining = el.scrollHeight - el.scrollTop - el.clientHeight
+      if (remaining < 500) loadMore()
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [loadMore])
 
   // Mois « épinglé » = groupe de la première ligne visible
   const firstVisible = virtualizer.getVirtualItems()[0]
@@ -976,8 +1026,8 @@ export default function App(): JSX.Element {
                     setFaceList(await window.api.invoke('faces:byPerson', { personId: view.id }))
                     setSelFaces(new Set())
                     window.api
-                      .invoke('photos:byPerson', { personId: view.id, offset: 0, limit: 10000 })
-                      .then(setPhotos)
+                      .invoke('photos:byPerson', { personId: view.id, offset: 0, limit: PAGE_SIZE })
+                      .then((result) => { setPhotos(result); setHasMore(result.length >= PAGE_SIZE) })
                   }}
                 >
                   ✖ Pas cette personne
@@ -989,8 +1039,8 @@ export default function App(): JSX.Element {
                     setFaceList(await window.api.invoke('faces:byPerson', { personId: view.id }))
                     setSelFaces(new Set())
                     window.api
-                      .invoke('photos:byPerson', { personId: view.id, offset: 0, limit: 10000 })
-                      .then(setPhotos)
+                      .invoke('photos:byPerson', { personId: view.id, offset: 0, limit: PAGE_SIZE })
+                      .then((result) => { setPhotos(result); setHasMore(result.length >= PAGE_SIZE) })
                   }}
                 >
                   ✂ Détacher (nouvelle personne)
