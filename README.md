@@ -1,12 +1,21 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.3.1-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.3.2-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 2.3.2
+
+- 🍎 **macOS : correction du message Gatekeeper « L'app est endommagée »
+  sur Apple Silicon** : le bundle `.app` n'était pas signé (pas de
+  certificat Apple Developer), ce qui déclenche ce message trompeur sur
+  arm64 au lieu du simple avertissement « développeur non identifié ».
+  L'app est désormais signée en ad-hoc pendant le build — plus besoin de
+  passer par `xattr -cr` après le téléchargement.
 
 ## 🆕 Quoi de neuf en 2.3.1
 

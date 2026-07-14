@@ -3,6 +3,17 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.3.2] — 2026-07-15
+
+### Corrigé
+- **macOS : message Gatekeeper « L'app est endommagée » sur Apple Silicon**.
+  Sans certificat Apple Developer, electron-builder ne signait pas le
+  `.app` — sur arm64, un bundle non signé déclenche ce message trompeur au
+  lieu du simple avertissement « développeur non identifié » obtenu sur
+  Intel. Ajout d'un hook `afterPack` qui signe le bundle en ad-hoc
+  (`codesign --deep --force --sign -`) juste avant la mise en DMG/zip —
+  suffisant pour satisfaire Gatekeeper localement, sans notarisation.
+
 ## [2.3.1] — 2026-07-14
 
 ### Corrigé — vérification approfondie des fonctionnalités 2.0.0→2.3.0
