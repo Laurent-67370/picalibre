@@ -12,14 +12,21 @@
  * → déplacer un fichier ne régénère jamais sa miniature.
  */
 import sharp from 'sharp'
-import { mkdir, access } from 'node:fs/promises'
-import { join, dirname } from 'node:path'
-import { cpus } from 'node:os'
+import { mkdir, access, unlink } from 'node:fs/promises'
+import { join, dirname, extname } from 'node:path'
+import { cpus, tmpdir } from 'node:os'
+import { exiftool } from 'exiftool-vendored'
 
 const SIZES = [256, 1024] as const
 const QUALITY = 82
 const CONCURRENCY = Math.max(2, (cpus().length || 4) - 1)
 const RESULT_BATCH = 50
+
+// Extensions RAW qui peuvent nécessiter un fallback exiftool
+// quand sharp/libvips ne sait pas décoder le fichier directement.
+const RAW_EXT = new Set([
+  '.cr2', '.nef', '.arw', '.raf', '.orf', '.dng'
+])
 
 export interface ThumbItem {
   photoId: number
@@ -53,12 +60,54 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
+/**
+ * Fallback exiftool : extrait la preview JPEG embarquée des fichiers RAW
+ * quand sharp/libvips ne peut pas décoder le fichier directement.
+ * - extractJpgFromRaw : JPEG embarqué dans les RAW (CR2, NEF, ARW…)
+ * - extractPreview : preview JPEG pour certains RAW avec preview
+ * Retourne un chemin temporaire vers le JPEG extrait, ou null si échec.
+ */
+async function extractEmbeddedPreview(filepath: string, photoId: number): Promise<string | null> {
+  const tmpFile = join(tmpdir(), `picalibre-prev-${photoId}-${Date.now()}.jpg`)
+  try {
+    await exiftool.extractJpgFromRaw(filepath, tmpFile)
+    return tmpFile
+  } catch {
+    // JpgFromRaw non disponible → essayer PreviewImage (PSD, certains RAW)
+  }
+  try {
+    await exiftool.extractPreview(filepath, tmpFile)
+    return tmpFile
+  } catch {
+    // les deux méthodes ont échoué
+  }
+  await unlink(tmpFile).catch(() => {})
+  return null
+}
+
 async function processItem(item: ThumbItem, cacheDir: string): Promise<ThumbResult[]> {
   const out: ThumbResult[] = []
+  const ext = extname(item.filepath).toLowerCase()
+  const needsFallback = RAW_EXT.has(ext)
+
+  let sourcePath = item.filepath
+  let tmpPreview: string | null = null
+
   try {
     // .rotate() sans argument applique l'orientation EXIF
-    const base = sharp(item.filepath, { failOn: 'none' }).rotate()
-    const meta = await base.metadata()
+    let base = sharp(sourcePath, { failOn: 'none' }).rotate()
+    let meta = await base.metadata()
+
+    // Si sharp ne peut pas lire les dimensions, c'est qu'il ne supporte
+    // pas ce format → fallback exiftool pour extraire la preview embarquée
+    if ((!meta.width || !meta.height) && needsFallback) {
+      tmpPreview = await extractEmbeddedPreview(sourcePath, item.photoId)
+      if (tmpPreview) {
+        sourcePath = tmpPreview
+        base = sharp(sourcePath, { failOn: 'none' }).rotate()
+        meta = await base.metadata()
+      }
+    }
 
     for (const size of SIZES) {
       const cachePath = cachePathFor(cacheDir, item.hash, size)
@@ -87,6 +136,9 @@ async function processItem(item: ThumbItem, cacheDir: string): Promise<ThumbResu
       ok: false,
       error: (err as Error).message
     })
+  } finally {
+    // Nettoyer le fichier temporaire de la preview exiftool
+    if (tmpPreview) await unlink(tmpPreview).catch(() => {})
   }
   return out
 }
