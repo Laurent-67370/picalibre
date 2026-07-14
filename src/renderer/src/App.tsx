@@ -15,6 +15,21 @@ declare global {
 
 const PAGE_SIZE = 500 // chargement incrémental : page initiale, puis scroll
 
+/**
+ * Overscan adaptatif pour TanStack Virtual.
+ * Plus de cœurs CPU = overscan plus élevé pour pré-rendre plus de vignettes
+ * hors écran et réduire le scintillement au scroll.
+ * - ≤4 cœurs : 4 (défaut, prudent)
+ * - 6-8 cœurs : 6
+ * - ≥10 cœurs : 8
+ */
+function computeAdaptiveOverscan(): number {
+  const cores = navigator.hardwareConcurrency ?? 4
+  if (cores >= 10) return 8
+  if (cores >= 6) return 6
+  return 4
+}
+
 const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre']
 const monthLabel = (t: number | null): string =>
   t ? `${MONTHS_FR[new Date(t * 1000).getMonth()]} ${new Date(t * 1000).getFullYear()}` : 'Sans date'
@@ -629,11 +644,13 @@ export default function App(): JSX.Element {
     return rows
   }, [shown, columns, grouped])
 
+  const [adaptiveOverscan] = useState(computeAdaptiveOverscan)
+
   const virtualizer = useVirtualizer({
     count: gridRows.length,
     getScrollElement: () => gridRef.current,
     estimateSize: (i) => (gridRows[i]?.kind === 'header' ? HEADER_H : ROW_H),
-    overscan: 4
+    overscan: adaptiveOverscan
   })
   useEffect(() => {
     virtualizer.measure()
