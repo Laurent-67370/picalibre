@@ -1,12 +1,23 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-1.9.2-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.9.3-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 1.9.3
+
+- 📜 **Pagination incrémentale** : la grille ne charge plus 10 000 photos
+  d'un coup. Un premier lot de 500 photos s'affiche instantanément, puis les
+  suivantes se chargent automatiquement au fur et à mesure du défilement.
+  Latence initiale drastiquement réduite sur les très grandes bibliothèques.
+- 🎯 **Overscan adaptatif** : TanStack Virtual ajuste automatiquement le
+  pré-rendu selon le nombre de cœurs du CPU — 8 lignes sur les machines
+  10+ cœurs, 6 sur les 6+ cœurs, 4 sur les plus modestes. Moins de
+  scintillement au scroll rapide sur les machines puissantes.
 
 ## 🆕 Quoi de neuf en 1.9.2
 

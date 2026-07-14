@@ -3,6 +3,26 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.9.3] — 2026-07-14
+
+### Performance — Pagination incrémentale (infinite scroll)
+- Remplacement de `PAGE = 10000` par `PAGE_SIZE = 500` — la grille ne
+  charge plus 10 000 photos d'un coup.
+- Premier lot de 500 photos affiché instantanément, puis chargement
+  automatique des pages suivantes au défilement.
+- `loadMore()` demande la page suivante via IPC avec `offset = photos.length`,
+  concatène les résultats, met à jour `hasMore`.
+- Listener scroll : déclenche `loadMore()` quand il reste < 500px à scroller.
+- Latence initiale drastiquement réduite sur les très grandes bibliothèques.
+
+### Performance — Overscan adaptatif
+- `computeAdaptiveOverscan()` — ajuste le pré-rendu TanStack Virtual selon
+  `navigator.hardwareConcurrency` :
+  - ≥ 10 cœurs → overscan 8 (pré-rendu plus large)
+  - ≥ 6 cœurs → overscan 6
+  - ≤ 4 cœurs → overscan 4 (prudent)
+- Moins de scintillement au scroll rapide sur les machines puissantes.
+
 ## [1.9.2] — 2026-07-14
 
 ### Performance — Filtrage et tri SQL
