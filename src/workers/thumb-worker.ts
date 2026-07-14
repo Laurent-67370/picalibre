@@ -22,10 +22,10 @@ const QUALITY = 82
 const CONCURRENCY = Math.max(2, (cpus().length || 4) - 1)
 const RESULT_BATCH = 50
 
-// Extensions RAW qui peuvent nécessiter un fallback exiftool
+// Extensions RAW et PSD qui peuvent nécessiter un fallback exiftool
 // quand sharp/libvips ne sait pas décoder le fichier directement.
-const RAW_EXT = new Set([
-  '.cr2', '.nef', '.arw', '.raf', '.orf', '.dng'
+const RAW_PSD_EXT = new Set([
+  '.cr2', '.nef', '.arw', '.raf', '.orf', '.dng', '.psd'
 ])
 
 export interface ThumbItem {
@@ -62,9 +62,9 @@ async function exists(p: string): Promise<boolean> {
 
 /**
  * Fallback exiftool : extrait la preview JPEG embarquée des fichiers RAW
- * quand sharp/libvips ne peut pas décoder le fichier directement.
+ * et PSD quand sharp/libvips ne peut pas décoder le fichier directement.
  * - extractJpgFromRaw : JPEG embarqué dans les RAW (CR2, NEF, ARW…)
- * - extractPreview : preview JPEG pour certains RAW avec preview
+ * - extractPreview : preview JPEG pour PSD et certains RAW avec preview
  * Retourne un chemin temporaire vers le JPEG extrait, ou null si échec.
  */
 async function extractEmbeddedPreview(filepath: string, photoId: number): Promise<string | null> {
@@ -88,7 +88,7 @@ async function extractEmbeddedPreview(filepath: string, photoId: number): Promis
 async function processItem(item: ThumbItem, cacheDir: string): Promise<ThumbResult[]> {
   const out: ThumbResult[] = []
   const ext = extname(item.filepath).toLowerCase()
-  const needsFallback = RAW_EXT.has(ext)
+  const needsFallback = RAW_PSD_EXT.has(ext)
 
   let sourcePath = item.filepath
   let tmpPreview: string | null = null

@@ -18,7 +18,9 @@ const IMAGE_EXT = new Set([
   '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tif', '.tiff', '.heic', '.heif', '.avif',
   // RAW natif — supportés via sharp (libvips) pour les miniatures
   // et exiftool-vendored pour les métadonnées
-  '.cr2', '.nef', '.arw', '.raf', '.orf', '.dng'
+  '.cr2', '.nef', '.arw', '.raf', '.orf', '.dng',
+  // PSD — sharp/libvips lit le calque fusionné ; fallback exiftool pour la preview
+  '.psd'
 ])
 const VIDEO_EXT = new Set(['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.3gp', '.mts'])
 const IGNORED_DIRS = new Set(['node_modules', '.git', '.thumbnails', '@eaDir', '.picalibre'])
