@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { AlbumRow, FaceLite, FolderRow, PersonRow, PhotoRow, ScanProgress, RendererApi } from '@shared/ipc'
 import MapView from './MapView'
 import Slideshow from './Slideshow'
+import FaceMovie from './FaceMovie'
 import Editor from './Editor'
 import Lightbox from './Lightbox'
 import InfoPanel from './InfoPanel'
@@ -167,6 +168,8 @@ export default function App(): JSX.Element {
   const [batchFormat, setBatchFormat] = useState<'jpeg' | 'webp' | 'png'>('jpeg')
   const [batchQuality, setBatchQuality] = useState(90)
   const [slideshow, setSlideshow] = useState(false)
+  const [faceMovieActive, setFaceMovieActive] = useState(false)
+  const [faceMovieFaces, setFaceMovieFaces] = useState<FaceLite[]>([])
   const [screensaverActive, setScreensaverActive] = useState(false)
   const [screensaverEnabled, setScreensaverEnabled] = useState<boolean>(
     () => localStorage.getItem('picalibre.screensaver.enabled') === 'true'
@@ -1100,6 +1103,17 @@ export default function App(): JSX.Element {
               >
                 {manageFaces ? '▣ Grille photos' : '👥 Gérer les visages'}
               </button>
+              <button
+                onClick={async () => {
+                  const fl = await window.api.invoke('faces:byPerson', { personId: view.id })
+                  setFaceMovieFaces(fl)
+                  setFaceMovieActive(true)
+                }}
+                disabled={photos.length === 0}
+                title="Diaporama centré sur le visage de cette personne"
+              >
+                🎬 Face Movie
+              </button>
               <select
                 value={mergeTarget}
                 onChange={(e) => setMergeTarget(e.target.value === '' ? '' : Number(e.target.value))}
@@ -1790,6 +1804,13 @@ export default function App(): JSX.Element {
         />
       )}
       {editing && <Editor photo={editing} onClose={() => setEditing(null)} />}
+      {faceMovieActive && (
+        <FaceMovie
+          photos={shown}
+          faces={faceMovieFaces}
+          onClose={() => setFaceMovieActive(false)}
+        />
+      )}
       {slideshow && !screensaverActive && (
         <Slideshow
           photos={tray.size > 0 ? [...tray.values()] : shown}
