@@ -17,7 +17,7 @@ import { utilityProcess, BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { opendir } from 'node:fs/promises'
 import { cpus } from 'node:os'
-import { getDb, getKnownFiles, upsertScannedBatch } from '../db'
+import { getDb, getKnownFilesForRoots, upsertScannedBatch } from '../db'
 import { runPostScanPipeline } from './pipeline'
 
 /** Nombre maximum de workers en parallèle (cpus − 1, au moins 1). */
@@ -107,7 +107,6 @@ export async function startScan(win: BrowserWindow, rootsOverride?: string[]): P
   if (roots.length === 0) return
 
   const partitions = await partitionRoots(roots)
-  const knownFiles = getKnownFiles()
 
   // État d'agrégation
   const progress: WorkerProgress = { filesFound: 0, filesProcessed: 0, currentPath: null }
@@ -131,6 +130,10 @@ export async function startScan(win: BrowserWindow, rootsOverride?: string[]): P
   }
 
   for (const partition of partitions) {
+    // Ne charger que les fichiers connus de cette partition — réduit
+    // l'empreinte mémoire de 50-100 Mo sur les grosses bibliothèques
+    // (avant: toute la table photos en Map JS pour chaque worker).
+    const knownFiles = getKnownFilesForRoots(partition.roots, partition.shallow)
     const worker = utilityProcess.fork(join(__dirname, 'scan-worker.js'))
     worker.postMessage({
       type: 'scan',

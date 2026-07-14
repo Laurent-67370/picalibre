@@ -62,11 +62,65 @@ export function getDb(): Database.Database {
   return db
 }
 
-/** Carte (filepath → size/mtime) des fichiers connus, pour le rescan incrémental. */
+/** Carte (filepath → size/mtime) des fichiers connus, pour le rescan incrémental.
+ *  @deprecated Préférer getKnownFilesForRoots() qui ne charge que les fichiers
+ *  d'une partition, réduisant l'empreinte mémoire de 50-100 Mo sur les grosses
+ *  bibliothèques (500k+ photos). */
 export function getKnownFiles(): Record<string, { size: number; mtime: number }> {
   const rows = db
     .prepare(`SELECT filepath, file_size AS size, file_mtime AS mtime FROM photos WHERE status != 'trashed'`)
     .all() as { filepath: string; size: number; mtime: number }[]
+  const map: Record<string, { size: number; mtime: number }> = {}
+  for (const r of rows) map[r.filepath] = { size: r.size, mtime: r.mtime }
+  return map
+}
+
+/**
+ * Carte (filepath → size/mtime) filtrée par racines de scan.
+ *
+ * Au lieu de charger toute la table photos en mémoire (50-100 Mo pour 500k
+ * photos), cette fonction ne sélectionne que les fichiers dont le chemin
+ * commence par l'une des racines de la partition. Chaque worker du scan
+ * multi-worker ne reçoit ainsi que les fichiers connus de sa partition,
+ * réduisant d'autant l'empreinte mémoire et la taille du message IPC.
+ *
+ * @param roots  Racines de scan de la partition (ex: ["/photos/vacances"])
+ * @param shallow Si true, ne retourner que les fichiers directement dans roots[]
+ *                (pas les sous-dossiers) — utilisé par le worker « shallow ».
+ */
+export function getKnownFilesForRoots(
+  roots: string[],
+  shallow: boolean
+): Record<string, { size: number; mtime: number }> {
+  if (roots.length === 0) return {}
+
+  // Détecter le séparateur de chemin depuis les racines (les chemins viennent
+  // tous de la même plateforme). Aucun de ces caractères n'est un joker LIKE.
+  const sep = roots[0].includes('\\') ? '\\' : '/'
+
+  // Construit les conditions LIKE parameterisées — une par racine.
+  // shallow: filepath LIKE 'root/%' AND filepath NOT LIKE 'root/%/%'
+  // recursif: filepath LIKE 'root/%'
+  const cond = shallow
+    ? '(filepath LIKE ? AND filepath NOT LIKE ?)'
+    : 'filepath LIKE ?'
+  const conditions = roots.map(() => cond).join(' OR ')
+
+  // Construit les paramètres dans le même ordre que les conditions.
+  const params: string[] = []
+  for (const r of roots) {
+    params.push(`${r}${sep}%`)
+    if (shallow) params.push(`${r}${sep}%${sep}%`)
+  }
+
+  const rows = db
+    .prepare(
+      `SELECT filepath, file_size AS size, file_mtime AS mtime
+       FROM photos
+       WHERE status != 'trashed' AND (${conditions})`
+    )
+    .all(...params) as { filepath: string; size: number; mtime: number }[]
+
   const map: Record<string, { size: number; mtime: number }> = {}
   for (const r of rows) map[r.filepath] = { size: r.size, mtime: r.mtime }
   return map
