@@ -15,7 +15,7 @@ import { startWatchers } from './services/watcher'
 import { importFromDevice, importFileList } from './services/importer'
 import { relocateLibrary } from './services/relocate'
 import { privacyStatus, setPassword, unlock, lock, isUnlocked } from './services/privacy'
-import { batchExport, exportMetadataCsv, emailShare, setWallpaper } from './services/exporter'
+import { batchExport, exportMetadataCsv, emailShare, emailPhoto, setWallpaper } from './services/exporter'
 import { printPhotos } from './services/printer'
 import { makeCollage, CollageItem } from './services/collage'
 import { makeMovie, MovieItem } from './services/movie'
@@ -405,6 +405,16 @@ function registerIpc(): void {
             }
           })
         }
+      },
+      {
+        label: "✉️ Envoyer par email",
+        click: () => {
+          void emailPhoto(photoId).then((r) => {
+            if (!r.ok) {
+              dialog.showErrorBox('Email', `Échec: ${r.error ?? 'erreur inconnue'}`)
+            }
+          })
+        }
       }
     ])
     menu.popup({ window: mainWindow })
@@ -559,6 +569,7 @@ function registerIpc(): void {
   )
   ipcMain.handle('photos:print', (_e, { photoIds, perPage }) => printPhotos(photoIds, perPage))
   ipcMain.handle('share:email', (_e, { photoIds }) => emailShare(mainWindow, photoIds))
+  ipcMain.handle('photos:email', (_e, { photoId }) => emailPhoto(photoId))
   ipcMain.handle('duplicates:list', () => {
     const db = getDb()
     const hashes = db

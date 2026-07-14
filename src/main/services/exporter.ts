@@ -102,6 +102,32 @@ export async function exportMetadataCsv(
   return { rows: lines.length - 1 }
 }
 
+/** Email (photo unique via menu contextuel) : export JPEG temp + ouverture dossier + client mail. */
+export async function emailPhoto(photoId: number): Promise<{ ok: boolean; error?: string }> {
+  const db = getDb()
+  const photo = db.prepare('SELECT filepath, filename FROM photos WHERE id = ?').get(photoId) as
+    | { filepath: string; filename: string }
+    | undefined
+  if (!photo) return { ok: false, error: 'Photo introuvable' }
+
+  try {
+    const { stack } = getEditState(photoId)
+    const buffer = await renderEdited(photo.filepath, stack, { format: 'jpeg', quality: 90, maxSize: 1600 })
+    const base = photo.filename.replace(/\.[^.]+$/, '')
+    const tmpFile = join(app.getPath('temp'), `picalibre-email-${base}-${Date.now()}.jpg`)
+    await writeFile(tmpFile, buffer)
+    shell.showItemInFolder(tmpFile)
+    void shell.openExternal(
+      `mailto:?subject=${encodeURIComponent('Photo')}&body=${encodeURIComponent(
+        "La photo est prête à être jointe — le dossier vient de s'ouvrir."
+      )}`
+    )
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: (err as Error).message }
+  }
+}
+
 /** Email : copies 1600 px dans un dossier temporaire + client mail + dossier ouvert. */
 export async function emailShare(
   win: BrowserWindow,

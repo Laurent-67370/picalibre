@@ -8,3 +8,4 @@ release/
 *.local
 web-server/data/
 .git-credentials-temp
+.push_url.txt
