@@ -102,6 +102,32 @@ export async function exportMetadataCsv(
   return { rows: lines.length - 1 }
 }
 
+/**
+ * Export vers blog : redimensionne à 1024 px, copie le chemin dans le
+ * presse-papiers, ouvre le navigateur par défaut vers un site de blog.
+ */
+export async function blogExport(photoId: number): Promise<{ ok: boolean; error?: string }> {
+  const { clipboard } = await import('electron')
+  const db = getDb()
+  const photo = db.prepare('SELECT filepath, filename FROM photos WHERE id = ?').get(photoId) as
+    | { filepath: string; filename: string }
+    | undefined
+  if (!photo) return { ok: false, error: 'Photo introuvable' }
+
+  try {
+    const { stack } = getEditState(photoId)
+    const buffer = await renderEdited(photo.filepath, stack, { format: 'jpeg', quality: 88, maxSize: 1024 })
+    const base = photo.filename.replace(/\.[^.]+$/, '')
+    const tmpFile = join(app.getPath('temp'), `picalibre-blog-${base}-${Date.now()}.jpg`)
+    await writeFile(tmpFile, buffer)
+    clipboard.writeText(tmpFile)
+    void shell.openExternal('https://wordpress.com/post')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: (err as Error).message }
+  }
+}
+
 /** Email (photo unique via menu contextuel) : export JPEG temp + ouverture dossier + client mail. */
 export async function emailPhoto(photoId: number): Promise<{ ok: boolean; error?: string }> {
   const db = getDb()

@@ -15,7 +15,7 @@ import { startWatchers } from './services/watcher'
 import { importFromDevice, importFileList } from './services/importer'
 import { relocateLibrary } from './services/relocate'
 import { privacyStatus, setPassword, unlock, lock, isUnlocked } from './services/privacy'
-import { batchExport, exportMetadataCsv, emailShare, emailPhoto, setWallpaper } from './services/exporter'
+import { batchExport, exportMetadataCsv, emailShare, emailPhoto, blogExport, setWallpaper } from './services/exporter'
 import { printPhotos } from './services/printer'
 import { makeCollage, CollageItem } from './services/collage'
 import { makeMovie, MovieItem } from './services/movie'
@@ -415,6 +415,16 @@ function registerIpc(): void {
             }
           })
         }
+      },
+      {
+        label: "📝 Exporter vers blog",
+        click: () => {
+          void blogExport(photoId).then((r) => {
+            if (!r.ok) {
+              dialog.showErrorBox('Blog', `Échec: ${r.error ?? 'erreur inconnue'}`)
+            }
+          })
+        }
       }
     ])
     menu.popup({ window: mainWindow })
@@ -570,6 +580,7 @@ function registerIpc(): void {
   ipcMain.handle('photos:print', (_e, { photoIds, perPage }) => printPhotos(photoIds, perPage))
   ipcMain.handle('share:email', (_e, { photoIds }) => emailShare(mainWindow, photoIds))
   ipcMain.handle('photos:email', (_e, { photoId }) => emailPhoto(photoId))
+  ipcMain.handle('photos:blogExport', (_e, { photoId }) => blogExport(photoId))
   ipcMain.handle('duplicates:list', () => {
     const db = getDb()
     const hashes = db
