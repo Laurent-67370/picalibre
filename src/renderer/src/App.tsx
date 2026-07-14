@@ -6,6 +6,7 @@ import Slideshow from './Slideshow'
 import Editor from './Editor'
 import Lightbox from './Lightbox'
 import InfoPanel from './InfoPanel'
+import ThumbCanvas from './ThumbCanvas'
 
 declare global {
   interface Window {
@@ -1472,11 +1473,12 @@ export default function App(): JSX.Element {
                               e.dataTransfer.effectAllowed = 'copy'
                             }}
                           >
-                            <ThumbImg
+                            <ThumbCanvas
                               photoId={p.id}
                               v={p.hash_xxh3}
                               size={256}
                               alt={p.filename}
+                              fitMode={fitMode}
                               onClick={(e) => selectPhoto(p, gi, e)}
                               onDoubleClick={() => setLightboxIndex(gi)}
                               onContextMenu={() => {
@@ -1486,13 +1488,12 @@ export default function App(): JSX.Element {
                               style={{
                                 width: '100%',
                                 aspectRatio: '1',
-                                objectFit: fitMode,
                                 borderRadius: 4,
                                 background: '#14171c',
-                                display: 'block',
                                 cursor: 'pointer',
                                 outline: inTray ? '3px solid #2f6feb' : 'none',
-                                outlineOffset: -3
+                                outlineOffset: -3,
+                                overflow: 'hidden'
                               }}
                             />
                             {inTray && (
