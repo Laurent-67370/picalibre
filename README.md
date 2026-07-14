@@ -1,14 +1,26 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-1.9.1-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.9.2-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
 
-## 🆕 Quoi de neuf en 1.9.1
+## 🆕 Quoi de neuf en 1.9.2
+
+- 🧠 **Filtrage et tri SQL** : les filtres par note (étoiles) et par type
+  (photo/vidéo) sont désormais gérés directement par SQLite via ses index
+  partiels, au lieu d'un `Array.filter` + `Array.sort` en JavaScript sur
+  10 000 photos. Le tri (date, nom, note) se fait aussi en SQL —
+  quasi-instantané même sur de très grandes bibliothèques.
+- 💾 **Scan économe en mémoire** : `getKnownFiles()` ne charge plus toute la
+  table photos en RAM. Chaque worker du scan ne reçoit que les fichiers
+  connus de sa partition — réduction de 50 à 100 Mo d'empreinte mémoire sur
+  les bibliothèques de plusieurs centaines de milliers de photos.
+
+## Quoi de neuf en 1.9.1
 
 - 🔍 **Recherche plein texte FTS5** : la recherche passe sur un index SQLite
   **FTS5** ultra-rapide — une seule requête intercepte le nom de fichier, la

@@ -3,6 +3,30 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [1.9.2] — 2026-07-14
+
+### Performance — Filtrage et tri SQL
+- Les filtres **minStars** (note minimale) et **typeFilter** (photo/vidéo)
+  sont désormais appliqués côté SQL via `buildFilterClauses()`, utilisant
+  les index partiels existants (`idx_photos_grid_folder`,
+  `idx_photos_grid_timeline`).
+- Le tri (`sortMode`) se fait en SQL via `buildOrderBy()` — date desc/asc,
+  nom, note — au lieu d'un `Array.sort` en JavaScript.
+- 5 handlers IPC mis à jour : `photos:timeline`, `photos:byFolder`,
+  `photos:byAlbum`, `photos:search`, `photos:byPerson`.
+- `App.tsx` : suppression du `useMemo` de filtrage/tri JS, passage des
+  filtres via IPC, rechargement automatique de la vue quand les filtres
+  changent.
+- Types `GridFilters` / `SortMode` / `TypeFilter` ajoutés dans `ipc.ts`.
+
+### Performance — Scan économe en mémoire (getKnownFiles)
+- `getKnownFiles()` ne charge plus toute la table photos en `Map` JS.
+- Nouvelle fonction `getKnownFilesForRoots(roots, shallow)` filtre par
+  partition — chaque worker du scan multi-worker ne reçoit que les fichiers
+  connus de sa partition.
+- Réduction de 50 à 100 Mo d'empreinte mémoire sur les bibliothèques de
+  plusieurs centaines de milliers de photos.
+
 ## [1.9.1] — 2026-07-14
 
 ### Ajouté — Recherche plein texte FTS5
