@@ -18,6 +18,14 @@ export interface BatchExportOptions {
   watermark: string | null
 }
 
+export interface BatchExportAdvancedOptions {
+  photoIds: number[]
+  destDir: string
+  maxSize: number | null  // null = original, ou 1920, 1024, 800…
+  format: 'jpeg' | 'webp' | 'png'
+  quality: number
+}
+
 export async function batchExport(
   win: BrowserWindow,
   opts: BatchExportOptions
@@ -48,6 +56,44 @@ export async function batchExport(
     }
     win.webContents.send('export:progress', {
       done: exported + errors,
+      total: opts.photoIds.length
+    })
+  }
+  return { exported, errors }
+}
+
+/** Export groupé avancé : choix du format (jpeg/webp/png), taille, qualité.
+ *  Envoie la progression via 'batch:progress' (current, total). */
+export async function batchExportAdvanced(
+  win: BrowserWindow,
+  opts: BatchExportAdvancedOptions
+): Promise<{ exported: number; errors: number }> {
+  const db = getDb()
+  const getPhoto = db.prepare('SELECT filepath, filename FROM photos WHERE id = ?')
+  let exported = 0
+  let errors = 0
+  await mkdir(opts.destDir, { recursive: true })
+
+  const ext = opts.format === 'jpeg' ? 'jpg' : opts.format
+  for (const id of opts.photoIds) {
+    try {
+      const photo = getPhoto.get(id) as { filepath: string; filename: string } | undefined
+      if (!photo) throw new Error('photo introuvable')
+      const { stack } = getEditState(id)
+      const renderOpts: ExportOptions = {
+        format: opts.format,
+        quality: opts.quality,
+        maxSize: opts.maxSize ?? undefined
+      }
+      const buffer = await renderEdited(photo.filepath, stack, renderOpts)
+      const base = photo.filename.replace(/\.[^.]+$/, '')
+      await writeFile(join(opts.destDir, `${base}.${ext}`), buffer)
+      exported++
+    } catch {
+      errors++
+    }
+    win.webContents.send('batch:progress', {
+      current: exported + errors,
       total: opts.photoIds.length
     })
   }

@@ -143,6 +143,10 @@ export interface IpcInvokeMap {
   'share:email': { req: { photoIds: number[] }; res: { dir: string } }
   'photos:email': { req: { photoId: number }; res: { ok: boolean; error?: string } }
   'photos:blogExport': { req: { photoId: number }; res: { ok: boolean; error?: string } }
+  'photos:batchExport': {
+    req: { photoIds: number[]; maxSize: number | null; format: 'jpeg' | 'webp' | 'png'; quality: number }
+    res: { exported: number; errors: number; canceled: boolean }
+  }
   'photos:setWallpaper': { req: { photoId: number }; res: { ok: boolean; error?: string } }
   'import:dropped': {
     req: { paths: string[] }
@@ -189,6 +193,7 @@ export interface IpcEventMap {
   'persons:changed': Record<string, never>
   'import:progress': { done: number; total: number; copied: number; skipped: number }
   'export:progress': { done: number; total: number }
+  'batch:progress': { current: number; total: number }
   'movie:progress': { done: number; total: number }
 }
 

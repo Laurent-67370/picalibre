@@ -161,6 +161,11 @@ export default function App(): JSX.Element {
   const [exportPreset, setExportPreset] = useState<number | 0>(0)
   const [watermark, setWatermark] = useState('')
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null)
+  const [batchExportOpen, setBatchExportOpen] = useState(false)
+  const [batchSize, setBatchSize] = useState<number | 0>(0)
+  const [batchFormat, setBatchFormat] = useState<'jpeg' | 'webp' | 'png'>('jpeg')
+  const [batchQuality, setBatchQuality] = useState(90)
   const [slideshow, setSlideshow] = useState(false)
   const [screensaverActive, setScreensaverActive] = useState(false)
   const [screensaverEnabled, setScreensaverEnabled] = useState<boolean>(
@@ -449,8 +454,12 @@ export default function App(): JSX.Element {
     const off6 = window.api.on('export:progress', (p) => {
       setExportProgress(p.done >= p.total ? null : p)
     })
+    const offBP = window.api.on('batch:progress', (p) => {
+      setBatchProgress(p.current >= p.total ? null : p)
+    })
     void off5
     void off6
+    void offBP
     return () => {
       off1()
       off2()
@@ -460,6 +469,7 @@ export default function App(): JSX.Element {
       offM()
       offWS()
       offP()
+      offBP()
     }
   }, [refreshSidebar, loadView])
 
@@ -499,6 +509,26 @@ export default function App(): JSX.Element {
     })
     setExportProgress(null)
     alert(`Export : ${r.exported} réussie(s), ${r.errors} erreur(s).`)
+  }
+
+  const trayBatchExport = async (): Promise<void> => {
+    if (trayIds.length === 0) return
+    setBatchExportOpen(true)
+  }
+
+  const doBatchExport = async (): Promise<void> => {
+    setBatchExportOpen(false)
+    setBatchProgress({ current: 0, total: trayIds.length })
+    const r = await window.api.invoke('photos:batchExport', {
+      photoIds: trayIds,
+      maxSize: batchSize === 0 ? null : batchSize,
+      format: batchFormat,
+      quality: batchQuality
+    })
+    setBatchProgress(null)
+    if (!r.canceled) {
+      alert(`Export groupé : ${r.exported} réussie(s), ${r.errors} erreur(s).`)
+    }
   }
 
   const trayCsv = async () => {
@@ -1924,6 +1954,9 @@ export default function App(): JSX.Element {
               <button onClick={trayExport} title="Exporter les photos (éditions appliquées)">
                 💾 Exporter
               </button>
+              <button onClick={trayBatchExport} title="Export groupé avec choix taille/format/qualité">
+                📤 Export groupé
+              </button>
               <button onClick={() => window.api.invoke('photos:print', { photoIds: trayIds, perPage: 4 })} title="Imprimer, 4 par page">
                 🖨 Imprimer
               </button>
@@ -1946,6 +1979,122 @@ export default function App(): JSX.Element {
           </>
         )}
       </footer>
+
+      {/* ---- Dialogue d'options pour l'export groupé ---- */}
+      {batchExportOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 250,
+            background: '#0f172acc',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={() => setBatchExportOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--card)',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              minWidth: 360
+            }}
+          >
+            <h3 style={{ margin: 0 }}>📤 Export groupé ({trayIds.length} photo(s))</h3>
+            <label style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              Taille
+              <select
+                value={batchSize}
+                onChange={(e) => setBatchSize(Number(e.target.value))}
+              >
+                <option value={0}>Original</option>
+                <option value={1920}>1920 px</option>
+                <option value={1024}>1024 px</option>
+                <option value={800}>800 px</option>
+              </select>
+            </label>
+            <label style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              Format
+              <select
+                value={batchFormat}
+                onChange={(e) => setBatchFormat(e.target.value as 'jpeg' | 'webp' | 'png')}
+              >
+                <option value="jpeg">JPEG</option>
+                <option value="webp">WebP</option>
+                <option value="png">PNG</option>
+              </select>
+            </label>
+            <label style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              Qualité : {batchQuality}
+              <input
+                type="range"
+                min={50}
+                max={100}
+                step={5}
+                value={batchQuality}
+                onChange={(e) => setBatchQuality(Number(e.target.value))}
+              />
+            </label>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setBatchExportOpen(false)}>Annuler</button>
+              <button className="primary" onClick={doBatchExport}>
+                Choisir le dossier et exporter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Barre de progression de l'export groupé ---- */}
+      {batchProgress && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 240,
+            background: '#111827',
+            borderTop: '1px solid var(--border)',
+            padding: '10px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            fontSize: 13
+          }}
+        >
+          <span>📤 Export groupé…</span>
+          <div
+            style={{
+              flex: 1,
+              height: 8,
+              background: 'var(--bg)',
+              borderRadius: 4,
+              overflow: 'hidden'
+            }}
+          >
+            <div
+              style={{
+                width: `${batchProgress.total > 0 ? (batchProgress.current / batchProgress.total) * 100 : 0}%`,
+                height: '100%',
+                background: 'var(--accent)',
+                borderRadius: 4,
+                transition: 'width 0.2s ease'
+              }}
+            />
+          </div>
+          <span style={{ color: '#94a3b8' }}>
+            {batchProgress.current}/{batchProgress.total}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

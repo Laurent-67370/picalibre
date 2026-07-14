@@ -15,7 +15,7 @@ import { startWatchers } from './services/watcher'
 import { importFromDevice, importFileList } from './services/importer'
 import { relocateLibrary } from './services/relocate'
 import { privacyStatus, setPassword, unlock, lock, isUnlocked } from './services/privacy'
-import { batchExport, exportMetadataCsv, emailShare, emailPhoto, blogExport, setWallpaper } from './services/exporter'
+import { batchExport, batchExportAdvanced, exportMetadataCsv, emailShare, emailPhoto, blogExport, setWallpaper } from './services/exporter'
 import { printPhotos } from './services/printer'
 import { makeCollage, CollageItem } from './services/collage'
 import { makeMovie, MovieItem } from './services/movie'
@@ -581,6 +581,21 @@ function registerIpc(): void {
   ipcMain.handle('share:email', (_e, { photoIds }) => emailShare(mainWindow, photoIds))
   ipcMain.handle('photos:email', (_e, { photoId }) => emailPhoto(photoId))
   ipcMain.handle('photos:blogExport', (_e, { photoId }) => blogExport(photoId))
+  ipcMain.handle('photos:batchExport', async (_e, { photoIds, maxSize, format, quality }) => {
+    const pick = await dialog.showOpenDialog(mainWindow, {
+      title: "Dossier d'export groupé",
+      properties: ['openDirectory', 'createDirectory']
+    })
+    if (pick.canceled || !pick.filePaths[0]) return { exported: 0, errors: 0, canceled: true }
+    const r = await batchExportAdvanced(mainWindow, {
+      photoIds,
+      destDir: pick.filePaths[0],
+      maxSize,
+      format,
+      quality
+    })
+    return { ...r, canceled: false }
+  })
   ipcMain.handle('duplicates:list', () => {
     const db = getDb()
     const hashes = db
