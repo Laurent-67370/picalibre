@@ -32,6 +32,16 @@ export interface RetouchStroke {
   r: number // rayon normalisé
 }
 
+/** Style de bordure/cadre. */
+export type BorderStyle = 'solid' | 'polaroid'
+
+/** Paramètres d'une opération de bordure/cadre sur photo. */
+export interface BorderOpParams {
+  thickness: number // épaisseur en ratio de la largeur (0..0.15), ex: 0.03 = 3% de la largeur
+  color: string // couleur CSS hex, ex: '#ffffff'
+  style: BorderStyle // 'solid' = bordure uniforme, 'polaroid' = bord fine + bord bas plus large
+}
+
 /** Paramètres d'une opération de texte sur photo. */
 export interface TextOpParams {
   content: string
@@ -56,6 +66,7 @@ export type EditOp =
   | { type: 'redeye'; params: { zones: RedeyeZone[] } }
   | { type: 'retouch'; params: { strokes: RetouchStroke[] } }
   | { type: 'text'; params: TextOpParams }
+  | { type: 'border'; params: BorderOpParams }
   | { type: ColorOpType; params: { value: number } } // -1..1 (fill_light : 0..1)
 
 export interface EditStack {
@@ -86,7 +97,8 @@ export function upsertOp(stack: EditStack, op: EditOp): EditStack {
     (op.type === 'filter' && op.params.intensity === 0) ||
     (op.type === 'redeye' && op.params.zones.length === 0) ||
     (op.type === 'retouch' && op.params.strokes.length === 0) ||
-    (op.type === 'text' && op.params.content.trim() === '')
+    (op.type === 'text' && op.params.content.trim() === '') ||
+    (op.type === 'border' && op.params.thickness <= 0)
   if (!isNeutral) ops.push(op)
   return { version: 1, ops }
 }
@@ -121,7 +133,8 @@ export function applyColorOps(
       o.type !== 'straighten' &&
       o.type !== 'redeye' &&
       o.type !== 'retouch' &&
-      o.type !== 'text'
+      o.type !== 'text' &&
+      o.type !== 'border'
   )
   if (colorOps.length === 0) return
 
@@ -423,6 +436,16 @@ export function getTextOp(
   stack: EditStack
 ): Extract<EditOp, { type: 'text' }> | undefined {
   return getOp(stack, 'text')
+}
+
+/**
+ * Récupère l'opération border du stack, le cas échéant.
+ * Une seule instance de bordure est autorisée (modèle upsert).
+ */
+export function getBorderOp(
+  stack: EditStack
+): Extract<EditOp, { type: 'border' }> | undefined {
+  return getOp(stack, 'border')
 }
 
 /**

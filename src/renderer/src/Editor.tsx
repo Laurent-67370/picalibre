@@ -6,11 +6,14 @@ import {
   FilterName,
   RedeyeZone,
   TextOpParams,
+  BorderOpParams,
+  BorderStyle,
   computeAutoColor,
   computeAutoContrast,
   emptyStack,
   getOp,
   getTextOp,
+  getBorderOp,
   upsertOp
 } from '@shared/edit-engine'
 import { renderPreview } from './render-canvas'
@@ -774,6 +777,83 @@ export default function Editor({
                         style={{ width: '100%', padding: 6, marginBottom: 12, fontSize: 12 }}
                       >
                         ✖ Retirer le texte
+                      </button>
+                    </>
+                  )}
+                </>
+              )
+            })()}
+
+            {/* ---- Bordure / cadre ---- */}
+            <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>CADRE</div>
+            {(() => {
+              const borderOp = getBorderOp(stack)
+              const borderParams: BorderOpParams = borderOp?.params ?? {
+                thickness: 0.03,
+                color: '#ffffff',
+                style: 'solid'
+              }
+              const updateBorder = (partial: Partial<BorderOpParams>): void => {
+                applyOp(
+                  { type: 'border', params: { ...borderParams, ...partial } },
+                  'border'
+                )
+              }
+              return (
+                <>
+                  <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={!!borderOp}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          applyOp({ type: 'border', params: borderParams }, 'border')
+                        } else {
+                          applyOp({ type: 'border', params: { ...borderParams, thickness: 0 } }, 'border_remove')
+                        }
+                      }}
+                    />
+                    Activer le cadre
+                  </label>
+                  {borderOp && (
+                    <>
+                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                        Style
+                        <select
+                          value={borderParams.style}
+                          onChange={(e) => updateBorder({ style: e.target.value as BorderStyle })}
+                          style={{ width: '100%', marginTop: 4 }}
+                        >
+                          <option value="solid">Solid (uniforme)</option>
+                          <option value="polaroid">Polaroid (bord bas large)</option>
+                        </select>
+                      </label>
+                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                        Épaisseur : {Math.round(borderParams.thickness * 100)}% de la largeur
+                        <input
+                          type="range"
+                          min={0.005}
+                          max={0.15}
+                          step={0.005}
+                          value={borderParams.thickness}
+                          onChange={(e) => updateBorder({ thickness: parseFloat(e.target.value) })}
+                          style={{ width: '100%' }}
+                        />
+                      </label>
+                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                        Couleur
+                        <input
+                          type="color"
+                          value={borderParams.color}
+                          onChange={(e) => updateBorder({ color: e.target.value })}
+                          style={{ width: '100%', height: 30, marginTop: 4, padding: 0 }}
+                        />
+                      </label>
+                      <button
+                        onClick={() => applyOp({ type: 'border', params: { ...borderParams, thickness: 0 } }, 'border_remove')}
+                        style={{ width: '100%', padding: 6, marginBottom: 12, fontSize: 12 }}
+                      >
+                        ✖ Retirer le cadre
                       </button>
                     </>
                   )}

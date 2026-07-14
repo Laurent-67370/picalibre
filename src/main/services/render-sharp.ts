@@ -16,6 +16,7 @@ import {
   cropRectPx,
   straightenAngle,
   getTextOp,
+  getBorderOp,
   escapeSvgText,
   hexToSvgFill
 } from '../../shared/edit-engine'
@@ -131,6 +132,31 @@ export async function renderEdited(
       .png()
       .toBuffer()
     out = sharp(composited)
+  }
+
+  // Bordure/cadre : appliqué APRÈS le texte et le filigrane, car la bordure
+  // étend l'image. Parité preview/export : même épaisseur relative, même couleur.
+  const borderOp = getBorderOp(stack)
+  if (borderOp && borderOp.params.thickness > 0) {
+    const inter = await out.png().toBuffer()
+    const m = await sharp(inter).metadata()
+    const W = m.width ?? 100
+    const H = m.height ?? 100
+    const bw = Math.round(borderOp.params.thickness * W)
+    const bottomBw = borderOp.params.style === 'polaroid' ? bw * 4 : bw
+    // Parser la couleur hex en { r, g, b }
+    const hexMatch = /^#?([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/.exec(borderOp.params.color)
+    const bg = hexMatch
+      ? { r: parseInt(hexMatch[1], 16), g: parseInt(hexMatch[2], 16), b: parseInt(hexMatch[3], 16) }
+      : { r: 255, g: 255, b: 255 }
+
+    out = sharp(inter).extend({
+      top: bw,
+      bottom: bottomBw,
+      left: bw,
+      right: bw,
+      background: { r: bg.r, g: bg.g, b: bg.b, alpha: 1 }
+    }).removeAlpha()
   }
 
   switch (format) {

@@ -23,7 +23,7 @@ type ColorOp = Extract<
 export function colorOpsOf(ops: EditOp[]): ColorOp[] {
   return ops.filter(
     (o): o is ColorOp =>
-      o.type !== 'crop' && o.type !== 'straighten' && o.type !== 'redeye' && o.type !== 'retouch'
+      o.type !== 'crop' && o.type !== 'straighten' && o.type !== 'redeye' && o.type !== 'retouch' && o.type !== 'text' && o.type !== 'border'
   )
 }
 

@@ -16,7 +16,8 @@ import {
   applySpatialOps,
   cropRectPx,
   straightenAngle,
-  getTextOp
+  getTextOp,
+  getBorderOp
 } from '@shared/edit-engine'
 import { applyColorOpsWebGL, colorOpsOf } from './render-webgl'
 
@@ -81,11 +82,13 @@ export function renderPreview(
   const hasSpatial = stack.ops.some((o) => o.type === 'redeye' || o.type === 'retouch')
   const hasColor = colorOpsOf(stack.ops).length > 0
   const hasText = stack.ops.some((o) => o.type === 'text')
-  if (!hasSpatial && !hasColor && !hasText) return
+  const hasBorder = stack.ops.some((o) => o.type === 'border')
+  if (!hasSpatial && !hasColor && !hasText && !hasBorder) return
 
-  // Si pas d'op pixel mais texte seul → dessiner directement
-  if (!hasSpatial && !hasColor && hasText) {
+  // Si pas d'op pixel mais texte/bordure seul → dessiner directement
+  if (!hasSpatial && !hasColor && (hasText || hasBorder)) {
     drawText(ctx, stack, rect.width, rect.height)
+    drawBorder(target, stack, rect.width, rect.height)
     return
   }
 
@@ -98,11 +101,13 @@ export function renderPreview(
       applyColorOpsWebGL(img, stack.ops, ctx, rect.width, rect.height)
     ) {
       drawText(ctx, stack, rect.width, rect.height)
+      drawBorder(target, stack, rect.width, rect.height)
       return // GPU a écrit le résultat (spatial inclus via la texture ImageData)
     }
     if (hasColor) applyColorOps(img.data, 4, stack.ops)
     ctx.putImageData(img, 0, 0)
     drawText(ctx, stack, rect.width, rect.height)
+    drawBorder(target, stack, rect.width, rect.height)
     return
   }
 
@@ -110,12 +115,14 @@ export function renderPreview(
   if (!opts.forceCpu && applyColorOpsWebGL(target, stack.ops, ctx, rect.width, rect.height)) {
     // Le GPU a traité la couleur, mais le texte doit être dessiné ensuite
     drawText(ctx, stack, rect.width, rect.height)
+    drawBorder(target, stack, rect.width, rect.height)
     return
   }
   const img = ctx.getImageData(0, 0, rect.width, rect.height)
   applyColorOps(img.data, 4, stack.ops)
   ctx.putImageData(img, 0, 0)
   drawText(ctx, stack, rect.width, rect.height)
+  drawBorder(target, stack, rect.width, rect.height)
 }
 
 /**
@@ -154,4 +161,50 @@ function drawText(
   ctx.fillStyle = color
   ctx.fillText(content, px, py)
   ctx.restore()
+}
+
+/**
+ * Dessine la bordure/cadre sur le canvas de preview.
+ * La bordure ÉTEND le canvas : on crée un nouveau canvas plus grand, on remplit
+ * avec la couleur de bordure, puis on dessine l'image par-dessus.
+ * Parité garantie avec le rendu SVG de l'export (render-sharp.ts).
+ *
+ * Style 'solid' : bordure uniforme sur les 4 côtés.
+ * Style 'polaroid' : bordure fine sur 3 côtés + bord bas plus large (effet Polaroid).
+ */
+function drawBorder(
+  canvas: HTMLCanvasElement,
+  stack: EditStack,
+  width: number,
+  height: number
+): void {
+  const borderOp = getBorderOp(stack)
+  if (!borderOp) return
+  const { thickness, color, style } = borderOp.params
+  if (thickness <= 0) return
+
+  const bw = Math.round(thickness * width)
+  // Polaroid : bord bas 4× plus épais
+  const bottomBw = style === 'polaroid' ? bw * 4 : bw
+  const newW = width + bw * 2
+  const newH = height + bw + bottomBw
+
+  // Créer un canvas étendu
+  const extended = document.createElement('canvas')
+  extended.width = newW
+  extended.height = newH
+  const ectx = extended.getContext('2d')!
+
+  // Remplir avec la couleur de bordure
+  ectx.fillStyle = color
+  ectx.fillRect(0, 0, newW, newH)
+
+  // Dessiner le canvas original par-dessus
+  ectx.drawImage(canvas, bw, bw)
+
+  // Recopier vers le canvas cible (redimensionner)
+  canvas.width = newW
+  canvas.height = newH
+  const ctx = canvas.getContext('2d')!
+  ctx.drawImage(extended, 0, 0)
 }
