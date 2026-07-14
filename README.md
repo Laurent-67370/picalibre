@@ -1,12 +1,22 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.2.0-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.3.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 2.3.0
+
+- 🗺️ **Géolocalisation et carte interactive** : les photos avec coordonnées
+  GPS EXIF sont affichées sur une carte Leaflet + OpenStreetMap. Marqueurs
+  clusterisés pour éviter la surcharge, clic sur un marqueur → ouverture dans
+  la lightbox. Filtrage par bounding box (photos dans la zone visible de la
+  carte uniquement). Géocoding inverse via Nominatim pour afficher le nom du
+  lieu. Bouton « Carte » dans la barre d'outils. Fallback offline si pas de
+  connexion. Index spatial optimisé en base de données.
 
 ## 🆕 Quoi de neuf en 2.2.0
 

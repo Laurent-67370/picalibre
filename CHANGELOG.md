@@ -3,6 +3,24 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.3.0] — 2026-07-14
+
+### Ajouté — Géolocalisation et carte interactive
+- **Lecture GPS EXIF** : extraction de GPSLatitude/GPSLongitude/GPSAltitude
+  via exiftool-vendored (déjà en place dans le pipeline metadata).
+- **Migration 008** : index spatial optimisé `idx_photos_gps_spatial` sur
+  `(gps_lat, gps_lon)` avec filtre partiel `WHERE gps_lat IS NOT NULL`.
+- **Handlers IPC** :
+  - `photos:withGeo` : photos dans une bounding box (south/west/north/east)
+    + filtres grille (minStars, typeFilter).
+  - `photos:reverseGeocode` : géocoding inverse via Nominatim.
+- **Carte interactive** : composant `MapView.tsx` avec Leaflet +
+  OpenStreetMap. Marqueurs clusterisés, clic → lightbox.
+- **Filtrage par lieu** : photos dans la zone visible de la carte uniquement.
+- **Bouton « Carte »** dans la barre d'outils.
+- **Fallback offline** : message si pas de connexion aux tuiles OSM.
+- Respect de `gps_manual = 1` (ne pas écraser un géotag manuel).
+
 ## [2.2.0] — 2026-07-14
 
 ### Ajouté — Face Movies
