@@ -7,6 +7,7 @@ import Editor from './Editor'
 import Lightbox from './Lightbox'
 import InfoPanel from './InfoPanel'
 import ThumbCanvas from './ThumbCanvas'
+import { prefetchBidirectionalThumbs, cleanupPrefetch } from './thumb-prefetch'
 
 declare global {
   interface Window {
@@ -669,6 +670,44 @@ export default function App(): JSX.Element {
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => el.removeEventListener('scroll', onScroll)
   }, [loadMore])
+
+  // ---- Préchargement prédictif (Optimisation 11) ----
+  // Au scroll, pré-décode les miniatures des N prochaines lignes (avant et
+  // après le viewport) via le Web Worker et les insère dans le cache LRU.
+  // Debounce de 150 ms pour éviter de lancer le préchargement à chaque pixel.
+  useEffect(() => {
+    const el = gridRef.current
+    if (!el) return
+
+    let scrollTimer: ReturnType<typeof setTimeout> | null = null
+
+    const triggerPrefetch = (): void => {
+      const items = virtualizer.getVirtualItems()
+      if (items.length === 0) return
+      const visibleStart = items[0].index
+      const visibleCount = items.length
+      prefetchBidirectionalThumbs(gridRows, visibleStart, visibleCount)
+    }
+
+    const onScroll = (): void => {
+      if (scrollTimer) clearTimeout(scrollTimer)
+      scrollTimer = setTimeout(triggerPrefetch, 150)
+    }
+
+    // Préchargement initial (au montage des données)
+    triggerPrefetch()
+
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      if (scrollTimer) clearTimeout(scrollTimer)
+    }
+  }, [virtualizer, gridRows])
+
+  // Nettoyage du Worker de préchargement au démontage
+  useEffect(() => {
+    return (): void => cleanupPrefetch()
+  }, [])
 
   // Mois « épinglé » = groupe de la première ligne visible
   const firstVisible = virtualizer.getVirtualItems()[0]
