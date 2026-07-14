@@ -9,6 +9,7 @@ import Lightbox from './Lightbox'
 import InfoPanel from './InfoPanel'
 import ThumbCanvas from './ThumbCanvas'
 import CollagePreview, { type CollageLayout, type CollageFormat } from './CollagePreview'
+import PrintDialog, { type PrintLayout, type PaperSize } from './PrintDialog'
 import { prefetchBidirectionalThumbs, cleanupPrefetch } from './thumb-prefetch'
 
 declare global {
@@ -170,6 +171,7 @@ export default function App(): JSX.Element {
   const [slideshow, setSlideshow] = useState(false)
   const [faceMovieActive, setFaceMovieActive] = useState(false)
   const [faceMovieFaces, setFaceMovieFaces] = useState<FaceLite[]>([])
+  const [printDialogOpen, setPrintDialogOpen] = useState(false)
   const [screensaverActive, setScreensaverActive] = useState(false)
   const [screensaverEnabled, setScreensaverEnabled] = useState<boolean>(
     () => localStorage.getItem('picalibre.screensaver.enabled') === 'true'
@@ -1978,7 +1980,7 @@ export default function App(): JSX.Element {
               <button onClick={trayBatchExport} title="Export groupé avec choix taille/format/qualité">
                 📤 Export groupé
               </button>
-              <button onClick={() => window.api.invoke('photos:print', { photoIds: trayIds, perPage: 4 })} title="Imprimer, 4 par page">
+              <button onClick={() => setPrintDialogOpen(true)} title="Imprimer avec choix du format et du layout">
                 🖨 Imprimer
               </button>
               <button onClick={() => window.api.invoke('share:email', { photoIds: trayIds })} title="Email avec copies 1600 px">
@@ -2000,6 +2002,19 @@ export default function App(): JSX.Element {
           </>
         )}
       </footer>
+
+      {/* ---- Dialogue d'impression ---- */}
+      {printDialogOpen && (
+        <PrintDialog
+          photos={tray.size > 0 ? [...tray.values()] : shown}
+          onClose={() => setPrintDialogOpen(false)}
+          onPrint={(layout: PrintLayout, paperSize: PaperSize, marginMm: number) => {
+            const ids = tray.size > 0 ? trayIds : shown.map((p) => p.id)
+            window.api.invoke('photos:print', { photoIds: ids, layout, paperSize, marginMm })
+            setPrintDialogOpen(false)
+          }}
+        />
+      )}
 
       {/* ---- Dialogue d'options pour l'export groupé ---- */}
       {batchExportOpen && (

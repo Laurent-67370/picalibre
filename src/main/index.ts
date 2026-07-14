@@ -577,7 +577,9 @@ function registerIpc(): void {
   ipcMain.handle('export:metadata', async (_e, { photoIds, destFile }) =>
     exportMetadataCsv(photoIds, destFile)
   )
-  ipcMain.handle('photos:print', (_e, { photoIds, perPage }) => printPhotos(photoIds, perPage))
+  ipcMain.handle('photos:print', (_e, { photoIds, layout, paperSize, marginMm }) =>
+    printPhotos(photoIds, layout, paperSize, marginMm)
+  )
   ipcMain.handle('share:email', (_e, { photoIds }) => emailShare(mainWindow, photoIds))
   ipcMain.handle('photos:email', (_e, { photoId }) => emailPhoto(photoId))
   ipcMain.handle('photos:blogExport', (_e, { photoId }) => blogExport(photoId))

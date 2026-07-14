@@ -152,3 +152,33 @@ input::placeholder {
   border: 1px dashed var(--border);
   border-radius: 10px;
 }
+
+/* ---- CSS d'impression (@media print) ---- */
+/* Masque tout sauf le contenu d'impression lors de window.print() */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-container,
+  .print-container * {
+    visibility: visible;
+  }
+  .print-container {
+    position: fixed;
+    inset: 0;
+    background: white;
+  }
+  .print-page {
+    width: 100%;
+    height: 100vh;
+    page-break-after: always;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .print-page:last-child {
+    page-break-after: auto;
+  }
+  @page {
+    margin: 10mm;
+  }
+}

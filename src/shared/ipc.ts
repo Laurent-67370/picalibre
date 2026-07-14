@@ -139,7 +139,15 @@ export interface IpcInvokeMap {
   'privacy:lock': { req: void; res: void }
   'export:batch': { req: { photoIds: number[]; destDir: string; maxSize: number | null; quality: number; watermark: string | null }; res: { exported: number; errors: number } }
   'export:metadata': { req: { photoIds: number[]; destFile: string }; res: { rows: number } }
-  'photos:print': { req: { photoIds: number[]; perPage: 1 | 2 | 4 }; res: void }
+  'photos:print': {
+    req: {
+      photoIds: number[]
+      layout: 'contact' | 'full' | 'grid2x3' | 'grid3x3'
+      paperSize: 'A4' | 'A3' | 'Letter' | 'Legal'
+      marginMm: number
+    }
+    res: void
+  }
   'share:email': { req: { photoIds: number[] }; res: { dir: string } }
   'photos:email': { req: { photoId: number }; res: { ok: boolean; error?: string } }
   'photos:blogExport': { req: { photoId: number }; res: { ok: boolean; error?: string } }
