@@ -10,19 +10,32 @@ Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 
 ## 🆕 Quoi de neuf en 1.8.2
 
-- 📦 **Taille des installeurs divisée par 2 à 3** : AppImage 274 → **95 Mo**
-  (−65 %), Windows 236 → **116 Mo**, macOS 246 → **127 Mo** — modèles de
-  visages réduits à l'essentiel, ffmpeg résolu à la volée (système → cache →
-  téléchargement unique de ~77 Mo si nécessaire) au lieu d'être embarqué,
-  dépendances mortes supprimées, compression maximale.
+- 📦 **Taille des installeurs divisée par 2 à 3** (suite) : AppImage ~96 Mo,
+  compression maximum, locales Electron réduites (fr/en)
+- 🐛 **Miniatures vidéo sur systèmes sans ffmpeg** (dont les runners CI) :
+  téléchargement unique et automatique du binaire officiel, mis en cache
+
+## Quoi de neuf en 1.8.1
+
+- 📦 **AppImage 274 → 123 Mo (−55 %)** : dépendance morte de 232 Mo supprimée,
+  modèles de reconnaissance faciale réduits à l'essentiel (28 → 7 Mo),
+  dépendances dédoublonnées, compression maximum
+- 🐛 Correctif de packaging : une bibliothèque native piégée dans l'archive
+  empêchait son chargement ; nouveau garde-fou CI testant le binaire packagé
+
+## Quoi de neuf en 1.8.0
+
 - ⚡ **Performance façon Picasa 3**, mesurée sur 50 000 photos : miniatures en
   cache navigateur permanent (zéro requête au re-scroll), chargement de vue
   2,8× plus rapide (colonnes ciblées, IPC −45 %), index SQL partiels, SQLite
-  affûté (cache 64 Mo, mmap 256 Mo).
+  affûté (cache 64 Mo, mmap 256 Mo)
+
+## Quoi de neuf en 1.7.0
+
 - 🖱️ **Glisser-déposer** : vignettes → albums, dossiers/fichiers de
-  l'explorateur → scan ou import automatique.
+  l'explorateur → scan ou import automatique
 - 🎚️ **Barre de critères d'affichage** : tri (date/nom/note), filtre ★ minimum
-  et photos/vidéos, vignettes carrées ou ratio préservé — mémorisés.
+  et photos/vidéos, vignettes carrées ou ratio préservé — mémorisés
 
 ## Quoi de neuf en 1.6.0
 
