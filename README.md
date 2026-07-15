@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.6.0-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.7.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -9,6 +9,12 @@ Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
 
 📄 [Politique de signature de code](CODE_SIGNING.md) — comment les installeurs sont signés et comment vérifier leur intégrité.
+
+## 🆕 Quoi de neuf en 2.7.0
+
+- ↩️ **Annuler façon Picasa (Ctrl/⌘+Z)** : après avoir masqué ou démasqué
+  des photos, un bandeau "Annuler" apparaît quelques secondes — un seul
+  niveau d'annulation pour la dernière action, comme dans Picasa.
 
 ## 🆕 Quoi de neuf en 2.6.0
 

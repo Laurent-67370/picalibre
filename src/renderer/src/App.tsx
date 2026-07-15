@@ -275,6 +275,41 @@ export default function App(): JSX.Element {
   const [trayAlbumId, setTrayAlbumId] = useState<number | ''>('')
   const trayIds = useMemo(() => [...tray.keys()], [tray])
 
+  /**
+   * Annulation façon Picasa : un seul niveau, la toute dernière action
+   * destructive/réversible. Un bandeau "Annuler" apparaît quelques
+   * secondes après l'action, et Ctrl/⌘+Z fait la même chose tant qu'il
+   * est affiché. Conçu en union discriminée pour pouvoir couvrir d'autres
+   * actions plus tard (notation, tag…) sans tout réécrire — seul 'hide'
+   * est câblé pour l'instant, l'action la plus fréquente et la plus
+   * "silencieusement destructive" (aucune confirmation avant de masquer).
+   */
+  type LastAction = { type: 'hide'; photoIds: number[]; wasHidden: boolean; label: string }
+  const [lastAction, setLastAction] = useState<LastAction | null>(null)
+  const lastActionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const armUndo = (action: LastAction): void => {
+    setLastAction(action)
+    if (lastActionTimer.current) clearTimeout(lastActionTimer.current)
+    lastActionTimer.current = setTimeout(() => setLastAction(null), 8000)
+  }
+  const undoLastAction = async (): Promise<void> => {
+    if (!lastAction) return
+    if (lastActionTimer.current) clearTimeout(lastActionTimer.current)
+    if (lastAction.type === 'hide') {
+      await window.api.invoke('photos:setHidden', {
+        photoIds: lastAction.photoIds,
+        hidden: lastAction.wasHidden
+      })
+      if (viewRef.current) loadView(viewRef.current)
+    }
+    setLastAction(null)
+  }
+  useEffect(() => {
+    return () => {
+      if (lastActionTimer.current) clearTimeout(lastActionTimer.current)
+    }
+  }, [])
+
   /** Sélection façon explorateur : clic = seule, Ctrl = bascule, Shift = plage. */
   const selectPhoto = (p: PhotoRow, i: number, e: React.MouseEvent): void => {
     if (e.shiftKey && anchorIndex.current >= 0) {
@@ -563,11 +598,20 @@ export default function App(): JSX.Element {
 
   const trayHide = async () => {
     const hide = view?.type !== 'hidden'
-    const r = await window.api.invoke('photos:setHidden', { photoIds: trayIds, hidden: hide })
+    const ids = [...trayIds]
+    const r = await window.api.invoke('photos:setHidden', { photoIds: ids, hidden: hide })
     if (!r.ok) {
       alert('Déverrouille les photos masquées d’abord (⚙ Réglages).')
       return
     }
+    armUndo({
+      type: 'hide',
+      photoIds: ids,
+      wasHidden: !hide,
+      label: hide
+        ? `${ids.length} photo(s) masquée(s)`
+        : `${ids.length} photo(s) affichée(s)`
+    })
     setTray(new Map())
     if (viewRef.current) loadView(viewRef.current)
   }
@@ -656,13 +700,18 @@ export default function App(): JSX.Element {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
         e.preventDefault()
         setTray(new Map(shown.map((p) => [p.id, p])))
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (lastAction) {
+          e.preventDefault()
+          void undoLastAction()
+        }
       } else if (e.key === 'Escape') {
         setTray(new Map())
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [photos, editing, lightboxIndex])
+  }, [photos, editing, lightboxIndex, lastAction])
 
   photosRef.current = photos
   trayHideRef.current = trayHide
@@ -2010,6 +2059,33 @@ export default function App(): JSX.Element {
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* ---- Annulation façon Picasa (un seul niveau, ~8s) ---- */}
+      {lastAction && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 74,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 260,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            borderRadius: 999,
+            padding: '8px 10px 8px 18px',
+            boxShadow: '0 8px 24px var(--shadow)',
+            fontSize: 13
+          }}
+        >
+          <span>{lastAction.label}</span>
+          <button className="primary" onClick={() => void undoLastAction()} title="Ctrl/⌘+Z">
+            ↩ Annuler
+          </button>
         </div>
       )}
 

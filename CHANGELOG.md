@@ -3,6 +3,19 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.7.0] — 2026-07-15
+
+### Ajouté — annulation façon Picasa
+- **Annuler (Ctrl/⌘+Z)** pour l'action « Masquer / afficher » : un bandeau
+  discret apparaît en bas de l'écran pendant ~8 s après un masquage ou un
+  démasquage (« 3 photo(s) masquée(s) — ↩ Annuler »), reproduisant le
+  comportement historique de Picasa — un seul niveau d'annulation pour la
+  toute dernière action, plutôt qu'une pile complexe. C'est l'action la
+  plus fréquente et la plus « silencieusement destructive » de PicaLibre
+  (aucune confirmation avant de masquer), donc la première à en profiter.
+  Architecture en union discriminée pour étendre facilement à d'autres
+  actions (notation, tag…) par la suite.
+
 ## [2.6.0] — 2026-07-15
 
 ### Ajouté — fiabilité et diagnostic
