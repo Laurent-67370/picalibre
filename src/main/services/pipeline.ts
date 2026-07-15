@@ -102,8 +102,18 @@ async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
           '-y', '-ss', seek, '-i', item.filepath,
           '-frames:v', '1', '-q:v', '3', tmpFrame
         ])
-        proc.on('error', reject)
-        proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}`))))
+        const killTimer = setTimeout(() => {
+          proc.kill('SIGKILL')
+          reject(new Error('ffmpeg timeout (20s) — process tué'))
+        }, 20_000)
+        proc.on('error', (err) => {
+          clearTimeout(killTimer)
+          reject(err)
+        })
+        proc.on('close', (code) => {
+          clearTimeout(killTimer)
+          code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}`))
+        })
       })
       const base = sharp(tmpFrame, { failOn: 'none' })
       const meta = await base.metadata()

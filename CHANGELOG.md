@@ -3,6 +3,35 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.6.0] — 2026-07-15
+
+### Ajouté — fiabilité et diagnostic
+- **Logs persistants** (`electron-log`) : tous les `console.log`/`console.error`
+  déjà présents dans le code (scanner, pipeline, ffmpeg, updater…) sont
+  désormais aussi écrits dans `userData/logs/main.log` (rotation à 5 Mo).
+  Jusqu'ici, la seule façon de diagnostiquer un échec silencieux (ex. la
+  vignette vidéo qui ne se générait pas) était de relancer l'app depuis un
+  terminal. Accessible via **Aide → Ouvrir le dossier des logs**.
+- **Rescan léger automatique au démarrage** : jusqu'ici, seul le watcher de
+  fichiers démarrait tout seul — si le pipeline avait échoué une fois sur
+  un fichier (miniature vidéo notamment) ou si des fichiers avaient été
+  ajoutés pendant que l'app était fermée, rien ne relançait jamais le
+  traitement sans action explicite (ajout d'un nouveau dossier). Un scan
+  léger se relance désormais automatiquement à chaque lancement, dès qu'au
+  moins un dossier est déjà configuré (désactivé en mode test headless).
+
+### Corrigé — résilience du pipeline vidéo
+- **Timeout de sécurité sur les appels `ffmpeg`** (génération de miniature
+  vidéo, sondage de durée) : un process qui reste bloqué (disque lent,
+  fichier corrompu, environnement CI capricieux) est désormais tué après
+  15-20 s au lieu de figer tout le pipeline indéfiniment.
+- **Retry + timeout sur le téléchargement du binaire ffmpeg** (premier
+  usage vidéo sans ffmpeg système/embarqué) : jusqu'à 3 tentatives avec
+  délai croissant (2 s, 4 s) et timeout de 60 s par tentative, au lieu
+  d'un unique essai sans filet. Fait suite à un échec CI Linux ponctuel
+  (probable aléa réseau) observé sur la 2.5.1, résolu par un simple
+  re-run mais révélant l'absence de résilience à cet endroit.
+
 ## [2.5.1] — 2026-07-15
 
 ### Corrigé

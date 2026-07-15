@@ -20,6 +20,7 @@
  * faire plutôt que de rester silencieux.
  */
 import { app, BrowserWindow, Menu, MenuItemConstructorOptions, dialog, shell } from 'electron'
+import log from 'electron-log/main'
 import { checkForUpdatesInteractive } from './services/updater'
 
 const REPO = 'https://github.com/Laurent-67370/picalibre'
@@ -197,6 +198,13 @@ export function buildAppMenu(win: BrowserWindow): void {
               detail: SHORTCUTS,
               buttons: ['Fermer']
             })
+          }
+        },
+        {
+          label: 'Ouvrir le dossier des logs',
+          click: () => {
+            const file = log.transports.file.getFile().path
+            shell.showItemInFolder(file)
           }
         },
         {

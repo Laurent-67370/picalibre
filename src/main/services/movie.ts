@@ -69,9 +69,19 @@ export async function probeDuration(ffmpegPath: string, file: string): Promise<n
   const stderr = await new Promise<string>((resolve) => {
     const proc = spawn(ffmpegPath, ['-i', file], { stdio: ['ignore', 'ignore', 'pipe'] })
     let out = ''
+    const killTimer = setTimeout(() => {
+      proc.kill('SIGKILL')
+      resolve(out)
+    }, 15_000)
     proc.stderr.on('data', (d) => (out += d.toString()))
-    proc.on('close', () => resolve(out)) // -i seul sort en code 1, normal
-    proc.on('error', () => resolve(out))
+    proc.on('close', () => {
+      clearTimeout(killTimer)
+      resolve(out) // -i seul sort en code 1, normal
+    })
+    proc.on('error', () => {
+      clearTimeout(killTimer)
+      resolve(out)
+    })
   })
   const m = stderr.match(/Duration:\s*(\d+):(\d+):(\d+)\.(\d+)/)
   if (!m) throw new Error(`Durée introuvable pour ${file}`)

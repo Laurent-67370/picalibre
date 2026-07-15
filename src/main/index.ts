@@ -1,4 +1,21 @@
 import { app, BrowserWindow, ipcMain, dialog, protocol, net } from 'electron'
+import log from 'electron-log/main'
+
+/**
+ * Logs persistants (electron-log).
+ * Écrit dans userData/logs/main.log (rotation automatique à 5 Mo, 3 fichiers
+ * conservés). `Object.assign(console, log.functions)` redirige TOUS les
+ * console.log/warn/error déjà présents dans le code (scanner, pipeline,
+ * ffmpeg, updater…) vers ce fichier, sans avoir à toucher chaque appel un
+ * par un — jusqu'ici, la seule façon de diagnostiquer un souci (ex. échec
+ * silencieux de génération de miniature vidéo) était de relancer l'app
+ * depuis un terminal. Consultable via Aide → Ouvrir le dossier des logs.
+ */
+log.initialize()
+log.transports.file.maxSize = 5 * 1024 * 1024
+log.transports.file.level = 'info'
+Object.assign(console, log.functions)
+
 import { pathToFileURL } from 'node:url'
 import { join } from 'node:path'
 import { writeFile, access } from 'node:fs/promises'
@@ -900,6 +917,30 @@ app.whenReady().then(() => {
   buildAppMenu(mainWindow)
   startWatchers(mainWindow)
   initAutoUpdate(mainWindow)
+
+  // Rescan léger automatique au démarrage (hors modes de test headless) :
+  // jusqu'ici, seul le watcher de fichiers démarrait tout seul — si une
+  // miniature échouait une fois (ex. vignette vidéo jamais générée) ou si
+  // des fichiers étaient ajoutés pendant que l'app était fermée, rien ne
+  // relançait jamais le pipeline sans action explicite de l'utilisateur.
+  const isTestMode = [
+    'PICALIBRE_TEST_SCAN',
+    'PICALIBRE_TEST_WEBGL',
+    'PICALIBRE_TEST_RELOCATE',
+    'PICALIBRE_TEST_IMPORT',
+    'PICALIBRE_TEST_BENCH',
+    'PICALIBRE_TEST_WEBSYNC',
+    'PICALIBRE_TEST_MENU',
+    'PICALIBRE_TEST_GEO_SCREENSHOT',
+    'PICALIBRE_TEST_SCREENSHOT'
+  ].some((k) => !!process.env[k])
+  if (!isTestMode) {
+    const hasRoots = getDb().prepare('SELECT 1 FROM scan_roots LIMIT 1').get()
+    if (hasRoots) {
+      console.log('[startup] rescan léger automatique')
+      startScan(mainWindow)
+    }
+  }
 
   // Mode test headless relocate : PICALIBRE_TEST_RELOCATE="nouvelleRacine"
   const testRelocate = process.env.PICALIBRE_TEST_RELOCATE

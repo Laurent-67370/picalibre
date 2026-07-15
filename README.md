@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.5.1-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.6.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -9,6 +9,17 @@ Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
 
 📄 [Politique de signature de code](CODE_SIGNING.md) — comment les installeurs sont signés et comment vérifier leur intégrité.
+
+## 🆕 Quoi de neuf en 2.6.0
+
+- 🧾 **Logs persistants** (Aide → Ouvrir le dossier des logs) : fini les
+  lancements depuis un terminal pour diagnostiquer un souci.
+- 🔄 **Rescan automatique au démarrage** : un échec ponctuel du pipeline
+  (miniature vidéo par ex.) ou des fichiers ajoutés app fermée sont
+  désormais retraités tout seuls, sans avoir à rajouter le dossier.
+- 🛡️ **Résilience ffmpeg** : timeout de sécurité si un process reste
+  bloqué, retry automatique (3 tentatives) si le téléchargement du
+  binaire échoue.
 
 ## 🆕 Quoi de neuf en 2.5.1
 
