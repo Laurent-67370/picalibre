@@ -1,12 +1,23 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.3.4-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.4.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 2.4.0
+
+- 📋 **Refonte de la barre de menus — tout devient trouvable** : nouveaux
+  menus **Bibliothèque** (Chronologie, Carte, Doublons, Photos masquées,
+  Analyser les visages) et **Outils** (Diaporama, Collage, Film,
+  Impression, Export, Email, CSV) ; menu **Édition** enrichi (éditer,
+  noter, taguer, créer un album, masquer) ; nouvelle entrée **Rescanner
+  la bibliothèque** (Ctrl/⌘+Maj+R) ; **Aide → Raccourcis clavier** avec
+  la liste complète des gestes (clic, glisser-déposer, molette, flèches…).
+  Plus aucune fonctionnalité cachée derrière une sélection préalable.
 
 ## 🆕 Quoi de neuf en 2.3.4
 

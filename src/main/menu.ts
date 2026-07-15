@@ -1,10 +1,23 @@
 /**
  * Menu applicatif PicaLibre (français).
- * Sans menu défini, Electron affiche son menu par défaut — avec un menu
- * « Aide » vide. Celui-ci fournit un menu complet : Fichier (actions reliées
- * au renderer), Édition/Affichage/Fenêtre (rôles natifs), et une Aide utile :
- * documentation, changelog, signalement de bug, vérification de mise à jour,
- * À propos.
+ *
+ * Objectif : aucune fonctionnalité ne doit être découvrable uniquement par
+ * hasard (bouton qui n'apparaît qu'après sélection, raccourci clavier non
+ * documenté, action cachée dans un panneau contextuel). Tout ce que l'app
+ * sait faire a une entrée de menu correspondante, groupée par intention
+ * plutôt que par écran technique :
+ *  - Fichier    : faire entrer des photos/vidéos dans la bibliothèque
+ *  - Édition    : agir sur la sélection courante (éditer, noter, taguer…)
+ *  - Bibliothèque : naviguer entre les vues (chronologie, carte, doublons…)
+ *  - Outils     : créer quelque chose à partir de la sélection (collage,
+ *                 film, export, impression…) ou lancer une analyse
+ *  - Affichage/Fenêtre : rôles natifs Electron
+ *  - Aide       : documentation, raccourcis clavier, à propos
+ *
+ * Chaque item envoie une action via 'menu:action' ; le renderer la route
+ * vers la fonction correspondante (menuActionsRef dans App.tsx). Si l'action
+ * nécessite une sélection et qu'il n'y en a pas, le renderer explique quoi
+ * faire plutôt que de rester silencieux.
  */
 import { app, BrowserWindow, Menu, MenuItemConstructorOptions, dialog, shell } from 'electron'
 import { checkForUpdatesInteractive } from './services/updater'
@@ -15,8 +28,24 @@ function sendMenuAction(win: BrowserWindow, action: string): void {
   if (!win.isDestroyed()) win.webContents.send('menu:action', { action })
 }
 
+const SHORTCUTS = [
+  ['Clic', 'Sélectionner une photo/vidéo'],
+  ['Ctrl/⌘ + clic', 'Ajouter à la sélection'],
+  ['Maj + clic', 'Sélectionner une plage'],
+  ['Ctrl/⌘ + A', 'Tout sélectionner'],
+  ['Échap', 'Vider la sélection / fermer'],
+  ['Double-clic', 'Ouvrir en plein écran'],
+  ['Clic droit', "Menu d'actions sur la photo"],
+  ['Glisser-déposer', 'Ajouter à un album (dans la barre latérale)'],
+  ['← / →', 'Photo précédente / suivante (visionneuse)'],
+  ['Molette', 'Zoom (visionneuse, images)'],
+  ['Double-clic (visionneuse)', 'Basculer ajusté ↔ 100 %'],
+  ['E', 'Éditer la photo affichée (visionneuse)']
+].map(([k, d]) => `${k.padEnd(26, ' ')} ${d}`).join('\n')
+
 export function buildAppMenu(win: BrowserWindow): void {
   const isMac = process.platform === 'darwin'
+  const act = (action: string): (() => void) => () => sendMenuAction(win, action)
 
   const template: MenuItemConstructorOptions[] = [
     ...(isMac
@@ -25,6 +54,12 @@ export function buildAppMenu(win: BrowserWindow): void {
             label: app.name,
             submenu: [
               { role: 'about' as const, label: 'À propos de PicaLibre' },
+              { type: 'separator' as const },
+              {
+                label: 'Réglages…',
+                accelerator: 'Cmd+,',
+                click: act('goSettings')
+              },
               { type: 'separator' as const },
               { role: 'hide' as const, label: 'Masquer PicaLibre' },
               { role: 'unhide' as const, label: 'Tout afficher' },
@@ -40,14 +75,29 @@ export function buildAppMenu(win: BrowserWindow): void {
         {
           label: 'Ajouter un dossier à scanner…',
           accelerator: 'CmdOrCtrl+O',
-          click: () => sendMenuAction(win, 'addFolder')
+          click: act('addFolder')
         },
         {
           label: 'Importer depuis SD / appareil photo…',
           accelerator: 'CmdOrCtrl+I',
-          click: () => sendMenuAction(win, 'import')
+          click: act('import')
+        },
+        {
+          label: 'Rescanner la bibliothèque',
+          accelerator: 'CmdOrCtrl+Shift+R',
+          click: act('rescan')
         },
         { type: 'separator' },
+        ...(isMac
+          ? []
+          : [
+              {
+                label: 'Réglages…',
+                accelerator: 'Ctrl+,',
+                click: act('goSettings')
+              },
+              { type: 'separator' as const }
+            ]),
         ...(isMac ? [] : [{ role: 'quit' as const, label: 'Quitter' }])
       ]
     },
@@ -60,7 +110,50 @@ export function buildAppMenu(win: BrowserWindow): void {
         { role: 'cut', label: 'Couper' },
         { role: 'copy', label: 'Copier' },
         { role: 'paste', label: 'Coller' },
-        { role: 'selectAll', label: 'Tout sélectionner' }
+        { role: 'selectAll', label: 'Tout sélectionner' },
+        { type: 'separator' },
+        {
+          label: 'Éditer la photo sélectionnée…',
+          click: act('editSelected')
+        },
+        {
+          label: 'Noter',
+          submenu: [0, 1, 2, 3, 4, 5].map((n) => ({
+            label: n === 0 ? 'Aucune note' : '★'.repeat(n),
+            click: act(`rate${n}`)
+          }))
+        },
+        { label: 'Taguer la sélection…', click: act('tagSelection') },
+        { label: 'Créer un album avec la sélection…', click: act('createAlbum') },
+        { label: 'Masquer / afficher la sélection', click: act('toggleHideSelection') },
+        { type: 'separator' },
+        { label: 'Vider la sélection (Échap)', click: act('clearSelection') }
+      ]
+    },
+    {
+      label: 'Bibliothèque',
+      submenu: [
+        { label: '🕒 Chronologie', click: act('goTimeline') },
+        { label: '🗺 Carte', click: act('goMap') },
+        { label: '⧉ Doublons', click: act('goDuplicates') },
+        { label: '🙈 Photos masquées', click: act('goHidden') },
+        { type: 'separator' },
+        { label: '🔍 Analyser les visages (détection des personnes)', click: act('scanFaces') }
+      ]
+    },
+    {
+      label: 'Outils',
+      submenu: [
+        { label: '▶ Diaporama de la vue courante', click: act('slideshow') },
+        { type: 'separator' },
+        { label: '🧩 Créer un collage avec la sélection…', click: act('collage') },
+        { label: '🎬 Créer un film avec la sélection…', click: act('movie') },
+        { type: 'separator' },
+        { label: '🖨 Imprimer la sélection…', click: act('print') },
+        { label: '💾 Exporter la sélection…', click: act('exportSelection') },
+        { label: '📤 Export groupé (taille/format)…', click: act('batchExport') },
+        { label: '✉ Envoyer la sélection par email', click: act('emailSelection') },
+        { label: '📄 Exporter les métadonnées (CSV)', click: act('csvExport') }
       ]
     },
     {
@@ -93,6 +186,18 @@ export function buildAppMenu(win: BrowserWindow): void {
         {
           label: 'Journal des modifications',
           click: () => void shell.openExternal(REPO + '/blob/main/CHANGELOG.md')
+        },
+        {
+          label: '⌨️ Raccourcis clavier',
+          click: () => {
+            void dialog.showMessageBox(win, {
+              type: 'info',
+              title: 'Raccourcis clavier',
+              message: 'Raccourcis clavier et gestes PicaLibre',
+              detail: SHORTCUTS,
+              buttons: ['Fermer']
+            })
+          }
         },
         {
           label: 'Signaler un problème…',

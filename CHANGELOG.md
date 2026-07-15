@@ -3,6 +3,37 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.4.0] — 2026-07-15
+
+### Ajouté — refonte de la barre de menus : tout devient trouvable
+- **Constat** : plusieurs fonctionnalités n'étaient visibles qu'une fois
+  « tombé dessus » — le panier en bas de fenêtre n'affichait Collage, Film,
+  Export groupé, Impression, Email et CSV qu'après avoir déjà sélectionné
+  des photos ; aucun moyen de relancer un scan de la bibliothèque sans
+  rajouter un dossier ; aucune liste de raccourcis clavier.
+- **Nouveau menu « Bibliothèque »** : Chronologie, Carte, Doublons, Photos
+  masquées, Analyser les visages — la navigation qui n'existait qu'en
+  barre latérale est désormais aussi dans la barre de menus.
+- **Nouveau menu « Outils »** : Diaporama, Collage, Film, Impression,
+  Export (simple/groupé), Email, CSV — chaque action indique clairement
+  qu'une sélection est requise si le panier est vide, au lieu de rester
+  invisible.
+- **Menu « Édition » enrichi** : Éditer la sélection, Noter (0 à 5 ★),
+  Taguer, Créer un album, Masquer/afficher, Vider la sélection — en plus
+  des rôles natifs (Annuler/Copier/Coller…).
+- **Menu « Fichier »** : nouvelle entrée **Rescanner la bibliothèque**
+  (Ctrl/⌘+Maj+R) — comble un vrai manque identifié en 2.3.x : le pipeline
+  de miniatures ne se relançait jamais automatiquement au démarrage,
+  seul un nouvel ajout de dossier le déclenchait.
+- **Aide → Raccourcis clavier** : liste complète (clic, Ctrl/⌘+clic,
+  Maj+clic, double-clic, glisser-déposer, molette, flèches, E) — plus
+  aucun geste caché.
+- *Note technique* : accélérateurs choisis en évitant deux conflits
+  potentiels — `E` n'est **pas** un raccourci global (aurait cassé la
+  frappe de la lettre « e » dans tous les champs texte de l'app) et reste
+  scindé à la visionneuse ; `Ctrl/⌘+R` (déjà pris par le rôle natif
+  « Recharger ») a été évité au profit de `Ctrl/⌘+Maj+R` pour Rescanner.
+
 ## [2.3.4] — 2026-07-15
 
 ### Corrigé

@@ -230,6 +230,12 @@ export default function App(): JSX.Element {
   const trayHideRef = useRef<(() => Promise<void>) | null>(null)
   const addFolderRef = useRef<(() => Promise<void>) | null>(null)
   const importRef = useRef<(() => Promise<void>) | null>(null)
+  // Une seule ref regroupant toutes les actions déclenchables depuis le menu
+  // applicatif (barre de menus native) — évite de multiplier les refs
+  // individuelles pour chaque fonctionnalité exposée. Peuplée plus bas, une
+  // fois toutes les fonctions du composant définies.
+  const menuActionsRef = useRef<Record<string, () => void>>({})
+  const trayNameInputRef = useRef<HTMLInputElement>(null)
   const [update, setUpdate] = useState<{ status: string; version?: string; percent?: number } | null>(null)
 
   // ---- Screensaver (écran de veille photo) ----
@@ -447,7 +453,8 @@ export default function App(): JSX.Element {
     const offWS = window.api.on('websync:progress', setWebsyncProgress)
     const offM = window.api.on('menu:action', ({ action }) => {
       if (action === 'addFolder') void addFolderRef.current?.()
-      if (action === 'import') void importRef.current?.()
+      else if (action === 'import') void importRef.current?.()
+      else menuActionsRef.current[action]?.()
     })
     const offU = window.api.on('update:status', (u) => {
       if (u.status === 'error') return
@@ -677,6 +684,75 @@ export default function App(): JSX.Element {
     if (!trayName.trim() || trayIds.length === 0) return
     await window.api.invoke('tags:addToPhotos', { name: trayName.trim(), photoIds: trayIds })
     setTrayName('')
+  }
+
+  // ---- Actions exposées dans le menu applicatif natif ('menu:action') ----
+  // Beaucoup de ces fonctionnalités n'étaient auparavant accessibles que via
+  // le panier (une fois des photos sélectionnées) ou la barre latérale —
+  // invisibles pour qui ne les avait pas déjà découvertes. Le menu les rend
+  // désormais toutes trouvables, avec un message clair si une sélection est
+  // nécessaire mais absente.
+  const needsSelection = (): boolean => {
+    if (trayIds.length === 0) {
+      alert('Sélectionne d’abord une ou plusieurs photos/vidéos dans la grille (clic, Ctrl+clic pour plusieurs), puis relance cette action.')
+      return true
+    }
+    return false
+  }
+  menuActionsRef.current = {
+    rescan: () => void window.api.invoke('scan:start', {}),
+    goSettings: () => loadView({ type: 'settings' }),
+    goTimeline: () => loadView({ type: 'timeline' }),
+    goMap: () => loadView({ type: 'map' }),
+    goDuplicates: () => loadView({ type: 'duplicates' }),
+    goHidden: () => loadView({ type: 'hidden' }),
+    scanFaces: () => {
+      void window.api.invoke('faces:scan', undefined).then((r) => {
+        if (r.started) setFaceProgress({ done: 0, total: 1 })
+      })
+    },
+    editSelected: () => {
+      if (needsSelection()) return
+      const p = [...tray.values()][0]
+      if (p.media_type === 'video') {
+        alert('L’éditeur ne prend pas encore en charge les vidéos — utilise la lecture dans la visionneuse (double-clic).')
+        return
+      }
+      setEditing(p)
+    },
+    rate0: () => { if (!needsSelection()) trayIds.forEach((id) => void setRating(id, 0)) },
+    rate1: () => { if (!needsSelection()) trayIds.forEach((id) => void setRating(id, 1)) },
+    rate2: () => { if (!needsSelection()) trayIds.forEach((id) => void setRating(id, 2)) },
+    rate3: () => { if (!needsSelection()) trayIds.forEach((id) => void setRating(id, 3)) },
+    rate4: () => { if (!needsSelection()) trayIds.forEach((id) => void setRating(id, 4)) },
+    rate5: () => { if (!needsSelection()) trayIds.forEach((id) => void setRating(id, 5)) },
+    tagSelection: () => {
+      if (needsSelection()) return
+      trayNameInputRef.current?.focus()
+    },
+    toggleHideSelection: () => { if (!needsSelection()) void trayHideRef.current?.() },
+    createAlbum: () => {
+      if (needsSelection()) return
+      trayNameInputRef.current?.focus()
+    },
+    clearSelection: () => setTray(new Map()),
+    slideshow: () => {
+      if (shown.length === 0) {
+        alert('Aucune photo dans la vue courante à faire défiler.')
+        return
+      }
+      setSlideshow(true)
+    },
+    collage: () => { if (!needsSelection()) void trayCollage() },
+    movie: () => { if (!needsSelection()) void trayMovie() },
+    print: () => { if (!needsSelection()) setPrintDialogOpen(true) },
+    exportSelection: () => { if (!needsSelection()) void trayExport() },
+    batchExport: () => { if (!needsSelection()) void trayBatchExport() },
+    emailSelection: () => {
+      if (needsSelection()) return
+      void window.api.invoke('share:email', { photoIds: trayIds })
+    },
+    csvExport: () => { if (!needsSelection()) void trayCsv() }
   }
 
   // ---- Grille virtualisée ----
@@ -1937,6 +2013,7 @@ export default function App(): JSX.Element {
             <div className="ftgroup">
               <span className="ftlabel">Organiser</span>
               <input
+                ref={trayNameInputRef}
                 placeholder="Nom d'album ou tag…"
                 value={trayName}
                 onChange={(e) => setTrayName(e.target.value)}
