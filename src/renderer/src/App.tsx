@@ -1985,7 +1985,21 @@ export default function App(): JSX.Element {
           {update.status === 'downloading' && (
             <span>⬇️ Mise à jour {update.version ?? ''} en téléchargement… {update.percent ?? 0} %</span>
           )}
-          {update.status === 'ready' && (
+          {update.status === 'ready' && window.api.platform === 'darwin' && (
+            <>
+              <span>
+                ⬇️ PicaLibre {update.version} est disponible. L'installation automatique n'est pas
+                possible sans certificat Apple payant — la page de téléchargement va s'ouvrir.
+              </span>
+              <button onClick={() => window.api.invoke('update:install', undefined)}>
+                Ouvrir la page de téléchargement
+              </button>
+              <button onClick={() => setUpdate(null)} style={{ opacity: 0.7 }}>
+                Plus tard
+              </button>
+            </>
+          )}
+          {update.status === 'ready' && window.api.platform !== 'darwin' && (
             <>
               <span>✅ PicaLibre {update.version} est prête à être installée.</span>
               <button onClick={() => window.api.invoke('update:install', undefined)}>

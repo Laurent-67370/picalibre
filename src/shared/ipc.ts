@@ -232,4 +232,5 @@ export interface RendererApi {
     payload: IpcInvokeMap[C]['req']
   ): Promise<IpcInvokeMap[C]['res']>
   on<E extends IpcEvent>(event: E, cb: (data: IpcEventMap[E]) => void): () => void
+  platform: NodeJS.Platform
 }

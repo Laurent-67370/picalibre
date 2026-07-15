@@ -3,6 +3,25 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.5.1] — 2026-07-15
+
+### Corrigé
+- **macOS : la mise à jour se télécharge mais ne s'installe jamais**,
+  même en cliquant sur « Redémarrer et installer ». Cause racine :
+  Squirrel.Mac (le mécanisme d'installation d'electron-updater sur macOS)
+  exige une signature **Developer ID Apple réelle** (payante, 99 $/an)
+  pour remplacer le `.app` en place — c'est documenté par Electron
+  lui-même. La signature ad-hoc de PicaLibre (depuis la 2.3.2) suffit à
+  satisfaire Gatekeeper au premier lancement, mais pas cette validation
+  d'installation-là : `quitAndInstall()` échouait silencieusement, sans
+  aucune erreur visible. Le bouton ouvre désormais la page de release
+  GitHub pour un remplacement manuel du `.app` (comme pour un premier
+  téléchargement), avec un message clair expliquant pourquoi.
+- ⚠️ **Cette mise à jour vers la 2.5.1 elle-même** devra probablement être
+  installée manuellement une dernière fois (le correctif n'est actif
+  qu'une fois la 2.5.1 déjà en place) — les mises à jour suivantes
+  ouvriront correctement la page de téléchargement.
+
 ## [2.5.0] — 2026-07-15
 
 ### Ajouté — thème clair inspiré de Picasa 3 (par défaut) + thème sombre en option

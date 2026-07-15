@@ -1,12 +1,21 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.5.0-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.5.1-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 2.5.1
+
+- 🔄 **Correction de la mise à jour macOS** : le bouton « Redémarrer et
+  installer » ne faisait rien (Squirrel.Mac exige un certificat Apple
+  payant pour remplacer l'app en place, absent ici). Il ouvre désormais
+  la page de téléchargement pour un remplacement manuel, avec un message
+  clair. *Cette mise à jour-ci devra encore être installée manuellement
+  une dernière fois — les suivantes s'ouvriront automatiquement.*
 
 ## 🆕 Quoi de neuf en 2.5.0
 
