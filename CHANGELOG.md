@@ -3,6 +3,22 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.7.1] — 2026-07-15
+
+### Ajouté — annulation étendue à la fusion de doublons
+- **Annuler (Ctrl/⌘+Z)** couvre maintenant aussi la **fusion de doublons**
+  (vue Doublons) — la seule action réellement destructive de PicaLibre
+  jusqu'ici sans filet : elle fusionne notes/favoris, déplace albums/tags/
+  visages vers la photo gardée, puis met l'autre à la corbeille.
+- Annulation fidèle, pas approximative : un instantané complet est capturé
+  **avant** la fusion (note/favori d'origine de la photo gardée, lignes
+  d'albums/tags de la photo supprimée, identifiants de ses visages) et
+  restauré tel quel. Seule concession pragmatique (façon Picasa, pensé
+  pour un « oups » immédiat plutôt qu'un historique complet) : un tag ou
+  un album que la photo gardée aurait « gagné » pendant la fusion peut
+  rester après annulation — sans perte de données, juste une note en trop
+  possible.
+
 ## [2.7.0] — 2026-07-15
 
 ### Ajouté — annulation façon Picasa

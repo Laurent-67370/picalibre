@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { AlbumRow, FaceLite, FolderRow, PersonRow, PhotoRow, ScanProgress, RendererApi } from '@shared/ipc'
+import type { AlbumRow, FaceLite, FolderRow, MergeSnapshot, PersonRow, PhotoRow, ScanProgress, RendererApi } from '@shared/ipc'
 import MapView from './MapView'
 import Slideshow from './Slideshow'
 import FaceMovie from './FaceMovie'
@@ -284,7 +284,9 @@ export default function App(): JSX.Element {
    * est câblé pour l'instant, l'action la plus fréquente et la plus
    * "silencieusement destructive" (aucune confirmation avant de masquer).
    */
-  type LastAction = { type: 'hide'; photoIds: number[]; wasHidden: boolean; label: string }
+  type LastAction =
+    | { type: 'hide'; photoIds: number[]; wasHidden: boolean; label: string }
+    | { type: 'trash'; snapshot: MergeSnapshot; label: string }
   const [lastAction, setLastAction] = useState<LastAction | null>(null)
   const lastActionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const armUndo = (action: LastAction): void => {
@@ -300,6 +302,11 @@ export default function App(): JSX.Element {
         photoIds: lastAction.photoIds,
         hidden: lastAction.wasHidden
       })
+      if (viewRef.current) loadView(viewRef.current)
+    } else if (lastAction.type === 'trash') {
+      await window.api.invoke('duplicates:undoMerge', lastAction.snapshot)
+      window.api.invoke('duplicates:list', undefined).then(setDupGroups)
+      refreshSidebar()
       if (viewRef.current) loadView(viewRef.current)
     }
     setLastAction(null)
@@ -544,9 +551,14 @@ export default function App(): JSX.Element {
     const group = dupGroups.find((g) => g.hash === hash)
     if (!group) return
     const removeIds = group.photos.filter((p) => p.id !== keepId).map((p) => p.id)
-    await window.api.invoke('duplicates:merge', { keepId, removeIds })
+    const snapshot = await window.api.invoke('duplicates:merge', { keepId, removeIds })
     window.api.invoke('duplicates:list', undefined).then(setDupGroups)
     refreshSidebar()
+    armUndo({
+      type: 'trash',
+      snapshot,
+      label: `${removeIds.length} doublon(s) fusionné(s)`
+    })
   }
 
   const trayExport = async () => {

@@ -116,8 +116,11 @@ async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
         })
       })
       const base = sharp(tmpFrame, { failOn: 'none' })
+      console.log('[DEBUG] frame ok, avant metadata()', item.photoId)
       const meta = await base.metadata()
+      console.log('[DEBUG] metadata ok', item.photoId, JSON.stringify(meta.width), meta.height)
       for (const size of [256, 1024]) {
+        console.log('[DEBUG] avant resize', size, item.photoId)
         const cachePath = join(thumbsCacheDir(), item.hash.slice(0, 2), `${item.hash}_${size}.webp`)
         await mkdir(join(thumbsCacheDir(), item.hash.slice(0, 2)), { recursive: true })
         await base
@@ -126,6 +129,7 @@ async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
           .webp({ quality: 82 })
           .toFile(cachePath)
         insertThumb.run(item.photoId, size, cachePath)
+        console.log('[DEBUG] thumb insérée', size, item.photoId)
       }
       updateMeta.run(
         meta.width ?? null,

@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.7.0-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.7.1-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -9,6 +9,13 @@ Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
 
 📄 [Politique de signature de code](CODE_SIGNING.md) — comment les installeurs sont signés et comment vérifier leur intégrité.
+
+## 🆕 Quoi de neuf en 2.7.1
+
+- ↩️ **Annuler (Ctrl/⌘+Z) étendu à la fusion de doublons** : la seule
+  action vraiment destructive de PicaLibre a maintenant son filet — un
+  instantané complet (notes, favoris, albums, tags, visages) est capturé
+  avant la fusion et restauré fidèlement en cas d'annulation.
 
 ## 🆕 Quoi de neuf en 2.7.0
 

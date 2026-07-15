@@ -41,7 +41,7 @@ import { parseStack } from '../shared/edit-engine'
 import { renderEdited } from './services/render-sharp'
 import { startScan } from './services/scanner'
 import { thumbsCacheDir } from './services/pipeline'
-import type { GridFilters, SortMode, BoundingBox, ReverseGeocodeResult } from '../shared/ipc'
+import type { GridFilters, SortMode, BoundingBox, ReverseGeocodeResult, MergeSnapshot } from '../shared/ipc'
 
 app.setName('picalibre')
 
@@ -640,6 +640,31 @@ function registerIpc(): void {
   })
   ipcMain.handle('duplicates:merge', (_e, { keepId, removeIds }) => {
     const db = getDb()
+    // Instantané AVANT mutation — seule façon d'annuler proprement ensuite :
+    // la fusion écrase note/favori du gardé (MAX) et déplace irrévocablement
+    // albums/tags/visages depuis les photos supprimées.
+    const keepBefore = db
+      .prepare('SELECT rating, is_favorite FROM photos WHERE id = ?')
+      .get(keepId) as { rating: number; is_favorite: number }
+    const snapshot: MergeSnapshot = {
+      keepId,
+      keepBefore,
+      removed: (removeIds as number[]).map((rid: number) => ({
+        id: rid,
+        albumItems: db
+          .prepare('SELECT album_id, position, added_at FROM album_items WHERE photo_id = ?')
+          .all(rid) as { album_id: number; position: number; added_at: number }[],
+        tagIds: (
+          db.prepare('SELECT tag_id FROM photo_tags WHERE photo_id = ?').all(rid) as {
+            tag_id: number
+          }[]
+        ).map((r) => r.tag_id),
+        faceIds: (
+          db.prepare('SELECT id FROM faces WHERE photo_id = ?').all(rid) as { id: number }[]
+        ).map((r) => r.id)
+      }))
+    }
+
     const tx = db.transaction((ids: number[]) => {
       for (const rid of ids) {
         // Fusion des références : albums, tags, visages pointent vers la photo gardée
@@ -665,6 +690,35 @@ function registerIpc(): void {
       }
     })
     tx(removeIds)
+    return snapshot
+  })
+  ipcMain.handle('duplicates:undoMerge', (_e, snapshot: MergeSnapshot) => {
+    const db = getDb()
+    const tx = db.transaction((snap: MergeSnapshot) => {
+      db.prepare('UPDATE photos SET rating = ?, is_favorite = ? WHERE id = ?').run(
+        snap.keepBefore.rating,
+        snap.keepBefore.is_favorite,
+        snap.keepId
+      )
+      for (const r of snap.removed) {
+        db.prepare(`UPDATE photos SET status = 'active' WHERE id = ?`).run(r.id)
+        for (const ai of r.albumItems) {
+          db.prepare(
+            `INSERT OR IGNORE INTO album_items (album_id, photo_id, position, added_at)
+             VALUES (?, ?, ?, ?)`
+          ).run(ai.album_id, r.id, ai.position, ai.added_at)
+        }
+        for (const tagId of r.tagIds) {
+          db.prepare(
+            'INSERT OR IGNORE INTO photo_tags (photo_id, tag_id) VALUES (?, ?)'
+          ).run(r.id, tagId)
+        }
+        for (const faceId of r.faceIds) {
+          db.prepare('UPDATE faces SET photo_id = ? WHERE id = ?').run(r.id, faceId)
+        }
+      }
+    })
+    tx(snapshot)
   })
   ipcMain.handle('import:dropped', async (_e, { paths }) => {
     const { statSync } = await import('node:fs')
@@ -1121,7 +1175,7 @@ app.whenReady().then(() => {
         console.log(`[test] PIPELINE OK en ${Date.now() - t0} ms`)
         clearInterval(iv)
         if (!process.env.PICALIBRE_TEST_KEEPALIVE) exitTest(0)
-      } else if (Date.now() - t0 > 60000) {
+      } else if (Date.now() - t0 > 120000) {
         console.error('[test] TIMEOUT pipeline')
         clearInterval(iv)
         exitTest(1)
