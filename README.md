@@ -8,6 +8,8 @@
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
 
+📄 [Politique de signature de code](CODE_SIGNING.md) — comment les installeurs sont signés et comment vérifier leur intégrité.
+
 ## 🆕 Quoi de neuf en 2.5.1
 
 - 🔄 **Correction de la mise à jour macOS** : le bouton « Redémarrer et
