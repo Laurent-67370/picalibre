@@ -207,6 +207,13 @@ export default function App(): JSX.Element {
   const [fitMode, setFitMode] = useState<'cover' | 'contain'>(
     (localStorage.getItem('picalibre.fit') as 'cover' | 'contain') || 'cover'
   )
+  const [theme, setTheme] = useState<'light' | 'dark'>(
+    localStorage.getItem('picalibre.theme') === 'dark' ? 'dark' : 'light'
+  )
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem('picalibre.theme', theme)
+  }, [theme])
   useEffect(() => localStorage.setItem('picalibre.sort', sortMode), [sortMode])
   useEffect(() => localStorage.setItem('picalibre.minStars', String(minStars)), [minStars])
   useEffect(() => localStorage.setItem('picalibre.typeFilter', typeFilter), [typeFilter])
@@ -925,14 +932,14 @@ export default function App(): JSX.Element {
             alignItems: 'center',
             justifyContent: 'center',
             pointerEvents: 'none',
-            border: '3px dashed #f97316',
+            border: '3px dashed var(--accent)',
             borderRadius: 12,
             margin: 10
           }}
         >
           <div style={{ textAlign: 'center', fontSize: 18 }}>
             📥 Dépose ici
-            <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 6 }}>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
               Dossiers → ajoutés au scan · Fichiers → import avec choix de destination
             </div>
           </div>
@@ -943,7 +950,7 @@ export default function App(): JSX.Element {
         <aside
           style={{
             width: 260,
-            borderRight: '1px solid #333',
+            borderRight: '1px solid var(--border-soft)',
             padding: 12,
             overflow: 'auto',
             flexShrink: 0
@@ -964,10 +971,10 @@ export default function App(): JSX.Element {
               width: '100%',
               padding: 6,
               marginBottom: 12,
-              background: '#14171c',
-              border: '1px solid #333',
+              background: 'var(--card)',
+              border: '1px solid var(--border-soft)',
               borderRadius: 4,
-              color: '#d7dae0',
+              color: 'var(--text)',
               boxSizing: 'border-box'
             }}
           />
@@ -1053,7 +1060,7 @@ export default function App(): JSX.Element {
                     height: 26,
                     borderRadius: '50%',
                     flexShrink: 0,
-                    background: '#14171c',
+                    background: 'var(--card)',
                     backgroundImage: hasBox
                       ? `url("thumb://library/256/${pe.samplePhotoId}")`
                       : undefined,
@@ -1098,7 +1105,7 @@ export default function App(): JSX.Element {
               }}
               style={{
                 ...sidebarItem(view?.type === 'album' && view.id === a.id),
-                outline: dragOverAlbum === a.id ? '2px dashed #f97316' : 'none',
+                outline: dragOverAlbum === a.id ? '2px dashed var(--accent)' : 'none',
                 outlineOffset: -2
               }}
             >
@@ -1127,7 +1134,7 @@ export default function App(): JSX.Element {
         {/* ---- Zone principale ---- */}
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {progress && progress.phase !== 'done' && (
-            <div style={{ padding: '8px 16px', background: '#26313f', fontSize: 13 }}>
+            <div style={{ padding: '8px 16px', background: 'var(--card-2)', fontSize: 13 }}>
               {PHASE_LABEL[progress.phase]}… {progress.filesProcessed}/{progress.filesFound}
             </div>
           )}
@@ -1153,10 +1160,10 @@ export default function App(): JSX.Element {
                 }}
                 style={{
                   padding: 6,
-                  background: '#14171c',
-                  border: '1px solid #333',
+                  background: 'var(--card)',
+                  border: '1px solid var(--border-soft)',
                   borderRadius: 4,
-                  color: '#d7dae0',
+                  color: 'var(--text)',
                   width: 220
                 }}
               />
@@ -1195,7 +1202,7 @@ export default function App(): JSX.Element {
               <select
                 value={mergeTarget}
                 onChange={(e) => setMergeTarget(e.target.value === '' ? '' : Number(e.target.value))}
-                style={{ padding: 6, background: '#14171c', color: '#d7dae0', border: '1px solid #333' }}
+                style={{ padding: 6, background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border-soft)' }}
               >
                 <option value="">Fusionner dans…</option>
                 {persons
@@ -1296,17 +1303,17 @@ export default function App(): JSX.Element {
                           width: '100%',
                           aspectRatio: '1',
                           borderRadius: 8,
-                          background: '#14171c',
+                          background: 'var(--card)',
                           backgroundImage: `url("thumb://library/256/${f.photo_id}")`,
                           backgroundSize: `${100 / f.bbox_w}% ${100 / f.bbox_h}%`,
                           backgroundPosition: `${
                             f.bbox_w < 1 ? (f.bbox_x / (1 - f.bbox_w)) * 100 : 0
                           }% ${f.bbox_h < 1 ? (f.bbox_y / (1 - f.bbox_h)) * 100 : 0}%`,
                           outline: sel
-                            ? '3px solid #2f6feb'
+                            ? '3px solid var(--select)'
                             : f.assignment === 'confirmed'
-                              ? '2px solid #3fb950'
-                              : '1px solid #333',
+                              ? '2px solid var(--success)'
+                              : '1px solid var(--border-soft)',
                           outlineOffset: -2
                         }}
                       />
@@ -1325,7 +1332,28 @@ export default function App(): JSX.Element {
 
           {view?.type === 'person' && manageFaces ? null : view?.type === 'settings' ? (
             <div style={{ flex: 1, overflow: 'auto', padding: 16, maxWidth: 720 }}>
-              <h3 style={{ marginTop: 0 }}>Dossiers surveillés</h3>
+              <h3 style={{ marginTop: 0 }}>🎨 Apparence</h3>
+              <p style={{ fontSize: 13, opacity: 0.7 }}>
+                Clair : palette inspirée de Picasa 3. Sombre : palette navy/orange historique de PicaLibre.
+              </p>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <button
+                  className={theme === 'light' ? 'primary' : undefined}
+                  onClick={() => setTheme('light')}
+                  aria-pressed={theme === 'light'}
+                >
+                  ☀️ Clair
+                </button>
+                <button
+                  className={theme === 'dark' ? 'primary' : undefined}
+                  onClick={() => setTheme('dark')}
+                  aria-pressed={theme === 'dark'}
+                >
+                  🌙 Sombre
+                </button>
+              </div>
+
+              <h3>Dossiers surveillés</h3>
               {roots.map((r) => (
                 <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
                   <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1340,7 +1368,6 @@ export default function App(): JSX.Element {
                       })
                       window.api.invoke('scanRoots:list', undefined).then(setRoots)
                     }}
-                    style={{ padding: 4, background: '#14171c', color: '#d7dae0', border: '1px solid #333' }}
                   >
                     <option value="watch">Surveillé</option>
                     <option value="once">Une fois</option>
@@ -1408,7 +1435,7 @@ export default function App(): JSX.Element {
                   placeholder="Mot de passe…"
                   value={pwInput}
                   onChange={(e) => setPwInput(e.target.value)}
-                  style={{ padding: 6, background: '#14171c', border: '1px solid #333', borderRadius: 4, color: '#d7dae0' }}
+                  style={{ padding: 6, background: 'var(--card)', border: '1px solid var(--border-soft)', borderRadius: 4, color: 'var(--text)' }}
                 />
                 {!privacy.hasPassword || privacy.unlocked ? (
                   <button
@@ -1465,14 +1492,14 @@ export default function App(): JSX.Element {
                   placeholder="https://photos.mondomaine.fr"
                   value={websyncUrl}
                   onChange={(e) => setWebsyncUrl(e.target.value)}
-                  style={{ padding: 6, background: '#14171c', border: '1px solid #333', borderRadius: 4, color: '#d7dae0' }}
+                  style={{ padding: 6, background: 'var(--card)', border: '1px solid var(--border-soft)', borderRadius: 4, color: 'var(--text)' }}
                 />
                 <input
                   type="password"
                   placeholder="Jeton d'accès (SYNC_TOKEN du serveur)"
                   value={websyncToken}
                   onChange={(e) => setWebsyncToken(e.target.value)}
-                  style={{ padding: 6, background: '#14171c', border: '1px solid #333', borderRadius: 4, color: '#d7dae0' }}
+                  style={{ padding: 6, background: 'var(--card)', border: '1px solid var(--border-soft)', borderRadius: 4, color: 'var(--text)' }}
                 />
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
@@ -1528,7 +1555,7 @@ export default function App(): JSX.Element {
                     if (r.ok) loadView({ type: 'hidden' })
                     else alert('Mot de passe incorrect.')
                   }}
-                  style={{ padding: 6, background: '#14171c', border: '1px solid #333', borderRadius: 4, color: '#d7dae0' }}
+                  style={{ padding: 6, background: 'var(--card)', border: '1px solid var(--border-soft)', borderRadius: 4, color: 'var(--text)' }}
                 />
               </div>
             </div>
@@ -1541,7 +1568,7 @@ export default function App(): JSX.Element {
                   <div
                     key={g.hash}
                     style={{
-                      border: '1px solid #333',
+                      border: '1px solid var(--border-soft)',
                       borderRadius: 6,
                       padding: 12,
                       marginBottom: 12
@@ -1626,7 +1653,7 @@ export default function App(): JSX.Element {
               alignItems: 'center',
               gap: 10,
               padding: '6px 16px',
-              borderBottom: '1px solid #26334a',
+              borderBottom: '1px solid var(--border-soft)',
               fontSize: 13,
               flexWrap: 'wrap'
             }}
@@ -1642,7 +1669,7 @@ export default function App(): JSX.Element {
                 <span
                   key={n}
                   onClick={() => setMinStars(minStars === n ? 0 : n)}
-                  style={{ color: n <= minStars ? '#f5c518' : '#475569', fontSize: 15 }}
+                  style={{ color: n <= minStars ? 'var(--star)' : 'var(--border)', fontSize: 15 }}
                 >
                   ★
                 </span>
@@ -1660,7 +1687,7 @@ export default function App(): JSX.Element {
             >
               {fitMode === 'cover' ? '▣ Carré' : '⬒ Ratio'}
             </button>
-            <span style={{ color: '#64748b', marginLeft: 'auto' }}>
+            <span style={{ color: 'var(--muted)', marginLeft: 'auto' }}>
               {shown.length}{shown.length !== photos.length ? ` / ${photos.length}` : ''} élément(s)
             </span>
           </div>
@@ -1697,8 +1724,8 @@ export default function App(): JSX.Element {
                         <span style={{ fontSize: 15, fontWeight: 600, textTransform: 'capitalize' }}>
                           {r.label}
                         </span>
-                        <span style={{ fontSize: 12, color: '#94a3b8' }}>{r.count} élément(s)</span>
-                        <span style={{ flex: 1, height: 1, background: '#26334a', marginBottom: 5 }} />
+                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{r.count} élément(s)</span>
+                        <span style={{ flex: 1, height: 1, background: 'var(--border-soft)', marginBottom: 5 }} />
                       </div>
                     )
                   }
@@ -1746,9 +1773,9 @@ export default function App(): JSX.Element {
                                 width: '100%',
                                 aspectRatio: '1',
                                 borderRadius: 4,
-                                background: '#14171c',
+                                background: 'var(--card)',
                                 cursor: 'pointer',
-                                outline: inTray ? '3px solid #2f6feb' : 'none',
+                                outline: inTray ? '3px solid var(--select)' : 'none',
                                 outlineOffset: -3,
                                 overflow: 'hidden'
                               }}
@@ -1759,7 +1786,7 @@ export default function App(): JSX.Element {
                                   position: 'absolute',
                                   top: 6,
                                   right: 6,
-                                  background: '#2f6feb',
+                                  background: 'var(--select)',
                                   borderRadius: '50%',
                                   width: 20,
                                   height: 20,
@@ -1810,7 +1837,7 @@ export default function App(): JSX.Element {
                                 <span
                                   key={n}
                                   onClick={() => setRating(p.id, p.rating === n ? 0 : n)}
-                                  style={{ color: n <= p.rating ? '#f5c518' : '#444' }}
+                                  style={{ color: n <= p.rating ? 'var(--star)' : 'var(--border)' }}
                                 >
                                   ★
                                 </span>
@@ -1946,8 +1973,8 @@ export default function App(): JSX.Element {
       {update && update.status !== 'available' && (
         <div
           style={{
-            borderTop: '1px solid #333',
-            background: '#1d2d1f',
+            borderTop: '1px solid var(--border-soft)',
+            background: 'color-mix(in srgb, var(--success) 18%, var(--card))',
             padding: '6px 16px',
             fontSize: 13,
             display: 'flex',
@@ -2000,7 +2027,7 @@ export default function App(): JSX.Element {
                   />
                 ))}
                 {tray.size > 6 && (
-                  <span style={{ fontSize: 12, alignSelf: 'center', color: '#94a3b8' }}>
+                  <span style={{ fontSize: 12, alignSelf: 'center', color: 'var(--muted)' }}>
                     +{tray.size - 6}
                   </span>
                 )}
@@ -2096,7 +2123,7 @@ export default function App(): JSX.Element {
             </div>
 
             {exportProgress && (
-              <span style={{ fontSize: 12, color: '#94a3b8', flexShrink: 0 }}>
+              <span style={{ fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>
                 {exportProgress.done}/{exportProgress.total}
               </span>
             )}
@@ -2198,7 +2225,7 @@ export default function App(): JSX.Element {
             left: 0,
             right: 0,
             zIndex: 240,
-            background: '#111827',
+            background: 'var(--bg-elevated)',
             borderTop: '1px solid var(--border)',
             padding: '10px 16px',
             display: 'flex',
@@ -2227,7 +2254,7 @@ export default function App(): JSX.Element {
               }}
             />
           </div>
-          <span style={{ color: '#94a3b8' }}>
+          <span style={{ color: 'var(--muted)' }}>
             {batchProgress.current}/{batchProgress.total}
           </span>
         </div>

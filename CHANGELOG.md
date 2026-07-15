@@ -3,6 +3,33 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.5.0] — 2026-07-15
+
+### Ajouté — thème clair inspiré de Picasa 3 (par défaut) + thème sombre en option
+- **Nouveau thème clair, par défaut** : palette gris argenté/blanc inspirée
+  de Picasa 3, avec l'orange PicaLibre conservé comme accent principal
+  (cohérence avec le logo et les badges du dépôt) et le bleu de sélection
+  historique repris pour les surbrillances — proche de l'esprit Picasa
+  tout en restant identifiable comme PicaLibre.
+- **Thème sombre navy/orange** conservé à l'identique (mêmes valeurs
+  hexadécimales qu'avant), sélectionnable dans **Réglages → 🎨 Apparence**.
+  Préférence persistée (`localStorage`), appliquée avant le premier rendu
+  pour éviter tout flash du mauvais thème.
+- **Modes immersifs volontairement sombres dans les deux thèmes** :
+  visionneuse plein écran, éditeur, lecteur de film/diaporama, aperçu
+  collage, panneaux flottants de la carte — comme Picasa, Lightroom ou
+  Photos, l'espace de visualisation/retouche reste sombre indépendamment
+  du thème de l'appli, pour ne pas fausser le jugement des couleurs et
+  rester lisible par-dessus des photos ou des tuiles de carte variées.
+- *Note technique* : ~90 couleurs codées en dur remplacées par des tokens
+  CSS (`--bg`, `--card`, `--border`, `--text`, `--muted`, `--select`,
+  `--star`, `--success`, `--danger`…) dans `styles.css` et les composants
+  du renderer. Plusieurs premiers remplacements automatiques s'étaient
+  révélés incorrects par endroits (bordures/texte de panneaux volontai-
+  rement sombres qui suivaient à tort le thème, cassant le contraste en
+  clair) — corrigés après relecture ciblée et vérification par capture
+  d'écran réelle (Xvfb + Electron).
+
 ## [2.4.0] — 2026-07-15
 
 ### Ajouté — refonte de la barre de menus : tout devient trouvable

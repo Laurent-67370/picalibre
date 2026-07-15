@@ -464,7 +464,7 @@ export default function Editor({
     width: 14,
     height: 14,
     background: '#fff',
-    border: '2px solid #2f6feb',
+    border: '2px solid var(--select)',
     borderRadius: 2,
     ...pos
   })
@@ -536,7 +536,7 @@ export default function Editor({
                     setTool(tool === t ? 'none' : t)
                     setPendingDefect(null)
                   }}
-                  style={{ flex: 1, background: tool === t ? '#2f6feb' : undefined, fontSize: 12 }}
+                  style={{ flex: 1, background: tool === t ? 'var(--select)' : undefined, fontSize: 12 }}
                 >
                   {label}
                 </button>
@@ -590,7 +590,7 @@ export default function Editor({
                         'filter'
                       )
                     }
-                    style={{ padding: '4px 10px', fontSize: 12, background: active ? '#2f6feb' : undefined }}
+                    style={{ padding: '4px 10px', fontSize: 12, background: active ? 'var(--select)' : undefined }}
                   >
                     {f.label}
                   </button>
@@ -933,7 +933,7 @@ export default function Editor({
                   }}
                   style={{
                     padding: '4px 10px',
-                    background: ratio === r.value ? '#2f6feb' : undefined
+                    background: ratio === r.value ? 'var(--select)' : undefined
                   }}
                 >
                   {r.label}
@@ -1007,7 +1007,7 @@ export default function Editor({
                     top: d.top + z.y * d.height - rp,
                     width: rp * 2,
                     height: rp * 2,
-                    border: '2px solid #ff5252',
+                    border: '2px solid var(--danger)',
                     borderRadius: '50%',
                     cursor: 'pointer'
                   }}
@@ -1031,7 +1031,7 @@ export default function Editor({
                   top: d.top + pendingDefect.y * d.height - rp,
                   width: rp * 2,
                   height: rp * 2,
-                  border: '2px dashed #f5c518',
+                  border: '2px dashed var(--star)',
                   borderRadius: '50%',
                   pointerEvents: 'none'
                 }}

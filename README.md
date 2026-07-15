@@ -1,12 +1,22 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.4.0-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.5.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+## 🆕 Quoi de neuf en 2.5.0
+
+- 🎨 **Thème clair inspiré de Picasa 3, par défaut** : palette gris
+  argenté/blanc, accent orange PicaLibre conservé, sélection bleue façon
+  Picasa. Le thème sombre navy/orange historique reste disponible dans
+  **Réglages → Apparence**. La visionneuse, l'éditeur et les autres modes
+  immersifs restent volontairement sombres dans les deux thèmes (comme
+  Picasa, Lightroom ou Photos), pour ne pas fausser le jugement des
+  couleurs des photos.
 
 ## 🆕 Quoi de neuf en 2.4.0
 

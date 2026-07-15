@@ -43,7 +43,7 @@ function Row({ label, value }: { label: string; value?: string | null }): JSX.El
   if (!value) return null
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '3px 0' }}>
-      <span style={{ color: '#94a3b8', flexShrink: 0 }}>{label}</span>
+      <span style={{ color: 'var(--muted)', flexShrink: 0 }}>{label}</span>
       <span style={{ textAlign: 'right', wordBreak: 'break-word' }}>{value}</span>
     </div>
   )
@@ -77,8 +77,8 @@ export default function InfoPanel({
       style={{
         width: 280,
         flexShrink: 0,
-        borderLeft: '1px solid #334155',
-        background: '#111827',
+        borderLeft: '1px solid var(--border)',
+        background: 'var(--bg-elevated)',
         padding: 14,
         overflow: 'auto',
         fontSize: 13
@@ -92,15 +92,15 @@ export default function InfoPanel({
       </div>
 
       {!p ? (
-        <p style={{ color: '#94a3b8' }}>Chargement…</p>
+        <p style={{ color: 'var(--muted)' }}>Chargement…</p>
       ) : (
         <>
           <img
             src={`thumb://library/256/${p.id}?v=${p.hash_xxh3}`}
-            style={{ width: '100%', borderRadius: 8, marginBottom: 10, background: '#0f172a' }}
+            style={{ width: '100%', borderRadius: 8, marginBottom: 10, background: 'var(--bg-elevated)' }}
           />
           <div style={{ fontWeight: 600, wordBreak: 'break-all', marginBottom: 2 }}>{p.filename}</div>
-          <div style={{ color: '#94a3b8', marginBottom: 10 }}>{fmtDate(p.taken_at)}</div>
+          <div style={{ color: 'var(--muted)', marginBottom: 10 }}>{fmtDate(p.taken_at)}</div>
 
           <Row
             label="Dimensions"
@@ -137,14 +137,14 @@ export default function InfoPanel({
 
           {d.tags.length > 0 && (
             <>
-              <div style={{ color: '#94a3b8', margin: '10px 0 4px' }}>Tags</div>
+              <div style={{ color: 'var(--muted)', margin: '10px 0 4px' }}>Tags</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {d.tags.map((t) => (
                   <span
                     key={t}
                     style={{
-                      border: '1px solid #f97316',
-                      color: '#fb923c',
+                      border: '1px solid var(--accent)',
+                      color: 'var(--accent-2)',
                       borderRadius: 999,
                       padding: '2px 10px',
                       fontSize: 12

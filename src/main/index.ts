@@ -1036,7 +1036,7 @@ app.whenReady().then(() => {
       // Double-clic sur la 1re vignette → capture de la LIGHTBOX
       setTimeout(() => {
         void mainWindow.webContents.executeJavaScript(
-          `(() => { const im = document.querySelector('main figure img'); if (im) im.click() })()`
+          `(() => { const im = document.querySelector('main figure canvas'); if (im) im.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })()`
         )
       }, 3000)
       setTimeout(async () => {

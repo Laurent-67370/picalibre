@@ -1,14 +1,61 @@
-/* PicaLibre — styles globaux (palette navy/orange) */
+/* PicaLibre — thèmes clair (Picasa 3) et sombre (navy/orange, historique) */
 
 :root {
+  /* ---- Thème clair — par défaut, inspiré de Picasa 3 (gris argenté,
+     cartes blanches, sélection bleue, accent PicaLibre orange conservé
+     pour la cohérence de marque avec le logo/README) ---- */
+  --bg: #eef1f6;
+  --bg-elevated: #e3e8f0;
+  --card: #ffffff;
+  --card-2: #eef1f5;
+  --border: #d7dce4;
+  --border-soft: #e4e8ee;
+  --text: #1e293b;
+  --muted: #64748b;
+  --accent: #f97316;
+  --accent-2: #ea580c;
+  --accent-ink: #ffffff;
+  --select: #2f6feb;
+  --star: #f5c518;
+  --danger: #ef4444;
+  --danger-2: #fca5a5;
+  --success: #16a34a;
+  --shadow: rgba(30, 41, 59, 0.1);
+  --overlay: rgba(15, 23, 42, 0.85);
+  --scrollbar: #c7cfdb;
+}
+
+:root[data-theme='dark'] {
+  /* ---- Thème sombre — palette d'origine PicaLibre (navy/orange),
+     conservée à l'identique pour qui la préfère ---- */
   --bg: #0f172a;
+  --bg-elevated: #111827;
   --card: #1e293b;
   --card-2: #151f31;
   --border: #334155;
+  --border-soft: #333333;
   --text: #e2e8f0;
   --muted: #94a3b8;
   --accent: #f97316;
   --accent-2: #fb923c;
+  --accent-ink: #0f172a;
+  --select: #2f6feb;
+  --star: #f5c518;
+  --danger: #ef4444;
+  --danger-2: #fca5a5;
+  --success: #3fb950;
+  --shadow: rgba(0, 0, 0, 0.4);
+  --overlay: rgba(15, 23, 42, 0.85);
+  --scrollbar: #334155;
+}
+
+* {
+  scrollbar-color: var(--scrollbar) transparent;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
 }
 
 /* ---- Boutons : lisibles, survol net, désactivé évident ---- */
@@ -25,25 +72,28 @@ button {
   border: 1px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
   white-space: nowrap;
+  box-shadow: 0 1px 2px var(--shadow);
 }
 button:hover:not(:disabled) {
-  background: #273449;
+  background: var(--card-2);
   border-color: var(--accent);
   transform: translateY(-1px);
+  box-shadow: 0 3px 8px var(--shadow);
 }
 button:active:not(:disabled) {
   transform: translateY(0);
 }
 button:disabled {
-  opacity: 0.35;
+  opacity: 0.4;
   cursor: not-allowed;
+  box-shadow: none;
 }
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #0f172a;
+  color: var(--accent-ink);
   font-weight: 600;
 }
 button.primary:hover:not(:disabled) {
@@ -51,15 +101,15 @@ button.primary:hover:not(:disabled) {
   border-color: var(--accent-2);
 }
 button.danger:hover:not(:disabled) {
-  border-color: #ef4444;
-  color: #fca5a5;
+  border-color: var(--danger);
+  color: var(--danger-2);
 }
 
 /* ---- Champs ---- */
 input,
 select {
   padding: 8px 10px;
-  background: var(--bg);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
@@ -72,13 +122,13 @@ select:focus {
   border-color: var(--accent);
 }
 input::placeholder {
-  color: #64748b;
+  color: var(--muted);
 }
 
-/* ---- Barre d'actions du bac ---- */
+/* ---- Barre d'actions du bac (« light table » façon Picasa) ---- */
 .ft {
   border-top: 1px solid var(--border);
-  background: #111827;
+  background: var(--bg-elevated);
   padding: 10px 14px;
   display: flex;
   align-items: center;
@@ -99,7 +149,7 @@ input::placeholder {
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  border: 1px solid #26334a;
+  border: 1px solid var(--border-soft);
   border-radius: 12px;
   background: var(--card-2);
   flex-shrink: 0;
@@ -116,7 +166,7 @@ input::placeholder {
 /* Pastille du compteur du bac */
 .traycount {
   background: var(--accent);
-  color: #0f172a;
+  color: var(--accent-ink);
   font-weight: 700;
   border-radius: 999px;
   padding: 2px 10px;
@@ -132,7 +182,7 @@ input::placeholder {
   transition: border-color 0.15s ease, transform 0.15s ease;
 }
 .traythumb:hover {
-  border-color: #ef4444;
+  border-color: var(--danger);
   transform: scale(1.06);
 }
 
@@ -236,27 +286,27 @@ input::placeholder {
   background: rgba(249, 115, 22, 1);
 }
 
-/* Contrôles Leaflet sur fond sombre */
+/* Contrôles Leaflet — suivent le thème */
 .leaflet-control-zoom a {
-  background: #181b20 !important;
-  color: #c9d1d9 !important;
-  border-color: #36404a !important;
+  background: var(--card) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
 }
 
 .leaflet-control-zoom a:hover {
-  background: #1e2126 !important;
+  background: var(--card-2) !important;
 }
 
 .leaflet-control-attribution {
-  background: rgba(24, 27, 32, 0.8) !important;
-  color: #94a3b8 !important;
+  background: var(--overlay) !important;
+  color: #cbd5e1 !important;
 }
 
 .leaflet-control-attribution a {
-  color: #c9d1d9 !important;
+  color: #e2e8f0 !important;
 }
 
 /* Fond de carte pendant le chargement */
 .leaflet-container {
-  background: #0f172a !important;
+  background: var(--bg) !important;
 }

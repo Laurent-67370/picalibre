@@ -208,7 +208,7 @@ export default function PrintDialog({
                   <span
                     style={{
                       fontSize: 6,
-                      color: '#333',
+                      color: 'var(--muted)',
                       fontFamily: 'monospace',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',

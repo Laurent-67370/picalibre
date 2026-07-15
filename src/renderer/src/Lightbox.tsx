@@ -161,14 +161,14 @@ export default function Lightbox({
           gap: 12,
           padding: '10px 16px',
           background: '#0f172a',
-          borderBottom: '1px solid #334155'
+          borderBottom: '1px solid var(--border)'
         }}
       >
         <button onClick={onClose} title="Fermer (Échap)">
           ← Bibliothèque
         </button>
         <span style={{ fontSize: 14, fontWeight: 600 }}>{photo.filename}</span>
-        <span style={{ fontSize: 12, color: '#94a3b8' }}>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>
           {index + 1} / {photos.length}
         </span>
         <span style={{ fontSize: 14, letterSpacing: 2, cursor: 'pointer', userSelect: 'none' }}>
@@ -176,7 +176,7 @@ export default function Lightbox({
             <span
               key={n}
               onClick={() => onRate(photo.id, photo.rating === n ? 0 : n)}
-              style={{ color: n <= photo.rating ? '#f5c518' : '#475569' }}
+              style={{ color: n <= photo.rating ? 'var(--star)' : 'var(--border)' }}
             >
               ★
             </span>
@@ -184,7 +184,7 @@ export default function Lightbox({
         </span>
         <span style={{ flex: 1 }} />
         {!isVideo && zoom > 1.01 && (
-          <span style={{ fontSize: 12, color: '#94a3b8' }}>{Math.round(zoom * 100)} % — glisser pour naviguer</span>
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{Math.round(zoom * 100)} % — glisser pour naviguer</span>
         )}
         {!isVideo && (
           <button className="primary" onClick={() => onEdit(photo)} title="Ouvrir dans l'éditeur (E)">
@@ -289,7 +289,7 @@ export default function Lightbox({
         </div>
       )}
 
-      <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', padding: '6px 0', background: '#0f172a' }}>
+      <div style={{ textAlign: 'center', fontSize: 11, color: '#94a3b8', padding: '6px 0', background: '#0f172a' }}>
         {isVideo
           ? '← → : naviguer · Échap : fermer'
           : 'Molette : zoom · Double-clic : 100 % · ← → : naviguer · E : éditer · Échap : fermer'}
