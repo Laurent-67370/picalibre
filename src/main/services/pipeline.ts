@@ -75,8 +75,9 @@ async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
       `SELECT p.id AS photoId, p.filepath, p.hash_xxh3 AS hash
        FROM photos p
        WHERE p.status = 'active' AND p.media_type = 'video' AND p.hash_xxh3 != ''
-         AND NOT EXISTS (
-           SELECT 1 FROM thumbnails t WHERE t.photo_id = p.id AND t.size = 256
+         AND (
+           NOT EXISTS (SELECT 1 FROM thumbnails t WHERE t.photo_id = p.id AND t.size = 256)
+           OR NOT EXISTS (SELECT 1 FROM thumbnails t WHERE t.photo_id = p.id AND t.size = 1024)
          )`
     )
     .all() as { photoId: number; filepath: string; hash: string }[]
@@ -116,11 +117,8 @@ async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
         })
       })
       const base = sharp(tmpFrame, { failOn: 'none' })
-      console.log('[DEBUG] frame ok, avant metadata()', item.photoId)
       const meta = await base.metadata()
-      console.log('[DEBUG] metadata ok', item.photoId, JSON.stringify(meta.width), meta.height)
       for (const size of [256, 1024]) {
-        console.log('[DEBUG] avant resize', size, item.photoId)
         const cachePath = join(thumbsCacheDir(), item.hash.slice(0, 2), `${item.hash}_${size}.webp`)
         await mkdir(join(thumbsCacheDir(), item.hash.slice(0, 2)), { recursive: true })
         await base
@@ -129,7 +127,6 @@ async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
           .webp({ quality: 82 })
           .toFile(cachePath)
         insertThumb.run(item.photoId, size, cachePath)
-        console.log('[DEBUG] thumb insérée', size, item.photoId)
       }
       updateMeta.run(
         meta.width ?? null,
@@ -175,8 +172,9 @@ function thumbsPhase(win: BrowserWindow): Promise<void> {
       `SELECT p.id AS photoId, p.filepath, p.hash_xxh3 AS hash
        FROM photos p
        WHERE p.status = 'active' AND p.media_type = 'image' AND p.hash_xxh3 != ''
-         AND NOT EXISTS (
-           SELECT 1 FROM thumbnails t WHERE t.photo_id = p.id AND t.size = 256
+         AND (
+           NOT EXISTS (SELECT 1 FROM thumbnails t WHERE t.photo_id = p.id AND t.size = 256)
+           OR NOT EXISTS (SELECT 1 FROM thumbnails t WHERE t.photo_id = p.id AND t.size = 1024)
          )`
     )
     .all() as { photoId: number; filepath: string; hash: string }[]
@@ -215,6 +213,9 @@ function thumbsPhase(win: BrowserWindow): Promise<void> {
         case 'thumbs-done':
         case 'error':
           if (msg.type === 'error') console.error('[thumbs]', msg.message)
+          else if (msg.stats?.failed > 0) {
+            console.error('[thumbs] terminé avec échecs :', JSON.stringify(msg.stats))
+          }
           worker.kill()
           resolve()
           break

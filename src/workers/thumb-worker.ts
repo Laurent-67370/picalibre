@@ -172,8 +172,24 @@ async function run(items: ThumbItem[], cacheDir: string): Promise<void> {
     while (queue.length > 0) {
       const item = queue.shift()
       if (!item) break
-      const results = await processItem(item, cacheDir)
-      if (results.some((r) => !r.ok)) failed++
+      let results = await processItem(item, cacheDir)
+      if (results.some((r) => !r.ok)) {
+        // Retry unique : les échecs sharp/libvips observés sont parfois
+        // transitoires (contention CPU/mémoire sous charge, cf. le pipeline
+        // vidéo qui traite le même genre de fichiers en parallèle). Sans ce
+        // retry, un item raté était compté (stats.failed) mais jamais
+        // rejoué ni logué — silencieusement absent du résultat final.
+        const err = results.find((r) => !r.ok)?.error
+        console.error(`[thumb-worker] échec photoId=${item.photoId} (nouvelle tentative) :`, err)
+        results = await processItem(item, cacheDir)
+        if (results.some((r) => !r.ok)) {
+          failed++
+          console.error(
+            `[thumb-worker] échec définitif photoId=${item.photoId} :`,
+            results.find((r) => !r.ok)?.error
+          )
+        }
+      }
       pending.push(...results.filter((r) => r.ok))
       if (pending.length >= RESULT_BATCH) flush()
       done++

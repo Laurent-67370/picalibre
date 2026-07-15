@@ -3,6 +3,35 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.8.0] — 2026-07-15
+
+### Corrigé — la vraie cause de la vignette manquante intermittente
+- **Root cause identifiée** (après plusieurs pistes explorées en vain :
+  signature macOS, `stream:true`, timeouts ffmpeg) : les requêtes
+  sélectionnant les photos/vidéos à traiter dans le pipeline de
+  miniatures ne vérifiaient l'absence que de la taille **256px** pour
+  décider si un item devait être (re)traité. Si la taille 256 réussissait
+  mais que la 1024 échouait (course avec le watcher de fichiers qui peut
+  déclencher son propre scan pendant qu'un scan explicite est en cours),
+  l'item était **exclu silencieusement de toutes les passes suivantes** —
+  la miniature 1024 ne pouvait plus jamais se générer, y compris via le
+  rescan automatique au démarrage (2.6.0) ou un rescan manuel.
+- Les requêtes (miniatures photo et vidéo) vérifient désormais l'absence
+  de **l'une ou l'autre** taille. Le pipeline devient auto-réparant : un
+  échec partiel sur un item est automatiquement rattrapé à la prochaine
+  passe (mécanisme de rescan déjà existant), au lieu de rester bloqué
+  indéfiniment.
+- **Diagnostic renforcé** : le worker de miniatures (`thumb-worker.ts`)
+  logue désormais chaque échec individuel et retente une fois avant
+  d'abandonner (les échecs sharp/libvips étaient jusqu'ici comptés en
+  silence, sans log ni retry) ; la phase miniatures logue ses statistiques
+  finales en cas d'échec.
+- **Reproduit et vérifié empiriquement** : ~10 % de taux d'échec
+  intermittent avant correctif (reproduit une douzaine de fois sur des
+  lancements réels via Xvfb+Electron, avec inspection directe de la base
+  SQLite pour confirmer précisément quelle miniature manquait) ; 30/30
+  lancements réussis après correctif.
+
 ## [2.7.2] — 2026-07-15
 
 ### Corrigé
