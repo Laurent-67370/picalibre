@@ -3,6 +3,15 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.7.2] — 2026-07-15
+
+### Corrigé
+- **Timeout de téléchargement ffmpeg ramené à 15 s au lieu de 60 s** par
+  une modification de debug local restée par erreur dans le commit 2.7.1
+  — bien trop court pour 77 Mo sur une connexion normale (échouerait
+  systématiquement en dessous de ~40 Mbps soutenus). Repéré en relisant
+  le diff avant publication, jamais publié en release. Revenu à 60 s.
+
 ## [2.7.1] — 2026-07-15
 
 ### Ajouté — annulation étendue à la fusion de doublons

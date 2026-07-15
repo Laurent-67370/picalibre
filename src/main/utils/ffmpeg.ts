@@ -84,7 +84,7 @@ async function downloadFfmpeg(dest: string): Promise<void> {
     try {
       console.log(`[ffmpeg] téléchargement du binaire (tentative ${attempt}/3) :`, url)
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 15_000)
+      const timer = setTimeout(() => controller.abort(), 60_000)
       try {
         const res = await net.fetch(url, { signal: controller.signal })
         if (!res.ok || !res.body) throw new Error(`téléchargement ffmpeg : HTTP ${res.status}`)
