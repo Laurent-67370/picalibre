@@ -89,6 +89,7 @@ export default function Editor({
 
   const imgRef = useRef<HTMLImageElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const compareCanvasRef = useRef<HTMLCanvasElement>(null)
   const histRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const rafRef = useRef(0)
@@ -102,6 +103,12 @@ export default function Editor({
   showOriginalRef.current = showOriginal
   const toolRef = useRef(tool)
   toolRef.current = tool
+  // Côte à côte façon Picasa 3 : original et édité affichés simultanément
+  // (plutôt que showOriginal, qui bascule entre les deux sur le même canvas —
+  // resté inutilisé jusqu'ici, aucun bouton ne l'activait).
+  const [compareMode, setCompareMode] = useState(false)
+  const compareModeRef = useRef(compareMode)
+  compareModeRef.current = compareMode
 
   // ---------- Rendu ----------
   const drawHistogram = useCallback(() => {
@@ -140,6 +147,13 @@ export default function Editor({
       }
       renderPreview(img, s, canvas)
       drawHistogram()
+      // Côte à côte : le canvas de gauche reste toujours l'original intact,
+      // indépendamment de showOriginal (qui n'a plus vraiment de sens une
+      // fois le côte-à-côte actif, mais on ne casse rien s'il l'est aussi).
+      const compareCanvas = compareCanvasRef.current
+      if (compareModeRef.current && compareCanvas) {
+        renderPreview(img, emptyStack(), compareCanvas)
+      }
     })
   }, [drawHistogram])
 
@@ -159,7 +173,7 @@ export default function Editor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photo.id])
 
-  useEffect(scheduleRender, [stack, showOriginal, cropMode, scheduleRender])
+  useEffect(scheduleRender, [stack, showOriginal, cropMode, compareMode, scheduleRender])
 
   // ---------- Persistance ----------
   const persist = (next: EditStack, action: string) => {
@@ -353,6 +367,7 @@ export default function Editor({
     const existing = getOp(stackRef.current, 'crop')
     setCropRect(existing ? { ...existing.params } : { x: 0.05, y: 0.05, w: 0.9, h: 0.9 })
     setCropMode(true)
+    setCompareMode(false)
   }
 
   const applyCrop = () => {
@@ -450,6 +465,12 @@ export default function Editor({
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) doUndo()
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) doRedo()
+      const inField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(
+        (e.target as HTMLElement)?.tagName
+      )
+      if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey && !inField && !cropModeRef.current) {
+        setCompareMode((v) => !v)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -504,6 +525,16 @@ export default function Editor({
             Original
           </button>
         </div>
+
+        <button
+          className={compareMode ? 'primary' : undefined}
+          onClick={() => setCompareMode((v) => !v)}
+          disabled={cropMode}
+          title="Comparer original / édité côte à côte (C)"
+          style={{ width: '100%', marginBottom: 12 }}
+        >
+          ⇔ Comparer côte à côte
+        </button>
 
         {!cropMode ? (
           <>
@@ -972,18 +1003,58 @@ export default function Editor({
           touchAction: 'none'
         }}
       >
-        <canvas
-          ref={canvasRef}
-          onClick={onCanvasClick}
+        {compareMode && !cropMode && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              marginRight: 16,
+              maxWidth: '48%'
+            }}
+          >
+            <span style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6, letterSpacing: '0.04em' }}>
+              ORIGINAL
+            </span>
+            <canvas
+              ref={compareCanvasRef}
+              style={{
+                maxWidth: '100%',
+                maxHeight: 'calc(100vh - 140px)',
+                objectFit: 'contain',
+                boxShadow: '0 4px 24px #0008',
+                borderRadius: 4
+              }}
+            />
+          </div>
+        )}
+        <div
           style={{
-            maxWidth: '100%',
-            maxHeight: '100%',
-            objectFit: 'contain',
-            boxShadow: '0 4px 24px #0008',
-            borderRadius: 4,
-            cursor: tool !== 'none' && !cropMode ? 'crosshair' : 'default'
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            maxWidth: compareMode && !cropMode ? '48%' : '100%',
+            minWidth: 0
           }}
-        />
+        >
+          {compareMode && !cropMode && (
+            <span style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6, letterSpacing: '0.04em' }}>
+              ÉDITÉ
+            </span>
+          )}
+          <canvas
+            ref={canvasRef}
+            onClick={onCanvasClick}
+            style={{
+              maxWidth: '100%',
+              maxHeight: compareMode && !cropMode ? 'calc(100vh - 140px)' : '100%',
+              objectFit: 'contain',
+              boxShadow: '0 4px 24px #0008',
+              borderRadius: 4,
+              cursor: tool !== 'none' && !cropMode ? 'crosshair' : 'default'
+            }}
+          />
+        </div>
 
         {/* Marqueurs yeux rouges */}
         {tool === 'redeye' &&

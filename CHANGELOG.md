@@ -3,6 +3,25 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.9.0] — 2026-07-16
+
+### Ajouté — comparaison côte à côte (Éditeur)
+- **⇔ Comparer côte à côte** (raccourci `C`) : affiche l'original et la
+  version éditée simultanément, l'un à côté de l'autre — la fonctionnalité
+  phare de Picasa 3.9, absente jusqu'ici de PicaLibre. Chaque panneau est
+  étiqueté (ORIGINAL / ÉDITÉ), désactivé automatiquement en mode recadrage
+  (qui a besoin du canvas plein pour placer le cadre).
+- *Découverte au passage* : un début d'implémentation orphelin existait
+  déjà (`showOriginal`, un mode bascule original↔édité sur un seul
+  canvas) mais n'était relié à aucun bouton — resté inactif. Le nouveau
+  côte-à-côte le complète sans le retirer.
+- **Vérifié rigoureusement** (pas juste visuellement) : capture réelle
+  (Xvfb + Electron) avec un filtre N&B appliqué, coordonnées exactes des
+  deux canvas récupérées via le DOM, mesure de saturation par zone
+  (179 à gauche vs 36 à droite, confirmant original coloré / édité
+  désaturé) et vérification pixel par pixel de l'espace entre les deux
+  panneaux (0 débordement).
+
 ## [2.8.0] — 2026-07-15
 
 ### Corrigé — la vraie cause de la vignette manquante intermittente

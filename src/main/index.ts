@@ -987,7 +987,8 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_MENU',
     'PICALIBRE_TEST_GEO_SCREENSHOT',
     'PICALIBRE_TEST_SCREENSHOT',
-    'PICALIBRE_TEST_SCREENSHOT_GRID'
+    'PICALIBRE_TEST_SCREENSHOT_GRID',
+    'PICALIBRE_TEST_SCREENSHOT_COMPARE'
   ].some((k) => !!process.env[k])
   if (!isTestMode) {
     const hasRoots = getDb().prepare('SELECT 1 FROM scan_roots LIMIT 1').get()
@@ -1160,6 +1161,72 @@ app.whenReady().then(() => {
           await writeFile(shotOut, img.toPNG())
           console.log('[grid-shot] photos=', photos, 'thumbs=', thumbs, 'écrit:', shotOut)
           exitTest(0)
+        }, 1500)
+      }
+    }, 500)
+  }
+
+  // Capture du côte-à-côte de l'éditeur (QA visuelle) :
+  // PICALIBRE_TEST_SCREENSHOT_COMPARE=<dossier>
+  // Ouvre l'éditeur sur la 1re photo, applique un filtre N&B (changement
+  // visuel évident), active le côte-à-côte, puis capture.
+  const shotCompareDir = process.env.PICALIBRE_TEST_SCREENSHOT_COMPARE
+  if (shotCompareDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(shotCompareDir)
+    startScan(mainWindow)
+    const t0c = Date.now()
+    const ivc = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      const ready = photos > 0 && thumbs >= photos * 2
+      if (ready || Date.now() - t0c > 60000) {
+        clearInterval(ivc)
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Chronologie')); if (el) el.click(); })()`
+        )
+        setTimeout(async () => {
+          // Double-clic sur la 1re vignette → Lightbox, puis Éditer
+          await mainWindow.webContents.executeJavaScript(
+            `(() => { const im = document.querySelector('main figure canvas'); if (im) im.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })()`
+          )
+          setTimeout(async () => {
+            await mainWindow.webContents.executeJavaScript(
+              `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('Éditer')); if (b) b.click(); })()`
+            )
+            setTimeout(async () => {
+              // Appliquer le filtre N&B (changement visuel net et vérifiable)
+              await mainWindow.webContents.executeJavaScript(
+                `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === 'N&B'); if (b) b.click(); })()`
+              )
+              setTimeout(async () => {
+                // Activer le côte à côte
+                await mainWindow.webContents.executeJavaScript(
+                  `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('Comparer côte à côte')); if (b) b.click(); })()`
+                )
+                setTimeout(async () => {
+                  const dom = await mainWindow.webContents.executeJavaScript(
+                    `(() => {
+                      const canvases = document.querySelectorAll('main canvas')
+                      const spans = [...document.querySelectorAll('main span')].filter(s=>s.textContent==='ORIGINAL'||s.textContent==='ÉDITÉ')
+                      const rects = spans.map(s => {
+                        const canvas = s.parentElement.querySelector('canvas')
+                        const r = canvas ? canvas.getBoundingClientRect() : null
+                        return { label: s.textContent, rect: r ? {x:r.x,y:r.y,w:r.width,h:r.height} : null }
+                      })
+                      return { canvasCount: canvases.length, rects }
+                    })()`
+                  )
+                  console.log('[compare-shot] DOM:', JSON.stringify(dom))
+                  const img = await mainWindow.webContents.capturePage()
+                  const shotOut = join(app.getPath('temp'), 'picalibre-compare.png')
+                  await writeFile(shotOut, img.toPNG())
+                  console.log('[compare-shot] écrit:', shotOut)
+                  exitTest(0)
+                }, 800)
+              }, 500)
+            }, 1000)
+          }, 1500)
         }, 1500)
       }
     }, 500)

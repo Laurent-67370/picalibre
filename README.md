@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.8.0-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.9.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -9,6 +9,12 @@ Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
 
 📄 [Politique de signature de code](CODE_SIGNING.md) — comment les installeurs sont signés et comment vérifier leur intégrité.
+
+## 🆕 Quoi de neuf en 2.9.0
+
+- ⇔ **Comparaison côte à côte** dans l'éditeur (raccourci `C`) : original
+  et édité affichés simultanément, l'un à côté de l'autre — la
+  fonctionnalité phare de Picasa 3.9, maintenant dans PicaLibre.
 
 ## 🆕 Quoi de neuf en 2.8.0
 
