@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { AlbumRow, FaceLite, FolderRow, MergeSnapshot, PersonRow, PhotoRow, ScanProgress, RendererApi } from '@shared/ipc'
+import type { EditStack } from '@shared/edit-engine'
 import MapView from './MapView'
 import Slideshow from './Slideshow'
 import FaceMovie from './FaceMovie'
@@ -165,6 +166,10 @@ export default function App(): JSX.Element {
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null)
   const [batchExportOpen, setBatchExportOpen] = useState(false)
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renamePattern, setRenamePattern] = useState('{name}')
+  const [renameStart, setRenameStart] = useState(1)
+  const [renameBusy, setRenameBusy] = useState(false)
   const [batchSize, setBatchSize] = useState<number | 0>(0)
   const [batchFormat, setBatchFormat] = useState<'jpeg' | 'webp' | 'png'>('jpeg')
   const [batchQuality, setBatchQuality] = useState(90)
@@ -287,6 +292,12 @@ export default function App(): JSX.Element {
   type LastAction =
     | { type: 'hide'; photoIds: number[]; wasHidden: boolean; label: string }
     | { type: 'trash'; snapshot: MergeSnapshot; label: string }
+    | { type: 'batchEdit'; before: Array<{ photoId: number; prevStack: EditStack }>; label: string }
+    | {
+        type: 'batchRename'
+        items: Array<{ id: number; oldPath: string; oldFilename: string; newPath: string; newFilename: string }>
+        label: string
+      }
   const [lastAction, setLastAction] = useState<LastAction | null>(null)
   const lastActionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const armUndo = (action: LastAction): void => {
@@ -307,6 +318,12 @@ export default function App(): JSX.Element {
       await window.api.invoke('duplicates:undoMerge', lastAction.snapshot)
       window.api.invoke('duplicates:list', undefined).then(setDupGroups)
       refreshSidebar()
+      if (viewRef.current) loadView(viewRef.current)
+    } else if (lastAction.type === 'batchEdit') {
+      await window.api.invoke('edits:undoBatch', lastAction.before)
+      if (viewRef.current) loadView(viewRef.current)
+    } else if (lastAction.type === 'batchRename') {
+      await window.api.invoke('photos:undoBatchRename', lastAction.items)
       if (viewRef.current) loadView(viewRef.current)
     }
     setLastAction(null)
@@ -608,6 +625,70 @@ export default function App(): JSX.Element {
     alert(`CSV écrit (${r.rows} ligne(s)) : ${destDir}/metadonnees.csv`)
   }
 
+  const trayAutoFix = async () => {
+    if (trayIds.length === 0) return
+    const r = await window.api.invoke('edits:batchAutoFix', { photoIds: trayIds })
+    if (r.before.length > 0) {
+      armUndo({
+        type: 'batchEdit',
+        before: r.before,
+        label: `Correction auto appliquée à ${r.before.length} photo(s)${r.failed.length ? ` (${r.failed.length} échec(s))` : ''}`
+      })
+    } else if (r.failed.length > 0) {
+      alert(`Échec sur ${r.failed.length} photo(s) — vignettes pas encore prêtes ?`)
+    }
+  }
+
+  const trayPasteSettings = async () => {
+    if (trayIds.length === 0) return
+    const raw = localStorage.getItem('picalibre.clipboardStack')
+    if (!raw) {
+      alert('Copie d’abord des réglages depuis l’éditeur (bouton « 📋 Copier les réglages »).')
+      return
+    }
+    const stack = JSON.parse(raw) as EditStack
+    const r = await window.api.invoke('edits:batchApply', {
+      photoIds: trayIds,
+      stack,
+      action: 'paste_lot'
+    })
+    armUndo({
+      type: 'batchEdit',
+      before: r.before,
+      label: `Réglages collés sur ${r.before.length} photo(s)`
+    })
+  }
+
+  const runBatchRename = async () => {
+    if (trayIds.length === 0 || renameBusy) return
+    setRenameBusy(true)
+    try {
+      const r = await window.api.invoke('photos:batchRename', {
+        photoIds: trayIds,
+        pattern: renamePattern,
+        startNumber: renameStart
+      })
+      if (r.renamed.length > 0) {
+        armUndo({
+          type: 'batchRename',
+          items: r.renamed,
+          label: `${r.renamed.length} photo(s) renommée(s)${r.errors.length ? ` (${r.errors.length} échec(s))` : ''}`
+        })
+        if (viewRef.current) loadView(viewRef.current)
+        refreshSidebar()
+      }
+      if (r.errors.length > 0) {
+        alert(
+          `${r.errors.length} fichier(s) non renommé(s) :\n` +
+            r.errors.map((e) => `${e.filename} — ${e.error}`).join('\n')
+        )
+      }
+      setRenameOpen(false)
+    } finally {
+      setRenameBusy(false)
+    }
+  }
+
   const trayHide = async () => {
     const hide = view?.type !== 'hidden'
     const ids = [...trayIds]
@@ -820,7 +901,10 @@ export default function App(): JSX.Element {
       if (needsSelection()) return
       void window.api.invoke('share:email', { photoIds: trayIds })
     },
-    csvExport: () => { if (!needsSelection()) void trayCsv() }
+    csvExport: () => { if (!needsSelection()) void trayCsv() },
+    autoFix: () => { if (!needsSelection()) void trayAutoFix() },
+    pasteSettings: () => { if (!needsSelection()) void trayPasteSettings() },
+    batchRename: () => { if (!needsSelection()) setRenameOpen(true) }
   }
 
   // ---- Grille virtualisée ----
@@ -2219,6 +2303,19 @@ export default function App(): JSX.Element {
               <button onClick={trayCsv} title="Métadonnées en CSV">
                 📄 CSV
               </button>
+              <button onClick={trayAutoFix} title="Contraste + couleur calculés individuellement pour chaque photo (façon Picasa)">
+                🪄 Correction auto
+              </button>
+              <button
+                onClick={trayPasteSettings}
+                disabled={!localStorage.getItem('picalibre.clipboardStack')}
+                title="Colle les réglages copiés depuis l'éditeur (tuning, filtre, vignette, cadre) sur toute la sélection"
+              >
+                📥 Coller réglages
+              </button>
+              <button onClick={() => setRenameOpen(true)} title="Renommer tous les fichiers sélectionnés selon un modèle">
+                ✏️ Renommer
+              </button>
               <button onClick={trayHide} title="Masquer / démasquer">
                 {view?.type === 'hidden' ? '👁 Démasquer' : '🙈 Masquer'}
               </button>
@@ -2312,6 +2409,89 @@ export default function App(): JSX.Element {
               <button onClick={() => setBatchExportOpen(false)}>Annuler</button>
               <button className="primary" onClick={doBatchExport}>
                 Choisir le dossier et exporter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Renommage en lot ---- */}
+      {renameOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 250,
+            background: '#0f172acc',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={() => !renameBusy && setRenameOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--card)',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              minWidth: 400
+            }}
+          >
+            <h3 style={{ margin: 0 }}>✏️ Renommer en lot ({trayIds.length} fichier(s))</h3>
+            <label style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              Modèle
+              <input
+                value={renamePattern}
+                onChange={(e) => setRenamePattern(e.target.value)}
+                placeholder="{name}"
+              />
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                {'{n}'} = numéro séquentiel · {'{name}'} = nom d'origine · {'{date}'} = date de prise de vue
+              </span>
+            </label>
+            <label style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              Numéro de départ
+              <input
+                type="number"
+                min={0}
+                value={renameStart}
+                onChange={(e) => setRenameStart(Number(e.target.value))}
+                style={{ width: 100 }}
+              />
+            </label>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+              Aperçu :
+              <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                {[...tray.values()].slice(0, 3).map((p, i) => {
+                  const ext = p.filename.slice(p.filename.lastIndexOf('.'))
+                  const base = p.filename.slice(0, p.filename.lastIndexOf('.'))
+                  const date = p.taken_at
+                    ? new Date(p.taken_at * 1000).toISOString().slice(0, 10)
+                    : '????-??-??'
+                  const n = String(renameStart + i).padStart(3, '0')
+                  const preview =
+                    renamePattern.replace(/\{n\}/g, n).replace(/\{name\}/g, base).replace(/\{date\}/g, date) +
+                    ext
+                  return (
+                    <li key={p.id}>
+                      {p.filename} → <strong>{preview}</strong>
+                    </li>
+                  )
+                })}
+                {tray.size > 3 && <li>… et {tray.size - 3} autre(s)</li>}
+              </ul>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setRenameOpen(false)} disabled={renameBusy}>
+                Annuler
+              </button>
+              <button className="primary" onClick={runBatchRename} disabled={renameBusy || !renamePattern.trim()}>
+                {renameBusy ? 'Renommage…' : 'Renommer'}
               </button>
             </div>
           </div>

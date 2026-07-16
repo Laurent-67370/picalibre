@@ -170,6 +170,17 @@ export interface IpcInvokeMap {
   'scanRoots:setMode': { req: { id: number; mode: 'watch' | 'once' | 'excluded' }; res: void }
   'library:relocate': { req: { newRoot: string }; res: { markedMissing: number; relinked: number; stillMissing: number } }
   'photos:setHidden': { req: { photoIds: number[]; hidden: boolean }; res: { ok: boolean; error?: string } }
+  'photos:batchRename': {
+    req: { photoIds: number[]; pattern: string; startNumber: number }
+    res: {
+      renamed: Array<{ id: number; oldPath: string; oldFilename: string; newPath: string; newFilename: string }>
+      errors: Array<{ id: number; filename: string; error: string }>
+    }
+  }
+  'photos:undoBatchRename': {
+    req: Array<{ id: number; oldPath: string; oldFilename: string; newPath: string; newFilename: string }>
+    res: void
+  }
   'photos:hidden': { req: void; res: PhotoRow[] }
   'privacy:status': { req: void; res: { hasPassword: boolean; unlocked: boolean } }
   'privacy:setPassword': { req: { password: string }; res: { ok: boolean; error?: string } }
@@ -204,6 +215,15 @@ export interface IpcInvokeMap {
   'edits:save': { req: { photoId: number; stack: EditStack; action: string }; res: { canUndo: boolean; canRedo: boolean } }
   'edits:undo': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
   'edits:redo': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
+  'edits:batchApply': {
+    req: { photoIds: number[]; stack: EditStack; action: string }
+    res: { before: Array<{ photoId: number; prevStack: EditStack }> }
+  }
+  'edits:batchAutoFix': {
+    req: { photoIds: number[] }
+    res: { before: Array<{ photoId: number; prevStack: EditStack }>; failed: number[] }
+  }
+  'edits:undoBatch': { req: Array<{ photoId: number; prevStack: EditStack }>; res: void }
   'edits:export': { req: { photoId: number; format?: 'jpeg' | 'webp' | 'png'; maxSize?: number }; res: { outPath: string | null } }
   'update:install': { req: void; res: void }
   'context:photoMenu': { req: { photoId: number; selectedCount: number }; res: void }

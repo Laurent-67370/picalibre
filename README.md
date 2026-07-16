@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.10.0-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.11.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -9,6 +9,15 @@ Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
 
 📄 [Politique de signature de code](CODE_SIGNING.md) — comment les installeurs sont signés et comment vérifier leur intégrité.
+
+## 🆕 Quoi de neuf en 2.11.0
+
+- ✏️ **Renommage en lot** : modèle personnalisable ({n}/{name}/{date}),
+  aperçu en direct, annulable.
+- 🪄 **Correction auto en lot** : contraste/balance des blancs calculés
+  individuellement pour chaque photo sélectionnée.
+- 📋 **Copier/coller les réglages** entre l'éditeur et une sélection de
+  photos (tuning, filtre, vignette, cadre).
 
 ## 🆕 Quoi de neuf en 2.10.0
 

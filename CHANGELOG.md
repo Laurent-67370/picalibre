@@ -3,6 +3,35 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.11.0] — 2026-07-16
+
+### Ajouté — édition et renommage en lot (façon Picasa)
+- **✏️ Renommer en lot** : sélectionne des photos/vidéos, choisis un modèle
+  (`{n}` numéro séquentiel, `{name}` nom d'origine, `{date}` date de prise
+  de vue) avec aperçu en direct. Renomme les fichiers **sur le disque**
+  (pas juste dans la bibliothèque), watcher de fichiers désactivé pendant
+  l'opération pour éviter toute interférence, annulable (Ctrl/⌘+Z, comme
+  Masquer/Fusion de doublons).
+- **🪄 Correction auto (lot)** : applique contraste + balance des blancs
+  automatiques à toute une sélection — mais calculés **individuellement**
+  pour chaque photo (pas une valeur copiée), à partir de sa miniature déjà
+  en cache (rapide).
+- **📋 Copier les réglages** (éditeur) → **📥 Coller les réglages** (bac) :
+  copie tuning/filtre/vignette/cadre d'une photo éditée, colle sur toute
+  une sélection. Recadrage, retouche, yeux rouges et texte exclus de la
+  copie (n'ont de sens que sur la photo d'origine).
+- Toutes ces actions accessibles depuis le bac **et** le menu Outils.
+
+### Vérifié
+- Renommage en lot testé de bout en bout sur de vrais fichiers (Xvfb +
+  Electron réel) : 5/5 fichiers renommés sur disque + base, 5/5 restaurés
+  fidèlement après annulation (disque et base).
+- Édition en lot testée de bout en bout : correction auto produit des
+  valeurs de balance des blancs **différentes** par photo (calcul
+  individuel confirmé), le collage de réglages produit des valeurs
+  **identiques** sur toute la sélection (copie fidèle confirmée),
+  annulation groupée vérifiée.
+
 ## [2.10.0] — 2026-07-16
 
 ### Ajouté — plus d'effets créatifs et de cadres

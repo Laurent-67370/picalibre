@@ -113,6 +113,7 @@ export default function Editor({
   const [compareMode, setCompareMode] = useState(false)
   const compareModeRef = useRef(compareMode)
   compareModeRef.current = compareMode
+  const [copiedFlash, setCopiedFlash] = useState(false)
 
   // ---------- Rendu ----------
   const drawHistogram = useCallback(() => {
@@ -538,6 +539,31 @@ export default function Editor({
           style={{ width: '100%', marginBottom: 12 }}
         >
           ⇔ Comparer côte à côte
+        </button>
+
+        <button
+          onClick={() => {
+            // Recadrage/retouche/yeux rouges/texte exclus : n'ont de sens
+            // que sur CETTE photo, pas copiés sur une sélection différente.
+            const copyable = stack.ops.filter(
+              (o) =>
+                o.type !== 'crop' &&
+                o.type !== 'retouch' &&
+                o.type !== 'redeye' &&
+                o.type !== 'text'
+            )
+            localStorage.setItem(
+              'picalibre.clipboardStack',
+              JSON.stringify({ version: 1, ops: copyable })
+            )
+            setCopiedFlash(true)
+            setTimeout(() => setCopiedFlash(false), 1500)
+          }}
+          disabled={cropMode || stack.ops.length === 0}
+          title="Copier les réglages (tuning, filtre, vignette, cadre) pour les coller sur d'autres photos depuis la bibliothèque"
+          style={{ width: '100%', marginBottom: 12 }}
+        >
+          {copiedFlash ? '✔ Réglages copiés' : '📋 Copier les réglages'}
         </button>
 
         {!cropMode ? (

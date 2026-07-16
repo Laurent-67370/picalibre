@@ -17,8 +17,8 @@ log.transports.file.level = 'info'
 Object.assign(console, log.functions)
 
 import { pathToFileURL } from 'node:url'
-import { join } from 'node:path'
-import { writeFile, access } from 'node:fs/promises'
+import { join, dirname, basename, extname } from 'node:path'
+import { writeFile, access, rename as fsRename } from 'node:fs/promises'
 import sharp from 'sharp'
 import { initDb, getDb } from './db'
 import { getEditState, saveStack, undo, redo } from './services/edits'
@@ -28,7 +28,7 @@ import { getConfigForUi, setConfig, testConnection, runWebSync } from './service
 import { shutdownExiftool } from './services/exif'
 import { startFaceScan, isFaceScanRunning, humanModelsPath } from './services/faces'
 import { mergePersons, splitFaces, confirmFaces, rejectFaces, facesByPerson } from './services/faces/manage-core'
-import { startWatchers } from './services/watcher'
+import { startWatchers, stopWatchers } from './services/watcher'
 import { importFromDevice, importFileList } from './services/importer'
 import { relocateLibrary } from './services/relocate'
 import { privacyStatus, setPassword, unlock, lock, isUnlocked } from './services/privacy'
@@ -37,7 +37,13 @@ import { printPhotos } from './services/printer'
 import { makeCollage, CollageItem } from './services/collage'
 import { makeMovie, MovieItem } from './services/movie'
 import { getFfmpegPath } from './utils/ffmpeg'
-import { parseStack } from '../shared/edit-engine'
+import {
+  parseStack,
+  computeAutoContrast,
+  computeAutoColor,
+  upsertOp,
+  type EditStack
+} from '../shared/edit-engine'
 import { renderEdited } from './services/render-sharp'
 import { startScan } from './services/scanner'
 import { thumbsCacheDir } from './services/pipeline'
@@ -595,6 +601,103 @@ function registerIpc(): void {
       .prepare(`SELECT ${GRID_COLS} FROM photos WHERE is_hidden = 1 AND status = 'active' ORDER BY taken_at DESC`)
       .all()
   })
+
+  /**
+   * Renommage en lot (façon Picasa) : {n} = compteur séquentiel (3 chiffres),
+   * {name} = nom de fichier d'origine (sans extension), {date} = date de
+   * prise de vue AAAA-MM-JJ si connue, sinon date de modification.
+   * Le watcher est coupé pendant l'opération (sinon chaque renommage sur
+   * disque déclenche un 'unlink'+'add' chokidar qui pourrait marquer la
+   * photo 'missing' ou provoquer un rescan concurrent). La BDD est mise à
+   * jour AVANT le renommage sur disque : si un rescan tardif survient quand
+   * même après redémarrage du watcher, il ne trouvera rien d'incohérent.
+   */
+  ipcMain.handle('photos:batchRename', async (_e, { photoIds, pattern, startNumber }) => {
+    await stopWatchers()
+    const db = getDb()
+    const get = db.prepare(
+      'SELECT id, filepath, filename, taken_at, file_mtime FROM photos WHERE id = ?'
+    )
+    const renamed: Array<{
+      id: number
+      oldPath: string
+      oldFilename: string
+      newPath: string
+      newFilename: string
+    }> = []
+    const errors: Array<{ id: number; filename: string; error: string }> = []
+    let n = startNumber
+    for (const id of photoIds as number[]) {
+      const row = get.get(id) as
+        | { id: number; filepath: string; filename: string; taken_at: number | null; file_mtime: number }
+        | undefined
+      if (!row) continue
+      const ext = extname(row.filepath)
+      const base = basename(row.filepath, ext)
+      const ts = (row.taken_at ?? row.file_mtime) * 1000
+      const date = new Date(ts).toISOString().slice(0, 10)
+      const counter = String(n).padStart(3, '0')
+      const newFilename =
+        (pattern as string)
+          .replace(/\{n\}/g, counter)
+          .replace(/\{name\}/g, base)
+          .replace(/\{date\}/g, date) + ext
+      const newPath = join(dirname(row.filepath), newFilename)
+      n++
+      if (newPath === row.filepath) continue
+      try {
+        await access(newPath)
+        errors.push({ id, filename: row.filename, error: 'un fichier porte déjà ce nom' })
+        continue
+      } catch {
+        /* n'existe pas encore — bon signe, on continue */
+      }
+      try {
+        db.prepare('UPDATE photos SET filepath = ?, filename = ? WHERE id = ?').run(
+          newPath,
+          newFilename,
+          id
+        )
+        await fsRename(row.filepath, newPath)
+        renamed.push({ id, oldPath: row.filepath, oldFilename: row.filename, newPath, newFilename })
+      } catch (err) {
+        // Rollback BDD si le renommage disque a échoué après la mise à jour
+        db.prepare('UPDATE photos SET filepath = ?, filename = ? WHERE id = ?').run(
+          row.filepath,
+          row.filename,
+          id
+        )
+        errors.push({ id, filename: row.filename, error: (err as Error).message })
+      }
+    }
+    startWatchers(mainWindow)
+    return { renamed, errors }
+  })
+
+  ipcMain.handle('photos:undoBatchRename', async (_e, items) => {
+    await stopWatchers()
+    const db = getDb()
+    for (const it of items as Array<{
+      id: number
+      oldPath: string
+      oldFilename: string
+      newPath: string
+      newFilename: string
+    }>) {
+      try {
+        db.prepare('UPDATE photos SET filepath = ?, filename = ? WHERE id = ?').run(
+          it.oldPath,
+          it.oldFilename,
+          it.id
+        )
+        await fsRename(it.newPath, it.oldPath)
+      } catch (err) {
+        console.error('[undoBatchRename] échec pour', it.id, (err as Error).message)
+      }
+    }
+    startWatchers(mainWindow)
+  })
+
   ipcMain.handle('privacy:status', () => privacyStatus())
   ipcMain.handle('privacy:setPassword', (_e, { password }) => setPassword(password))
   ipcMain.handle('privacy:unlock', (_e, { password }) => ({ ok: unlock(password) }))
@@ -887,6 +990,64 @@ function registerIpc(): void {
   })
   ipcMain.handle('edits:undo', (_e, { photoId }) => undo(photoId))
   ipcMain.handle('edits:redo', (_e, { photoId }) => redo(photoId))
+
+  /**
+   * Édition en lot façon Picasa — deux modes :
+   *  - « Coller les réglages » : applique tel quel un stack copié depuis une
+   *    photo (crop/retouch/redeye exclus côté renderer avant l'appel — un
+   *    recadrage ou une retouche localisée n'a pas de sens copié ailleurs).
+   *  - « Correction auto » : contraste + couleur calculés INDIVIDUELLEMENT
+   *    pour chaque photo (pas une valeur copiée), à partir de sa miniature
+   *    1024px déjà en cache (rapide, pas besoin de décoder l'original).
+   * Les deux renvoient un instantané « avant » par photo pour permettre
+   * l'annulation groupée (façon Picasa, même mécanisme que les autres
+   * actions destructives).
+   */
+  ipcMain.handle('edits:batchApply', (_e, { photoIds, stack, action }) => {
+    const before: Array<{ photoId: number; prevStack: EditStack }> = []
+    for (const id of photoIds as number[]) {
+      before.push({ photoId: id, prevStack: getEditState(id).stack })
+      saveStack(id, stack, action)
+    }
+    return { before }
+  })
+
+  ipcMain.handle('edits:batchAutoFix', async (_e, { photoIds }) => {
+    const db = getDb()
+    const before: Array<{ photoId: number; prevStack: EditStack }> = []
+    const failed: number[] = []
+    for (const id of photoIds as number[]) {
+      const row = db.prepare('SELECT hash_xxh3 FROM photos WHERE id = ?').get(id) as
+        | { hash_xxh3: string }
+        | undefined
+      if (!row) continue
+      const cachePath = join(thumbsCacheDir(), row.hash_xxh3.slice(0, 2), `${row.hash_xxh3}_1024.webp`)
+      try {
+        const { data, info } = await sharp(cachePath)
+          .removeAlpha()
+          .raw()
+          .toBuffer({ resolveWithObject: true })
+        const { black, white } = computeAutoContrast(data, 3)
+        const { r, g, b } = computeAutoColor(data, 3)
+        const prevStack = getEditState(id).stack
+        before.push({ photoId: id, prevStack })
+        let next = upsertOp(prevStack, { type: 'levels', params: { black, white } })
+        next = upsertOp(next, { type: 'wb', params: { r, g, b } })
+        saveStack(id, next, 'auto_fix_lot')
+      } catch (err) {
+        console.error('[batchAutoFix] échec photoId=', id, (err as Error).message)
+        failed.push(id)
+      }
+    }
+    return { before, failed }
+  })
+
+  ipcMain.handle('edits:undoBatch', (_e, before) => {
+    for (const b of before as Array<{ photoId: number; prevStack: EditStack }>) {
+      saveStack(b.photoId, b.prevStack, 'undo_lot')
+    }
+  })
+
   ipcMain.handle('edits:export', async (_e, { photoId, format = 'jpeg', maxSize }) => {
     const photo = getDb()
       .prepare('SELECT filepath, filename FROM photos WHERE id = ?')
@@ -988,7 +1149,9 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_GEO_SCREENSHOT',
     'PICALIBRE_TEST_SCREENSHOT',
     'PICALIBRE_TEST_SCREENSHOT_GRID',
-    'PICALIBRE_TEST_SCREENSHOT_COMPARE'
+    'PICALIBRE_TEST_SCREENSHOT_COMPARE',
+    'PICALIBRE_TEST_RENAME',
+    'PICALIBRE_TEST_BATCHEDIT'
   ].some((k) => !!process.env[k])
   if (!isTestMode) {
     const hasRoots = getDb().prepare('SELECT 1 FROM scan_roots LIMIT 1').get()
@@ -1228,6 +1391,125 @@ app.whenReady().then(() => {
             }, 1000)
           }, 1500)
         }, 1500)
+      }
+    }, 500)
+  }
+
+  // Test headless du renommage en lot + annulation :
+  // PICALIBRE_TEST_RENAME=<dossier>
+  const renameTestDir = process.env.PICALIBRE_TEST_RENAME
+  if (renameTestDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(renameTestDir)
+    startScan(mainWindow)
+    const t0r = Date.now()
+    const ivr = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos > 0 && thumbs >= photos * 2) || Date.now() - t0r > 60000) {
+        clearInterval(ivr)
+        const db = getDb()
+        const rows = db
+          .prepare("SELECT id, filepath, filename FROM photos WHERE status = 'active' ORDER BY id LIMIT 5")
+          .all() as Array<{ id: number; filepath: string; filename: string }>
+        const ids = rows.map((r) => r.id)
+        console.log('[rename-test] avant:', JSON.stringify(rows))
+        const result = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:batchRename', { photoIds: ${JSON.stringify(ids)}, pattern: 'Test_{n}_{name}', startNumber: 1 })`
+        )
+        console.log('[rename-test] résultat renommage:', JSON.stringify(result))
+        const after = db
+          .prepare(`SELECT id, filepath, filename FROM photos WHERE id IN (${ids.join(',')}) ORDER BY id`)
+          .all()
+        console.log('[rename-test] après (BDD):', JSON.stringify(after))
+        // Vérifier sur le disque
+        const fs = await import('node:fs/promises')
+        for (const r of result.renamed) {
+          const exists = await fs
+            .access(r.newPath)
+            .then(() => true)
+            .catch(() => false)
+          const oldGone = await fs
+            .access(r.oldPath)
+            .then(() => false)
+            .catch(() => true)
+          console.log(`[rename-test] disque id=${r.id} nouveau existe=${exists} ancien absent=${oldGone}`)
+        }
+        // Annuler
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:undoBatchRename', ${JSON.stringify(result.renamed)})`
+        )
+        const restored = db
+          .prepare(`SELECT id, filepath, filename FROM photos WHERE id IN (${ids.join(',')}) ORDER BY id`)
+          .all()
+        console.log('[rename-test] après annulation (BDD):', JSON.stringify(restored))
+        for (const r of result.renamed) {
+          const oldExists = await fs
+            .access(r.oldPath)
+            .then(() => true)
+            .catch(() => false)
+          console.log(`[rename-test] disque id=${r.id} ancien restauré=${oldExists}`)
+        }
+        console.log('[rename-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
+  // Test headless de l'édition en lot : PICALIBRE_TEST_BATCHEDIT=<dossier>
+  const batchEditDir = process.env.PICALIBRE_TEST_BATCHEDIT
+  if (batchEditDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(batchEditDir)
+    startScan(mainWindow)
+    const t0b = Date.now()
+    const ivb = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos > 0 && thumbs >= photos * 2) || Date.now() - t0b > 60000) {
+        clearInterval(ivb)
+        const db = getDb()
+        const rows = db
+          .prepare("SELECT id FROM photos WHERE status = 'active' ORDER BY id LIMIT 4")
+          .all() as Array<{ id: number }>
+        const ids = rows.map((r) => r.id)
+
+        // 1) Correction auto en lot
+        const autoResult = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('edits:batchAutoFix', { photoIds: ${JSON.stringify(ids)} })`
+        )
+        console.log('[batchedit-test] auto-fix:', JSON.stringify(autoResult))
+        const afterAuto = db
+          .prepare(`SELECT photo_id, current_stack FROM edits WHERE photo_id IN (${ids.join(',')})`)
+          .all()
+        console.log('[batchedit-test] stacks après auto-fix:', JSON.stringify(afterAuto))
+
+        // 2) Annuler
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('edits:undoBatch', ${JSON.stringify(autoResult.before)})`
+        )
+        const afterUndo = db
+          .prepare(`SELECT photo_id, current_stack FROM edits WHERE photo_id IN (${ids.join(',')})`)
+          .all()
+        console.log('[batchedit-test] stacks après annulation:', JSON.stringify(afterUndo))
+
+        // 3) Coller des réglages (stack fictif : filtre sépia + vignette)
+        const pasteResult = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('edits:batchApply', {
+            photoIds: ${JSON.stringify(ids)},
+            stack: { version: 1, ops: [
+              { type: 'filter', params: { name: 'sepia', intensity: 0.7 } },
+              { type: 'vignette', params: { intensity: 0.5 } }
+            ] },
+            action: 'test_paste'
+          })`
+        )
+        const afterPaste = db
+          .prepare(`SELECT photo_id, current_stack FROM edits WHERE photo_id IN (${ids.join(',')})`)
+          .all()
+        console.log('[batchedit-test] stacks après coller réglages:', JSON.stringify(afterPaste))
+        console.log('[batchedit-test] TERMINÉ')
+        exitTest(0)
       }
     }, 500)
   }

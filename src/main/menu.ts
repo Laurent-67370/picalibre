@@ -154,7 +154,11 @@ export function buildAppMenu(win: BrowserWindow): void {
         { label: '💾 Exporter la sélection…', click: act('exportSelection') },
         { label: '📤 Export groupé (taille/format)…', click: act('batchExport') },
         { label: '✉ Envoyer la sélection par email', click: act('emailSelection') },
-        { label: '📄 Exporter les métadonnées (CSV)', click: act('csvExport') }
+        { label: '📄 Exporter les métadonnées (CSV)', click: act('csvExport') },
+        { type: 'separator' },
+        { label: '🪄 Correction auto (sélection)', click: act('autoFix') },
+        { label: '📥 Coller les réglages copiés (sélection)', click: act('pasteSettings') },
+        { label: '✏️ Renommer en lot (sélection)…', click: act('batchRename') }
       ]
     },
     {
