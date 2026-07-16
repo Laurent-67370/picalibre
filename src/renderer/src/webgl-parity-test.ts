@@ -26,6 +26,12 @@ function referenceImage(): ImageData {
   return img
 }
 
+// Note : le filtre 'grain' n'est PAS dans CASES ci-dessous — sin() perd en
+// précision pour de grands arguments sur GPU (comportement dépendant du
+// matériel/driver), donc son bruit position-based diverge pixel à pixel
+// entre CPU et GPU. Sans conséquence visuelle (effet stochastique : seul
+// l'aspect granuleux général compte). Un smoke-test séparé (plus bas)
+// vérifie juste qu'il s'exécute sans erreur sur les deux chemins.
 const CASES: Array<[string, EditOp[]]> = [
   ['levels', [{ type: 'levels', params: { black: 12, white: 238 } }]],
   ['wb', [{ type: 'wb', params: { r: 1.18, g: 0.97, b: 0.86 } }]],
@@ -34,6 +40,9 @@ const CASES: Array<[string, EditOp[]]> = [
   ['filtre warmify', [{ type: 'filter', params: { name: 'warmify', intensity: 0.6 } }]],
   ['filtre cool', [{ type: 'filter', params: { name: 'cool', intensity: 0.6 } }]],
   ['filtre invert', [{ type: 'filter', params: { name: 'invert', intensity: 1 } }]],
+  ['filtre posterize', [{ type: 'filter', params: { name: 'posterize', intensity: 1 } }]],
+  ['filtre duotone', [{ type: 'filter', params: { name: 'duotone', intensity: 0.8 } }]],
+  ['filtre crossprocess', [{ type: 'filter', params: { name: 'crossprocess', intensity: 0.8 } }]],
   ['fill_light', [{ type: 'fill_light', params: { value: 0.5 } }]],
   ['highlights', [{ type: 'highlights', params: { value: -0.4 } }]],
   ['contrast', [{ type: 'contrast', params: { value: 0.35 } }]],
@@ -65,7 +74,7 @@ export async function runWebglParityTest(): Promise<void> {
   for (const [name, ops] of CASES) {
     // CPU (vérité export)
     const cpu = referenceImage()
-    applyColorOps(cpu.data, 4, ops)
+    applyColorOps(cpu.data, 4, ops, SIZE)
 
     // GPU
     const src = referenceImage()
@@ -97,5 +106,26 @@ export async function runWebglParityTest(): Promise<void> {
       `[webgl-test] ${pass ? '✅' : '❌'} ${name} — écart max ${maxDiff}/255, ${pct.toFixed(2)} % de pixels à ±1`
     )
   }
+
+  // Smoke-test grain : vérifie juste que les deux chemins s'exécutent sans
+  // erreur et produisent un résultat non vide — pas de comparaison pixel
+  // (voir la note au-dessus de CASES pour pourquoi).
+  try {
+    const grainOps: EditOp[] = [{ type: 'filter', params: { name: 'grain', intensity: 1 } }]
+    const cpuG = referenceImage()
+    applyColorOps(cpuG.data, 4, grainOps, SIZE)
+    const srcG = referenceImage()
+    const outG = document.createElement('canvas')
+    outG.width = SIZE
+    outG.height = SIZE
+    const ctxG = outG.getContext('2d', { willReadFrequently: true })!
+    const okG = applyColorOpsWebGL(srcG, grainOps, ctxG, SIZE, SIZE)
+    console.log(`[webgl-test] ${okG ? '✅' : '❌'} filtre grain (smoke-test, sans comparaison pixel)`)
+    if (!okG) allPass = false
+  } catch (err) {
+    console.log(`[webgl-test] ❌ filtre grain (smoke-test) exception : ${(err as Error).message}`)
+    allPass = false
+  }
+
   console.log(`[webgl-test] VERDICT: ${allPass ? 'PASS' : 'FAIL'}`)
 }

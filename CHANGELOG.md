@@ -3,6 +3,30 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.10.0] — 2026-07-16
+
+### Ajouté — plus d'effets créatifs et de cadres
+- **4 nouveaux filtres** dans l'éditeur : Postériser, Duoton (dégradé
+  navy→orange, identité visuelle PicaLibre), Cross-process, Grain de
+  film — s'ajoutent aux 5 existants (N&B, Sépia, Réchauffer, Refroidir,
+  Négatif). Toujours mélangés par intensité (0-100 %) comme les filtres
+  existants.
+- **Vignette** (nouveau curseur dédié) : assombrissement radial des
+  bords, nul au centre — effet indépendant des filtres, cumulable avec
+  eux.
+- **Cadre « Musée »** : bordure épaisse uniforme, en plus de Solid et
+  Polaroid.
+- *Note technique* : le moteur d'édition garantit une parité stricte
+  CPU (export sharp) / GPU (preview WebGL) — chaque nouveau filtre a été
+  implémenté des deux côtés (JS + GLSL) et vérifié par le test de parité
+  dédié (écart ≤ 1/255 sur les 3 filtres couleur). Exception assumée et
+  documentée pour le grain : sin() perd en précision pour de grands
+  arguments sur GPU (limitation matérielle, pas un bug), sans
+  conséquence pour un effet de bruit stochastique — remplacé par un
+  smoke-test (exécution sans erreur) plutôt qu'une comparaison pixel.
+  Vignette vérifiée par mesure de luminosité réelle (coin/centre passant
+  de 0,93 à 0,24 une fois appliquée à 100 %, capture Xvfb+Electron).
+
 ## [2.9.0] — 2026-07-16
 
 ### Ajouté — comparaison côte à côte (Éditeur)

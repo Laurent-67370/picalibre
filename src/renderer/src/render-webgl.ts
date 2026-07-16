@@ -23,7 +23,13 @@ type ColorOp = Extract<
 export function colorOpsOf(ops: EditOp[]): ColorOp[] {
   return ops.filter(
     (o): o is ColorOp =>
-      o.type !== 'crop' && o.type !== 'straighten' && o.type !== 'redeye' && o.type !== 'retouch' && o.type !== 'text' && o.type !== 'border'
+      o.type !== 'crop' &&
+      o.type !== 'straighten' &&
+      o.type !== 'redeye' &&
+      o.type !== 'retouch' &&
+      o.type !== 'text' &&
+      o.type !== 'border' &&
+      o.type !== 'vignette'
   )
 }
 
@@ -58,7 +64,11 @@ function glslFor(op: ColorOp, i: number): { decl: string; body: string } {
             dot(c, vec3(0.272, 0.534, 0.131)));`,
         warmify: `vec3 e = vec3(l) + (c - vec3(l)) * 1.15 + vec3(28.0, 6.0, -22.0);`,
         cool: `vec3 e = vec3(l) + (c - vec3(l)) * 1.05 + vec3(-22.0, 0.0, 26.0);`,
-        invert: `vec3 e = vec3(255.0) - c;`
+        invert: `vec3 e = vec3(255.0) - c;`,
+        posterize: `float pstep = 255.0 / 4.0; vec3 e = floor(c / pstep + 0.5) * pstep;`,
+        duotone: `vec3 e = mix(vec3(15.0, 23.0, 42.0), vec3(249.0, 115.0, 22.0), l / 255.0);`,
+        crossprocess: `vec3 e = vec3(c.r, c.g + 15.0, c.b < 128.0 ? c.b * 0.7 : c.b + (c.b - 128.0) * 0.5);`,
+        grain: `float gh = fract(sin(dot(v_uv, vec2(12.9898, 78.233))) * 43758.5453); vec3 e = c + vec3((gh - 0.5) * 45.0);`
       }
       return {
         decl: `uniform float ${u};`,

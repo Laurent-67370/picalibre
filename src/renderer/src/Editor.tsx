@@ -55,7 +55,11 @@ const FILTERS: Array<{ name: FilterName; label: string }> = [
   { name: 'sepia', label: 'Sépia' },
   { name: 'warmify', label: 'Réchauffer' },
   { name: 'cool', label: 'Refroidir' },
-  { name: 'invert', label: 'Négatif' }
+  { name: 'invert', label: 'Négatif' },
+  { name: 'posterize', label: 'Postériser' },
+  { name: 'duotone', label: 'Duoton' },
+  { name: 'crossprocess', label: 'Cross-process' },
+  { name: 'grain', label: 'Grain de film' }
 ]
 
 export default function Editor({
@@ -654,6 +658,25 @@ export default function Editor({
               </label>
             )}
 
+            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+              🔘 Vignette : {Math.round((getOp(stack, 'vignette')?.params.intensity ?? 0) * 100)}
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={getOp(stack, 'vignette')?.params.intensity ?? 0}
+                onChange={(e) =>
+                  applyOp(
+                    { type: 'vignette', params: { intensity: parseFloat(e.target.value) } },
+                    'vignette'
+                  )
+                }
+                style={{ width: '100%' }}
+                title="Assombrit les bords de la photo (style Picasa)"
+              />
+            </label>
+
             {/* ---- Texte sur photo ---- */}
             <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>TEXTE</div>
             {(() => {
@@ -857,6 +880,7 @@ export default function Editor({
                         >
                           <option value="solid">Solid (uniforme)</option>
                           <option value="polaroid">Polaroid (bord bas large)</option>
+                          <option value="museum">Musée (cadre épais uniforme)</option>
                         </select>
                       </label>
                       <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
