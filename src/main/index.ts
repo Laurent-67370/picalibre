@@ -986,7 +986,8 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_WEBSYNC',
     'PICALIBRE_TEST_MENU',
     'PICALIBRE_TEST_GEO_SCREENSHOT',
-    'PICALIBRE_TEST_SCREENSHOT'
+    'PICALIBRE_TEST_SCREENSHOT',
+    'PICALIBRE_TEST_SCREENSHOT_GRID'
   ].some((k) => !!process.env[k])
   if (!isTestMode) {
     const hasRoots = getDb().prepare('SELECT 1 FROM scan_roots LIMIT 1').get()
@@ -1119,6 +1120,51 @@ app.whenReady().then(() => {
   }
 
   // Mode capture : scanne, sélectionne le 1er dossier, capture la fenêtre en PNG, quitte.
+  // Capture de la grille pure (QA visuelle) : PICALIBRE_TEST_SCREENSHOT_GRID=<dossier>
+  // Aucune navigation ni double-clic — juste la vue par défaut (Chronologie)
+  // une fois le scan terminé, pour vérifier visuellement le rendu des
+  // vignettes (chevauchement, recadrage, superposition…).
+  const shotGridDir = process.env.PICALIBRE_TEST_SCREENSHOT_GRID
+  if (shotGridDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(shotGridDir)
+    startScan(mainWindow)
+    const t0 = Date.now()
+    const iv = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      const ready = photos > 0 && thumbs >= photos * 2
+      if (ready || Date.now() - t0 > 60000) {
+        clearInterval(iv)
+        // Sélectionner le dossier dans la barre latérale — sur un profil
+        // neuf, aucune vue n'est active par défaut (comportement normal,
+        // pas un bug : « Sélectionne un dossier ou un album »).
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Chronologie')); if (el) el.click(); })()`
+        )
+        // Laisse le temps au canvas de peindre les miniatures fraîchement prêtes
+        setTimeout(async () => {
+          const dom = await mainWindow.webContents.executeJavaScript(
+            `(() => {
+              const figures = document.querySelectorAll('main figure')
+              const canvases = document.querySelectorAll('main figure canvas')
+              const mainText = document.querySelector('main')?.textContent?.slice(0, 300)
+              const asideHeaders = [...document.querySelectorAll('aside > div')].map(d => d.textContent?.slice(0, 40))
+              const errorBanner = document.body.textContent?.includes('Erreur')
+              return { figures: figures.length, canvases: canvases.length, mainText, asideHeaders, errorBanner, bodyLen: document.body.textContent.length }
+            })()`
+          )
+          console.log('[grid-shot] DOM:', JSON.stringify(dom))
+          const img = await mainWindow.webContents.capturePage()
+          const shotOut = join(app.getPath('temp'), 'picalibre-grid.png')
+          await writeFile(shotOut, img.toPNG())
+          console.log('[grid-shot] photos=', photos, 'thumbs=', thumbs, 'écrit:', shotOut)
+          exitTest(0)
+        }, 1500)
+      }
+    }, 500)
+  }
+
   const shotDir = process.env.PICALIBRE_TEST_SCREENSHOT
   if (shotDir) {
     getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(shotDir)
