@@ -3,6 +3,20 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.14.1] — 2026-07-17
+
+### Corrigé — Lisibilité et accessibilité de l'éditeur
+- **Titres de sections** : fontSize 11→13, opacity 0.5→0.85, fontWeight 600,
+  letterSpacing 0.3px. Lisibles et bien contrastés.
+- **Labels de curseurs** : fontSize 12→14 pour tous les sliders.
+- **Panneau élargi** : 300→330px, fontSize global 14, scrollbar fin.
+- **Barre de navigation rapide** : 5 boutons (Réglages, Filtres, Effets,
+  Texte, Cadre) qui scrollent vers la section correspondante.
+- **Section « Effets avancés »** : en-tête avec séparateur visuel (borderTop)
+  regroupant Flou, Netteté, Vignette, Doucette, Glow, Orton, Tilt-shift,
+  Pseudo-HDR.
+- **Sections Texte et Cadre** : séparateurs visuels ajoutés.
+
 ## [2.14.0] — 2026-07-17
 
 ### Ajouté — Tilt-shift (flou radial/linéaire)
