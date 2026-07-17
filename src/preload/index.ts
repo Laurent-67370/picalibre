@@ -9,6 +9,7 @@ const api: RendererApi & { pathForFile: (f: File) => string } = {
     ipcRenderer.on(event, listener)
     return () => ipcRenderer.removeListener(event, listener)
   },
+  platform: process.platform,
   pathForFile: (f) => webUtils.getPathForFile(f)
 }
 

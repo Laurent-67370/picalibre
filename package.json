@@ -1,6 +1,6 @@
 {
   "name": "picalibre",
-  "version": "2.3.0",
+  "version": "2.12.0",
   "description": "Gestionnaire de photos open-source inspiré de Picasa — Electron + React + TypeScript + SQLite",
   "main": "./out/main/index.js",
   "author": {
@@ -22,6 +22,7 @@
     "@vladmandic/human": "^3.3.6",
     "better-sqlite3": "^11.8.0",
     "chokidar": "^4.0.3",
+    "electron-log": "^5.4.4",
     "electron-updater": "^6.3.9",
     "exiftool-vendored": "^28.3.1",
     "leaflet": "^1.9.4",
@@ -101,6 +102,7 @@
       ],
       "category": "public.app-category.photography"
     },
+    "afterPack": "scripts/afterPack.js",
     "publish": {
       "provider": "github",
       "owner": "Laurent-67370",

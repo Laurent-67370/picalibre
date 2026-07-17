@@ -113,7 +113,9 @@ export function renderPreview(
   }
 
   // --- Pixels : spatial (CPU, zones locales) puis couleur (GPU si possible) ---
-  const hasSpatial = stack.ops.some((o) => o.type === 'redeye' || o.type === 'retouch')
+  const hasSpatial = stack.ops.some(
+    (o) => o.type === 'redeye' || o.type === 'retouch' || o.type === 'vignette'
+  )
   const hasColor = colorOpsOf(stack.ops).length > 0
   const hasText = stack.ops.some((o) => o.type === 'text')
   const hasBorder = stack.ops.some((o) => o.type === 'border')
@@ -140,7 +142,7 @@ export function renderPreview(
       drawBorder(target, stack, rect.width, rect.height)
       return // GPU a écrit le résultat (spatial inclus via la texture ImageData)
     }
-    if (hasColor) applyColorOps(img.data, 4, stack.ops)
+    if (hasColor) applyColorOps(img.data, 4, stack.ops, rect.width)
     ctx.putImageData(img, 0, 0)
     drawText(ctx, stack, rect.width, rect.height)
     drawBorder(target, stack, rect.width, rect.height)
@@ -155,7 +157,7 @@ export function renderPreview(
     return
   }
   const img = ctx.getImageData(0, 0, rect.width, rect.height)
-  applyColorOps(img.data, 4, stack.ops)
+  applyColorOps(img.data, 4, stack.ops, rect.width)
   ctx.putImageData(img, 0, 0)
   drawText(ctx, stack, rect.width, rect.height)
   drawBorder(target, stack, rect.width, rect.height)
@@ -220,10 +222,13 @@ function drawBorder(
   if (thickness <= 0) return
 
   const bw = Math.round(thickness * width)
-  // Polaroid : bord bas 4× plus épais
-  const bottomBw = style === 'polaroid' ? bw * 4 : bw
-  const newW = width + bw * 2
-  const newH = height + bw + bottomBw
+  const isMuseum = style === 'museum'
+  // Polaroid : bord bas 4× plus épais. Musée : bordure uniforme 2,5× plus épaisse.
+  const topBw = isMuseum ? Math.round(bw * 2.5) : bw
+  const sideBw = isMuseum ? Math.round(bw * 2.5) : bw
+  const bottomBw = style === 'polaroid' ? bw * 4 : isMuseum ? Math.round(bw * 2.5) : bw
+  const newW = width + sideBw * 2
+  const newH = height + topBw + bottomBw
 
   // Créer un canvas étendu
   const extended = document.createElement('canvas')
@@ -236,7 +241,7 @@ function drawBorder(
   ectx.fillRect(0, 0, newW, newH)
 
   // Dessiner le canvas original par-dessus
-  ectx.drawImage(canvas, bw, bw)
+  ectx.drawImage(canvas, sideBw, topBw)
 
   // Recopier vers le canvas cible (redimensionner)
   canvas.width = newW

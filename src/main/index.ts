@@ -1,7 +1,24 @@
 import { app, BrowserWindow, ipcMain, dialog, protocol, net } from 'electron'
+import log from 'electron-log/main'
+
+/**
+ * Logs persistants (electron-log).
+ * Écrit dans userData/logs/main.log (rotation automatique à 5 Mo, 3 fichiers
+ * conservés). `Object.assign(console, log.functions)` redirige TOUS les
+ * console.log/warn/error déjà présents dans le code (scanner, pipeline,
+ * ffmpeg, updater…) vers ce fichier, sans avoir à toucher chaque appel un
+ * par un — jusqu'ici, la seule façon de diagnostiquer un souci (ex. échec
+ * silencieux de génération de miniature vidéo) était de relancer l'app
+ * depuis un terminal. Consultable via Aide → Ouvrir le dossier des logs.
+ */
+log.initialize()
+log.transports.file.maxSize = 5 * 1024 * 1024
+log.transports.file.level = 'info'
+Object.assign(console, log.functions)
+
 import { pathToFileURL } from 'node:url'
-import { join } from 'node:path'
-import { writeFile, access } from 'node:fs/promises'
+import { join, dirname, basename, extname } from 'node:path'
+import { writeFile, access, rename as fsRename } from 'node:fs/promises'
 import sharp from 'sharp'
 import { initDb, getDb } from './db'
 import { getEditState, saveStack, undo, redo } from './services/edits'
@@ -11,7 +28,7 @@ import { getConfigForUi, setConfig, testConnection, runWebSync } from './service
 import { shutdownExiftool } from './services/exif'
 import { startFaceScan, isFaceScanRunning, humanModelsPath } from './services/faces'
 import { mergePersons, splitFaces, confirmFaces, rejectFaces, facesByPerson } from './services/faces/manage-core'
-import { startWatchers } from './services/watcher'
+import { startWatchers, stopWatchers } from './services/watcher'
 import { importFromDevice, importFileList } from './services/importer'
 import { relocateLibrary } from './services/relocate'
 import { privacyStatus, setPassword, unlock, lock, isUnlocked } from './services/privacy'
@@ -20,11 +37,17 @@ import { printPhotos } from './services/printer'
 import { makeCollage, CollageItem } from './services/collage'
 import { makeMovie, MovieItem } from './services/movie'
 import { getFfmpegPath } from './utils/ffmpeg'
-import { parseStack } from '../shared/edit-engine'
+import {
+  parseStack,
+  computeAutoContrast,
+  computeAutoColor,
+  upsertOp,
+  type EditStack
+} from '../shared/edit-engine'
 import { renderEdited } from './services/render-sharp'
 import { startScan } from './services/scanner'
 import { thumbsCacheDir } from './services/pipeline'
-import type { GridFilters, SortMode, BoundingBox, ReverseGeocodeResult } from '../shared/ipc'
+import type { GridFilters, SortMode, BoundingBox, ReverseGeocodeResult, MergeSnapshot } from '../shared/ipc'
 
 app.setName('picalibre')
 
@@ -32,7 +55,12 @@ let mainWindow: BrowserWindow
 
 // Doit être appelé AVANT app.whenReady()
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'thumb', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+  // stream:true est indispensable pour que <video src="thumb://.../orig/{id}">
+  // puisse lire un fichier vidéo — sans lui, Chromium refuse de traiter le
+  // schéma comme une source média valide (échec silencieux, aucune erreur
+  // visible côté renderer). Les miniatures webp (images) n'en ont pas besoin
+  // mais le privilège est sans effet négatif pour elles.
+  { scheme: 'thumb', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
   { scheme: 'faceres', privileges: { standard: true, secure: true, supportFetchAPI: true } }
 ])
 
@@ -139,7 +167,11 @@ function registerThumbProtocol(): void {
         | { filepath: string }
         | undefined
       if (!ph) return new Response('not found', { status: 404, headers: { 'Cache-Control': 'no-store' } })
-      return net.fetch(pathToFileURL(ph.filepath).toString())
+      // Transmet Range (et autres en-têtes pertinents) : sans ça, chaque
+      // requête (y compris un seek vidéo) re-fetch le fichier entier depuis
+      // le début — la barre de progression d'un <video> resterait cassée
+      // (currentTime revient toujours à 0).
+      return net.fetch(pathToFileURL(ph.filepath).toString(), { headers: request.headers })
     }
     const size = parseInt(parts[0], 10)
     const photoId = parseInt(parts[1], 10)
@@ -569,6 +601,103 @@ function registerIpc(): void {
       .prepare(`SELECT ${GRID_COLS} FROM photos WHERE is_hidden = 1 AND status = 'active' ORDER BY taken_at DESC`)
       .all()
   })
+
+  /**
+   * Renommage en lot (façon Picasa) : {n} = compteur séquentiel (3 chiffres),
+   * {name} = nom de fichier d'origine (sans extension), {date} = date de
+   * prise de vue AAAA-MM-JJ si connue, sinon date de modification.
+   * Le watcher est coupé pendant l'opération (sinon chaque renommage sur
+   * disque déclenche un 'unlink'+'add' chokidar qui pourrait marquer la
+   * photo 'missing' ou provoquer un rescan concurrent). La BDD est mise à
+   * jour AVANT le renommage sur disque : si un rescan tardif survient quand
+   * même après redémarrage du watcher, il ne trouvera rien d'incohérent.
+   */
+  ipcMain.handle('photos:batchRename', async (_e, { photoIds, pattern, startNumber }) => {
+    await stopWatchers()
+    const db = getDb()
+    const get = db.prepare(
+      'SELECT id, filepath, filename, taken_at, file_mtime FROM photos WHERE id = ?'
+    )
+    const renamed: Array<{
+      id: number
+      oldPath: string
+      oldFilename: string
+      newPath: string
+      newFilename: string
+    }> = []
+    const errors: Array<{ id: number; filename: string; error: string }> = []
+    let n = startNumber
+    for (const id of photoIds as number[]) {
+      const row = get.get(id) as
+        | { id: number; filepath: string; filename: string; taken_at: number | null; file_mtime: number }
+        | undefined
+      if (!row) continue
+      const ext = extname(row.filepath)
+      const base = basename(row.filepath, ext)
+      const ts = (row.taken_at ?? row.file_mtime) * 1000
+      const date = new Date(ts).toISOString().slice(0, 10)
+      const counter = String(n).padStart(3, '0')
+      const newFilename =
+        (pattern as string)
+          .replace(/\{n\}/g, counter)
+          .replace(/\{name\}/g, base)
+          .replace(/\{date\}/g, date) + ext
+      const newPath = join(dirname(row.filepath), newFilename)
+      n++
+      if (newPath === row.filepath) continue
+      try {
+        await access(newPath)
+        errors.push({ id, filename: row.filename, error: 'un fichier porte déjà ce nom' })
+        continue
+      } catch {
+        /* n'existe pas encore — bon signe, on continue */
+      }
+      try {
+        db.prepare('UPDATE photos SET filepath = ?, filename = ? WHERE id = ?').run(
+          newPath,
+          newFilename,
+          id
+        )
+        await fsRename(row.filepath, newPath)
+        renamed.push({ id, oldPath: row.filepath, oldFilename: row.filename, newPath, newFilename })
+      } catch (err) {
+        // Rollback BDD si le renommage disque a échoué après la mise à jour
+        db.prepare('UPDATE photos SET filepath = ?, filename = ? WHERE id = ?').run(
+          row.filepath,
+          row.filename,
+          id
+        )
+        errors.push({ id, filename: row.filename, error: (err as Error).message })
+      }
+    }
+    startWatchers(mainWindow)
+    return { renamed, errors }
+  })
+
+  ipcMain.handle('photos:undoBatchRename', async (_e, items) => {
+    await stopWatchers()
+    const db = getDb()
+    for (const it of items as Array<{
+      id: number
+      oldPath: string
+      oldFilename: string
+      newPath: string
+      newFilename: string
+    }>) {
+      try {
+        db.prepare('UPDATE photos SET filepath = ?, filename = ? WHERE id = ?').run(
+          it.oldPath,
+          it.oldFilename,
+          it.id
+        )
+        await fsRename(it.newPath, it.oldPath)
+      } catch (err) {
+        console.error('[undoBatchRename] échec pour', it.id, (err as Error).message)
+      }
+    }
+    startWatchers(mainWindow)
+  })
+
   ipcMain.handle('privacy:status', () => privacyStatus())
   ipcMain.handle('privacy:setPassword', (_e, { password }) => setPassword(password))
   ipcMain.handle('privacy:unlock', (_e, { password }) => ({ ok: unlock(password) }))
@@ -614,6 +743,31 @@ function registerIpc(): void {
   })
   ipcMain.handle('duplicates:merge', (_e, { keepId, removeIds }) => {
     const db = getDb()
+    // Instantané AVANT mutation — seule façon d'annuler proprement ensuite :
+    // la fusion écrase note/favori du gardé (MAX) et déplace irrévocablement
+    // albums/tags/visages depuis les photos supprimées.
+    const keepBefore = db
+      .prepare('SELECT rating, is_favorite FROM photos WHERE id = ?')
+      .get(keepId) as { rating: number; is_favorite: number }
+    const snapshot: MergeSnapshot = {
+      keepId,
+      keepBefore,
+      removed: (removeIds as number[]).map((rid: number) => ({
+        id: rid,
+        albumItems: db
+          .prepare('SELECT album_id, position, added_at FROM album_items WHERE photo_id = ?')
+          .all(rid) as { album_id: number; position: number; added_at: number }[],
+        tagIds: (
+          db.prepare('SELECT tag_id FROM photo_tags WHERE photo_id = ?').all(rid) as {
+            tag_id: number
+          }[]
+        ).map((r) => r.tag_id),
+        faceIds: (
+          db.prepare('SELECT id FROM faces WHERE photo_id = ?').all(rid) as { id: number }[]
+        ).map((r) => r.id)
+      }))
+    }
+
     const tx = db.transaction((ids: number[]) => {
       for (const rid of ids) {
         // Fusion des références : albums, tags, visages pointent vers la photo gardée
@@ -639,6 +793,35 @@ function registerIpc(): void {
       }
     })
     tx(removeIds)
+    return snapshot
+  })
+  ipcMain.handle('duplicates:undoMerge', (_e, snapshot: MergeSnapshot) => {
+    const db = getDb()
+    const tx = db.transaction((snap: MergeSnapshot) => {
+      db.prepare('UPDATE photos SET rating = ?, is_favorite = ? WHERE id = ?').run(
+        snap.keepBefore.rating,
+        snap.keepBefore.is_favorite,
+        snap.keepId
+      )
+      for (const r of snap.removed) {
+        db.prepare(`UPDATE photos SET status = 'active' WHERE id = ?`).run(r.id)
+        for (const ai of r.albumItems) {
+          db.prepare(
+            `INSERT OR IGNORE INTO album_items (album_id, photo_id, position, added_at)
+             VALUES (?, ?, ?, ?)`
+          ).run(ai.album_id, r.id, ai.position, ai.added_at)
+        }
+        for (const tagId of r.tagIds) {
+          db.prepare(
+            'INSERT OR IGNORE INTO photo_tags (photo_id, tag_id) VALUES (?, ?)'
+          ).run(r.id, tagId)
+        }
+        for (const faceId of r.faceIds) {
+          db.prepare('UPDATE faces SET photo_id = ? WHERE id = ?').run(r.id, faceId)
+        }
+      }
+    })
+    tx(snapshot)
   })
   ipcMain.handle('import:dropped', async (_e, { paths }) => {
     const { statSync } = await import('node:fs')
@@ -807,6 +990,64 @@ function registerIpc(): void {
   })
   ipcMain.handle('edits:undo', (_e, { photoId }) => undo(photoId))
   ipcMain.handle('edits:redo', (_e, { photoId }) => redo(photoId))
+
+  /**
+   * Édition en lot façon Picasa — deux modes :
+   *  - « Coller les réglages » : applique tel quel un stack copié depuis une
+   *    photo (crop/retouch/redeye exclus côté renderer avant l'appel — un
+   *    recadrage ou une retouche localisée n'a pas de sens copié ailleurs).
+   *  - « Correction auto » : contraste + couleur calculés INDIVIDUELLEMENT
+   *    pour chaque photo (pas une valeur copiée), à partir de sa miniature
+   *    1024px déjà en cache (rapide, pas besoin de décoder l'original).
+   * Les deux renvoient un instantané « avant » par photo pour permettre
+   * l'annulation groupée (façon Picasa, même mécanisme que les autres
+   * actions destructives).
+   */
+  ipcMain.handle('edits:batchApply', (_e, { photoIds, stack, action }) => {
+    const before: Array<{ photoId: number; prevStack: EditStack }> = []
+    for (const id of photoIds as number[]) {
+      before.push({ photoId: id, prevStack: getEditState(id).stack })
+      saveStack(id, stack, action)
+    }
+    return { before }
+  })
+
+  ipcMain.handle('edits:batchAutoFix', async (_e, { photoIds }) => {
+    const db = getDb()
+    const before: Array<{ photoId: number; prevStack: EditStack }> = []
+    const failed: number[] = []
+    for (const id of photoIds as number[]) {
+      const row = db.prepare('SELECT hash_xxh3 FROM photos WHERE id = ?').get(id) as
+        | { hash_xxh3: string }
+        | undefined
+      if (!row) continue
+      const cachePath = join(thumbsCacheDir(), row.hash_xxh3.slice(0, 2), `${row.hash_xxh3}_1024.webp`)
+      try {
+        const { data, info } = await sharp(cachePath)
+          .removeAlpha()
+          .raw()
+          .toBuffer({ resolveWithObject: true })
+        const { black, white } = computeAutoContrast(data, 3)
+        const { r, g, b } = computeAutoColor(data, 3)
+        const prevStack = getEditState(id).stack
+        before.push({ photoId: id, prevStack })
+        let next = upsertOp(prevStack, { type: 'levels', params: { black, white } })
+        next = upsertOp(next, { type: 'wb', params: { r, g, b } })
+        saveStack(id, next, 'auto_fix_lot')
+      } catch (err) {
+        console.error('[batchAutoFix] échec photoId=', id, (err as Error).message)
+        failed.push(id)
+      }
+    }
+    return { before, failed }
+  })
+
+  ipcMain.handle('edits:undoBatch', (_e, before) => {
+    for (const b of before as Array<{ photoId: number; prevStack: EditStack }>) {
+      saveStack(b.photoId, b.prevStack, 'undo_lot')
+    }
+  })
+
   ipcMain.handle('edits:export', async (_e, { photoId, format = 'jpeg', maxSize }) => {
     const photo = getDb()
       .prepare('SELECT filepath, filename FROM photos WHERE id = ?')
@@ -891,6 +1132,34 @@ app.whenReady().then(() => {
   buildAppMenu(mainWindow)
   startWatchers(mainWindow)
   initAutoUpdate(mainWindow)
+
+  // Rescan léger automatique au démarrage (hors modes de test headless) :
+  // jusqu'ici, seul le watcher de fichiers démarrait tout seul — si une
+  // miniature échouait une fois (ex. vignette vidéo jamais générée) ou si
+  // des fichiers étaient ajoutés pendant que l'app était fermée, rien ne
+  // relançait jamais le pipeline sans action explicite de l'utilisateur.
+  const isTestMode = [
+    'PICALIBRE_TEST_SCAN',
+    'PICALIBRE_TEST_WEBGL',
+    'PICALIBRE_TEST_RELOCATE',
+    'PICALIBRE_TEST_IMPORT',
+    'PICALIBRE_TEST_BENCH',
+    'PICALIBRE_TEST_WEBSYNC',
+    'PICALIBRE_TEST_MENU',
+    'PICALIBRE_TEST_GEO_SCREENSHOT',
+    'PICALIBRE_TEST_SCREENSHOT',
+    'PICALIBRE_TEST_SCREENSHOT_GRID',
+    'PICALIBRE_TEST_SCREENSHOT_COMPARE',
+    'PICALIBRE_TEST_RENAME',
+    'PICALIBRE_TEST_BATCHEDIT'
+  ].some((k) => !!process.env[k])
+  if (!isTestMode) {
+    const hasRoots = getDb().prepare('SELECT 1 FROM scan_roots LIMIT 1').get()
+    if (hasRoots) {
+      console.log('[startup] rescan léger automatique')
+      startScan(mainWindow)
+    }
+  }
 
   // Mode test headless relocate : PICALIBRE_TEST_RELOCATE="nouvelleRacine"
   const testRelocate = process.env.PICALIBRE_TEST_RELOCATE
@@ -982,7 +1251,269 @@ app.whenReady().then(() => {
     exitTest(aideItems.length >= 5 ? 0 : 1)
   }
 
+  // Mode capture CARTE : scanne, ouvre la vue Carte, capture, quitte.
+  const geoShotDir = process.env.PICALIBRE_TEST_GEO_SCREENSHOT
+  if (geoShotDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(geoShotDir)
+    startScan(mainWindow)
+    setTimeout(async () => {
+      const clicked = await mainWindow.webContents.executeJavaScript(
+        `(() => {
+          const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Carte'))
+          if (el) { el.click(); return true }
+          return false
+        })()`
+      )
+      console.log('[geo-test] clic Carte:', clicked)
+      setTimeout(async () => {
+        const probe = await mainWindow.webContents.executeJavaScript(
+          `(() => ({
+            leafletContainer: !!document.querySelector('.leaflet-container'),
+            markerCount: document.querySelectorAll('.leaflet-marker-icon, .marker-cluster').length,
+            tilesLoaded: document.querySelectorAll('.leaflet-tile-loaded, .leaflet-tile').length,
+            errorText: document.body.textContent.includes('hors ligne') || document.body.textContent.includes('connexion') ? 'message offline présent' : null
+          }))()`
+        )
+        console.log('[geo-test] probe:', JSON.stringify(probe))
+        const img = await mainWindow.webContents.capturePage()
+        await writeFile(join(app.getPath('temp'), 'picalibre-geo.png'), img.toPNG())
+        console.log('[geo-test] capture écrite')
+        exitTest(0)
+      }, 5000)
+    }, 6000)
+  }
+
   // Mode capture : scanne, sélectionne le 1er dossier, capture la fenêtre en PNG, quitte.
+  // Capture de la grille pure (QA visuelle) : PICALIBRE_TEST_SCREENSHOT_GRID=<dossier>
+  // Aucune navigation ni double-clic — juste la vue par défaut (Chronologie)
+  // une fois le scan terminé, pour vérifier visuellement le rendu des
+  // vignettes (chevauchement, recadrage, superposition…).
+  const shotGridDir = process.env.PICALIBRE_TEST_SCREENSHOT_GRID
+  if (shotGridDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(shotGridDir)
+    startScan(mainWindow)
+    const t0 = Date.now()
+    const iv = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      const ready = photos > 0 && thumbs >= photos * 2
+      if (ready || Date.now() - t0 > 60000) {
+        clearInterval(iv)
+        // Sélectionner le dossier dans la barre latérale — sur un profil
+        // neuf, aucune vue n'est active par défaut (comportement normal,
+        // pas un bug : « Sélectionne un dossier ou un album »).
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Chronologie')); if (el) el.click(); })()`
+        )
+        // Laisse le temps au canvas de peindre les miniatures fraîchement prêtes
+        setTimeout(async () => {
+          const dom = await mainWindow.webContents.executeJavaScript(
+            `(() => {
+              const figures = document.querySelectorAll('main figure')
+              const canvases = document.querySelectorAll('main figure canvas')
+              const mainText = document.querySelector('main')?.textContent?.slice(0, 300)
+              const asideHeaders = [...document.querySelectorAll('aside > div')].map(d => d.textContent?.slice(0, 40))
+              const errorBanner = document.body.textContent?.includes('Erreur')
+              return { figures: figures.length, canvases: canvases.length, mainText, asideHeaders, errorBanner, bodyLen: document.body.textContent.length }
+            })()`
+          )
+          console.log('[grid-shot] DOM:', JSON.stringify(dom))
+          const img = await mainWindow.webContents.capturePage()
+          const shotOut = join(app.getPath('temp'), 'picalibre-grid.png')
+          await writeFile(shotOut, img.toPNG())
+          console.log('[grid-shot] photos=', photos, 'thumbs=', thumbs, 'écrit:', shotOut)
+          exitTest(0)
+        }, 1500)
+      }
+    }, 500)
+  }
+
+  // Capture du côte-à-côte de l'éditeur (QA visuelle) :
+  // PICALIBRE_TEST_SCREENSHOT_COMPARE=<dossier>
+  // Ouvre l'éditeur sur la 1re photo, applique un filtre N&B (changement
+  // visuel évident), active le côte-à-côte, puis capture.
+  const shotCompareDir = process.env.PICALIBRE_TEST_SCREENSHOT_COMPARE
+  if (shotCompareDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(shotCompareDir)
+    startScan(mainWindow)
+    const t0c = Date.now()
+    const ivc = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      const ready = photos > 0 && thumbs >= photos * 2
+      if (ready || Date.now() - t0c > 60000) {
+        clearInterval(ivc)
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Chronologie')); if (el) el.click(); })()`
+        )
+        setTimeout(async () => {
+          // Double-clic sur la 1re vignette → Lightbox, puis Éditer
+          await mainWindow.webContents.executeJavaScript(
+            `(() => { const im = document.querySelector('main figure canvas'); if (im) im.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })()`
+          )
+          setTimeout(async () => {
+            await mainWindow.webContents.executeJavaScript(
+              `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('Éditer')); if (b) b.click(); })()`
+            )
+            setTimeout(async () => {
+              // Appliquer le filtre N&B (changement visuel net et vérifiable)
+              await mainWindow.webContents.executeJavaScript(
+                `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === 'N&B'); if (b) b.click(); })()`
+              )
+              setTimeout(async () => {
+                // Activer le côte à côte
+                await mainWindow.webContents.executeJavaScript(
+                  `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('Comparer côte à côte')); if (b) b.click(); })()`
+                )
+                setTimeout(async () => {
+                  const dom = await mainWindow.webContents.executeJavaScript(
+                    `(() => {
+                      const canvases = document.querySelectorAll('main canvas')
+                      const spans = [...document.querySelectorAll('main span')].filter(s=>s.textContent==='ORIGINAL'||s.textContent==='ÉDITÉ')
+                      const rects = spans.map(s => {
+                        const canvas = s.parentElement.querySelector('canvas')
+                        const r = canvas ? canvas.getBoundingClientRect() : null
+                        return { label: s.textContent, rect: r ? {x:r.x,y:r.y,w:r.width,h:r.height} : null }
+                      })
+                      return { canvasCount: canvases.length, rects }
+                    })()`
+                  )
+                  console.log('[compare-shot] DOM:', JSON.stringify(dom))
+                  const img = await mainWindow.webContents.capturePage()
+                  const shotOut = join(app.getPath('temp'), 'picalibre-compare.png')
+                  await writeFile(shotOut, img.toPNG())
+                  console.log('[compare-shot] écrit:', shotOut)
+                  exitTest(0)
+                }, 800)
+              }, 500)
+            }, 1000)
+          }, 1500)
+        }, 1500)
+      }
+    }, 500)
+  }
+
+  // Test headless du renommage en lot + annulation :
+  // PICALIBRE_TEST_RENAME=<dossier>
+  const renameTestDir = process.env.PICALIBRE_TEST_RENAME
+  if (renameTestDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(renameTestDir)
+    startScan(mainWindow)
+    const t0r = Date.now()
+    const ivr = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos > 0 && thumbs >= photos * 2) || Date.now() - t0r > 60000) {
+        clearInterval(ivr)
+        const db = getDb()
+        const rows = db
+          .prepare("SELECT id, filepath, filename FROM photos WHERE status = 'active' ORDER BY id LIMIT 5")
+          .all() as Array<{ id: number; filepath: string; filename: string }>
+        const ids = rows.map((r) => r.id)
+        console.log('[rename-test] avant:', JSON.stringify(rows))
+        const result = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:batchRename', { photoIds: ${JSON.stringify(ids)}, pattern: 'Test_{n}_{name}', startNumber: 1 })`
+        )
+        console.log('[rename-test] résultat renommage:', JSON.stringify(result))
+        const after = db
+          .prepare(`SELECT id, filepath, filename FROM photos WHERE id IN (${ids.join(',')}) ORDER BY id`)
+          .all()
+        console.log('[rename-test] après (BDD):', JSON.stringify(after))
+        // Vérifier sur le disque
+        const fs = await import('node:fs/promises')
+        for (const r of result.renamed) {
+          const exists = await fs
+            .access(r.newPath)
+            .then(() => true)
+            .catch(() => false)
+          const oldGone = await fs
+            .access(r.oldPath)
+            .then(() => false)
+            .catch(() => true)
+          console.log(`[rename-test] disque id=${r.id} nouveau existe=${exists} ancien absent=${oldGone}`)
+        }
+        // Annuler
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:undoBatchRename', ${JSON.stringify(result.renamed)})`
+        )
+        const restored = db
+          .prepare(`SELECT id, filepath, filename FROM photos WHERE id IN (${ids.join(',')}) ORDER BY id`)
+          .all()
+        console.log('[rename-test] après annulation (BDD):', JSON.stringify(restored))
+        for (const r of result.renamed) {
+          const oldExists = await fs
+            .access(r.oldPath)
+            .then(() => true)
+            .catch(() => false)
+          console.log(`[rename-test] disque id=${r.id} ancien restauré=${oldExists}`)
+        }
+        console.log('[rename-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
+  // Test headless de l'édition en lot : PICALIBRE_TEST_BATCHEDIT=<dossier>
+  const batchEditDir = process.env.PICALIBRE_TEST_BATCHEDIT
+  if (batchEditDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(batchEditDir)
+    startScan(mainWindow)
+    const t0b = Date.now()
+    const ivb = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos > 0 && thumbs >= photos * 2) || Date.now() - t0b > 60000) {
+        clearInterval(ivb)
+        const db = getDb()
+        const rows = db
+          .prepare("SELECT id FROM photos WHERE status = 'active' ORDER BY id LIMIT 4")
+          .all() as Array<{ id: number }>
+        const ids = rows.map((r) => r.id)
+
+        // 1) Correction auto en lot
+        const autoResult = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('edits:batchAutoFix', { photoIds: ${JSON.stringify(ids)} })`
+        )
+        console.log('[batchedit-test] auto-fix:', JSON.stringify(autoResult))
+        const afterAuto = db
+          .prepare(`SELECT photo_id, current_stack FROM edits WHERE photo_id IN (${ids.join(',')})`)
+          .all()
+        console.log('[batchedit-test] stacks après auto-fix:', JSON.stringify(afterAuto))
+
+        // 2) Annuler
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('edits:undoBatch', ${JSON.stringify(autoResult.before)})`
+        )
+        const afterUndo = db
+          .prepare(`SELECT photo_id, current_stack FROM edits WHERE photo_id IN (${ids.join(',')})`)
+          .all()
+        console.log('[batchedit-test] stacks après annulation:', JSON.stringify(afterUndo))
+
+        // 3) Coller des réglages (stack fictif : filtre sépia + vignette)
+        const pasteResult = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('edits:batchApply', {
+            photoIds: ${JSON.stringify(ids)},
+            stack: { version: 1, ops: [
+              { type: 'filter', params: { name: 'sepia', intensity: 0.7 } },
+              { type: 'vignette', params: { intensity: 0.5 } }
+            ] },
+            action: 'test_paste'
+          })`
+        )
+        const afterPaste = db
+          .prepare(`SELECT photo_id, current_stack FROM edits WHERE photo_id IN (${ids.join(',')})`)
+          .all()
+        console.log('[batchedit-test] stacks après coller réglages:', JSON.stringify(afterPaste))
+        console.log('[batchedit-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
   const shotDir = process.env.PICALIBRE_TEST_SCREENSHOT
   if (shotDir) {
     getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(shotDir)
@@ -995,7 +1526,7 @@ app.whenReady().then(() => {
       // Double-clic sur la 1re vignette → capture de la LIGHTBOX
       setTimeout(() => {
         void mainWindow.webContents.executeJavaScript(
-          `(() => { const im = document.querySelector('main figure img'); if (im) im.click() })()`
+          `(() => { const im = document.querySelector('main figure canvas'); if (im) im.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })()`
         )
       }, 3000)
       setTimeout(async () => {
@@ -1039,7 +1570,7 @@ app.whenReady().then(() => {
         console.log(`[test] PIPELINE OK en ${Date.now() - t0} ms`)
         clearInterval(iv)
         if (!process.env.PICALIBRE_TEST_KEEPALIVE) exitTest(0)
-      } else if (Date.now() - t0 > 60000) {
+      } else if (Date.now() - t0 > 120000) {
         console.error('[test] TIMEOUT pipeline')
         clearInterval(iv)
         exitTest(1)

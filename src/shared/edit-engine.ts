@@ -14,12 +14,29 @@
  * s'applique à la preview 1024 px et à l'export pleine résolution.
  */
 
-export type ColorOpType = 'fill_light' | 'highlights' | 'contrast' | 'saturation' | 'temperature'
+export type ColorOpType =
+  | 'fill_light'
+  | 'highlights'
+  | 'shadows'
+  | 'contrast'
+  | 'saturation'
+  | 'vibrance'
+  | 'temperature'
+  | 'hue'
 
 /** Effets basés sur le flou — opérations SPATIALES (pas des colorOps). */
 export type BlurEffectType = 'blur' | 'sharpen' | 'softfocus' | 'glow' | 'orton'
 
-export type FilterName = 'bw' | 'sepia' | 'warmify' | 'cool' | 'invert'
+export type FilterName =
+  | 'bw'
+  | 'sepia'
+  | 'warmify'
+  | 'cool'
+  | 'invert'
+  | 'posterize'
+  | 'duotone'
+  | 'crossprocess'
+  | 'grain'
 
 export interface RedeyeZone {
   x: number
@@ -36,7 +53,7 @@ export interface RetouchStroke {
 }
 
 /** Style de bordure/cadre. */
-export type BorderStyle = 'solid' | 'polaroid'
+export type BorderStyle = 'solid' | 'polaroid' | 'museum'
 
 /** Paramètres d'une opération de bordure/cadre sur photo. */
 export interface BorderOpParams {
@@ -66,6 +83,7 @@ export type EditOp =
   | { type: 'levels'; params: { black: number; white: number } } // contraste auto (0..255)
   | { type: 'wb'; params: { r: number; g: number; b: number } } // gains balance des blancs
   | { type: 'filter'; params: { name: FilterName; intensity: number } } // 0..1
+  | { type: 'vignette'; params: { intensity: number } } // 0..1, assombrissement radial des bords
   | { type: 'redeye'; params: { zones: RedeyeZone[] } }
   | { type: 'retouch'; params: { strokes: RetouchStroke[] } }
   | { type: 'text'; params: TextOpParams }
@@ -100,6 +118,7 @@ export function upsertOp(stack: EditStack, op: EditOp): EditStack {
     (op.type === 'levels' && op.params.black === 0 && op.params.white === 255) ||
     (op.type === 'wb' && op.params.r === 1 && op.params.g === 1 && op.params.b === 1) ||
     (op.type === 'filter' && op.params.intensity === 0) ||
+    (op.type === 'vignette' && op.params.intensity === 0) ||
     (op.type === 'redeye' && op.params.zones.length === 0) ||
     (op.type === 'retouch' && op.params.strokes.length === 0) ||
     (op.type === 'text' && op.params.content.trim() === '') ||
@@ -132,7 +151,8 @@ const clamp255 = (v: number): number => {
 export function applyColorOps(
   data: Uint8Array | Uint8ClampedArray,
   channels: 3 | 4,
-  ops: EditOp[]
+  ops: EditOp[],
+  width: number
 ): void {
   const colorOps = ops.filter(
     (o) =>
@@ -143,7 +163,8 @@ export function applyColorOps(
       o.type !== 'text' &&
       o.type !== 'border' &&
       o.type !== 'blur' &&
-      o.type !== 'sharpen'
+      o.type !== 'sharpen' &&
+      o.type !== 'vignette'
   )
   if (colorOps.length === 0) return
 
@@ -197,6 +218,45 @@ export function applyColorOps(
           case 'invert':
             er = 255 - r; eg = 255 - g; eb = 255 - b
             break
+          case 'posterize': {
+            const step = 255 / 4
+            er = Math.round(r / step) * step
+            eg = Math.round(g / step) * step
+            eb = Math.round(b / step) * step
+            break
+          }
+          case 'duotone': {
+            // Dégradé bicolore navy → orange (identité visuelle PicaLibre)
+            const t = l / 255
+            er = 15 + t * (249 - 15)
+            eg = 23 + t * (115 - 23)
+            eb = 42 + t * (22 - 42)
+            break
+          }
+          case 'crossprocess':
+            er = r
+            eg = g + 15
+            eb = b < 128 ? b * 0.7 : b + (b - 128) * 0.5
+            break
+          case 'grain': {
+            // Bruit pseudo-aléatoire déterministe basé sur la position — pas de
+            // Math.random() : rendu stable et reproductible.
+            // Exception assumée à la parité stricte CPU/GPU (documentée dans
+            // webgl-parity-test.ts) : sin() perd en précision pour de grands
+            // arguments sur GPU (comportement dépendant du matériel/driver,
+            // hors de notre contrôle) — la formule position-based du shader
+            // et celle-ci divergent donc pixel à pixel. Sans conséquence
+            // visuelle : un grain de film est un effet stochastique, seul
+            // l'aspect granuleux général compte, pas la correspondance exacte
+            // entre preview (GPU) et export (CPU).
+            const pIdx = i / channels
+            const px = pIdx % width
+            const py = Math.floor(pIdx / width)
+            const h = Math.sin(px * 12.9898 + py * 78.233) * 43758.5453
+            const n2 = (h - Math.floor(h) - 0.5) * 45
+            er = r + n2; eg = g + n2; eb = b + n2
+            break
+          }
         }
         r += t * (er - r)
         g += t * (eg - g)
@@ -224,6 +284,17 @@ export function applyColorOps(
           b += w * (255 - b)
           break
         }
+        case 'shadows': {
+          // Miroir de highlights, pondéré par l'obscurité (1-l) au lieu de
+          // la clarté : v>0 éclaircit les ombres, v<0 les assombrit (plus
+          // de contraste dans les tons foncés). Distinct de fill_light
+          // (qui ne fait que relever, jamais assombrir).
+          const w = v * (1 - l) * (1 - l)
+          r += w * (255 - r)
+          g += w * (255 - g)
+          b += w * (255 - b)
+          break
+        }
         case 'contrast': {
           const k = 1 + v
           r = (r - 128) * k + 128
@@ -239,10 +310,56 @@ export function applyColorOps(
           b = lum + (b - lum) * k
           break
         }
+        case 'vibrance': {
+          // Saturation « intelligente » : boost inversement proportionnel à
+          // la saturation déjà présente — protège les teintes déjà vives
+          // (et les carnations) d'une sursaturation, contrairement à
+          // 'saturation' qui boost tout uniformément.
+          const mx = Math.max(r, g, b)
+          const mn = Math.min(r, g, b)
+          const cur = mx === 0 ? 0 : (mx - mn) / mx
+          const k = 1 + v * (1 - cur)
+          const lum = l * 255
+          r = lum + (r - lum) * k
+          g = lum + (g - lum) * k
+          b = lum + (b - lum) * k
+          break
+        }
         case 'temperature': {
           // v>0 réchauffe (R+, B-), v<0 refroidit
           r += v * 40
           b -= v * 40
+          break
+        }
+        case 'hue': {
+          // Rotation de teinte via HSV (v ∈ [-1,1] → ±180°)
+          const mx = Math.max(r, g, b)
+          const mn = Math.min(r, g, b)
+          const d = mx - mn
+          let h = 0
+          if (d !== 0) {
+            if (mx === r) h = (((g - b) / d) % 6)
+            else if (mx === g) h = (b - r) / d + 2
+            else h = (r - g) / d + 4
+            h *= 60
+            if (h < 0) h += 360
+          }
+          const s = mx === 0 ? 0 : d / mx
+          const val = mx / 255
+          h = (h + v * 180 + 360) % 360
+          const cc = val * s
+          const x = cc * (1 - Math.abs(((h / 60) % 2) - 1))
+          const m = val - cc
+          let rr = 0, gg = 0, bb = 0
+          if (h < 60) { rr = cc; gg = x; bb = 0 }
+          else if (h < 120) { rr = x; gg = cc; bb = 0 }
+          else if (h < 180) { rr = 0; gg = cc; bb = x }
+          else if (h < 240) { rr = 0; gg = x; bb = cc }
+          else if (h < 300) { rr = x; gg = 0; bb = cc }
+          else { rr = cc; gg = 0; bb = x }
+          r = (rr + m) * 255
+          g = (gg + m) * 255
+          b = (bb + m) * 255
           break
         }
       }
@@ -306,7 +423,10 @@ export function applySpatialOps(
   const redeye = ops.find((o) => o.type === 'redeye') as
     | Extract<EditOp, { type: 'redeye' }>
     | undefined
-  if (!retouch && !redeye) return
+  const vignette = ops.find((o) => o.type === 'vignette') as
+    | Extract<EditOp, { type: 'vignette' }>
+    | undefined
+  if (!retouch && !redeye && !vignette) return
 
   // --- Tampon : copie de disque adouci depuis la source vers la destination ---
   if (retouch && retouch.params.strokes.length > 0) {
@@ -364,6 +484,25 @@ export function applySpatialOps(
             data[i] = Math.round((gg + bb) / 2)
           }
         }
+      }
+    }
+  }
+
+  // --- Vignette : assombrissement radial, nul au centre, maximal aux coins ---
+  if (vignette && vignette.params.intensity > 0) {
+    const t = vignette.params.intensity
+    const cx = width / 2
+    const cy = height / 2
+    // Rayon normalisant : distance centre→coin = assombrissement maximal (t)
+    const maxDist = Math.hypot(cx, cy)
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const d = Math.hypot(x - cx, y - cy) / maxDist // 0 au centre, 1 au coin
+        const k = 1 - t * d * d // assombrissement quadratique (doux au centre)
+        const i = (y * width + x) * channels
+        data[i] = Math.round(data[i] * k)
+        data[i + 1] = Math.round(data[i + 1] * k)
+        data[i + 2] = Math.round(data[i + 2] * k)
       }
     }
   }

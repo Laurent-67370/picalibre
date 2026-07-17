@@ -19,6 +19,26 @@ export interface GridFilters {
  * Chaque canal déclare son payload de requête et sa réponse.
  */
 
+/**
+ * Instantané pré-fusion d'un groupe de doublons — tout ce qu'il faut pour
+ * annuler `duplicates:merge` : les lignes déplacées/écrasées, capturées
+ * avant mutation. Restauration volontairement pragmatique (façon Picasa,
+ * annulation immédiate d'un seul geste) : la photo gardée peut conserver
+ * un tag/album « gagné » lors de la fusion même après annulation — sans
+ * conséquence, à la différence de la perte de la photo ou de sa note.
+ */
+export interface MergeSnapshot {
+  keepId: number
+  /** rating/is_favorite de la photo gardée, avant l'écrasement par MAX(). */
+  keepBefore: { rating: number; is_favorite: number }
+  removed: Array<{
+    id: number
+    albumItems: Array<{ album_id: number; position: number; added_at: number }>
+    tagIds: number[]
+    faceIds: number[]
+  }>
+}
+
 export interface PhotoRow {
   id: number
   folder_id: number
@@ -145,10 +165,22 @@ export interface IpcInvokeMap {
   'photos:withGeo': { req: { bbox: BoundingBox } & GridFilters; res: GpsPhoto[] }
   'photos:reverseGeocode': { req: { lat: number; lon: number }; res: ReverseGeocodeResult | null }
   'duplicates:list': { req: void; res: Array<{ hash: string; photos: PhotoRow[] }> }
-  'duplicates:merge': { req: { keepId: number; removeIds: number[] }; res: void }
+  'duplicates:merge': { req: { keepId: number; removeIds: number[] }; res: MergeSnapshot }
+  'duplicates:undoMerge': { req: MergeSnapshot; res: void }
   'scanRoots:setMode': { req: { id: number; mode: 'watch' | 'once' | 'excluded' }; res: void }
   'library:relocate': { req: { newRoot: string }; res: { markedMissing: number; relinked: number; stillMissing: number } }
   'photos:setHidden': { req: { photoIds: number[]; hidden: boolean }; res: { ok: boolean; error?: string } }
+  'photos:batchRename': {
+    req: { photoIds: number[]; pattern: string; startNumber: number }
+    res: {
+      renamed: Array<{ id: number; oldPath: string; oldFilename: string; newPath: string; newFilename: string }>
+      errors: Array<{ id: number; filename: string; error: string }>
+    }
+  }
+  'photos:undoBatchRename': {
+    req: Array<{ id: number; oldPath: string; oldFilename: string; newPath: string; newFilename: string }>
+    res: void
+  }
   'photos:hidden': { req: void; res: PhotoRow[] }
   'privacy:status': { req: void; res: { hasPassword: boolean; unlocked: boolean } }
   'privacy:setPassword': { req: { password: string }; res: { ok: boolean; error?: string } }
@@ -183,6 +215,15 @@ export interface IpcInvokeMap {
   'edits:save': { req: { photoId: number; stack: EditStack; action: string }; res: { canUndo: boolean; canRedo: boolean } }
   'edits:undo': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
   'edits:redo': { req: { photoId: number }; res: { stack: EditStack; canUndo: boolean; canRedo: boolean } }
+  'edits:batchApply': {
+    req: { photoIds: number[]; stack: EditStack; action: string }
+    res: { before: Array<{ photoId: number; prevStack: EditStack }> }
+  }
+  'edits:batchAutoFix': {
+    req: { photoIds: number[] }
+    res: { before: Array<{ photoId: number; prevStack: EditStack }>; failed: number[] }
+  }
+  'edits:undoBatch': { req: Array<{ photoId: number; prevStack: EditStack }>; res: void }
   'edits:export': { req: { photoId: number; format?: 'jpeg' | 'webp' | 'png'; maxSize?: number }; res: { outPath: string | null } }
   'update:install': { req: void; res: void }
   'context:photoMenu': { req: { photoId: number; selectedCount: number }; res: void }
@@ -232,4 +273,5 @@ export interface RendererApi {
     payload: IpcInvokeMap[C]['req']
   ): Promise<IpcInvokeMap[C]['res']>
   on<E extends IpcEvent>(event: E, cb: (data: IpcEventMap[E]) => void): () => void
+  platform: NodeJS.Platform
 }

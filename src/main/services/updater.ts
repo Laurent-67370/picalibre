@@ -5,7 +5,7 @@
  * - Jamais actif en dev (app non packagée).
  */
 import { autoUpdater } from 'electron-updater'
-import { BrowserWindow, app, dialog } from 'electron'
+import { BrowserWindow, app, dialog, shell } from 'electron'
 
 export function initAutoUpdate(win: BrowserWindow): void {
   if (!app.isPackaged) return
@@ -28,6 +28,21 @@ export function initAutoUpdate(win: BrowserWindow): void {
 }
 
 export function installUpdate(): void {
+  if (process.platform === 'darwin') {
+    // Squirrel.Mac (le mécanisme d'installation d'electron-updater sur macOS)
+    // exige que l'app soit signée avec une identité Developer ID Apple réelle
+    // (payante, 99 $/an) pour remplacer le bundle .app en place — c'est documenté
+    // par Electron lui-même : « Your application must be signed for automatic
+    // updates on macOS. This is a requirement of Squirrel.Mac. »
+    // La signature ad-hoc de PicaLibre (depuis la 2.3.2) suffit à satisfaire
+    // Gatekeeper au premier lancement, mais pas cette validation-là : sans
+    // certificat payant, quitAndInstall() échoue en silence (télécharge mais
+    // n'installe jamais, symptôme rapporté). On ouvre donc la page de release
+    // pour un remplacement manuel du .app, plutôt que de laisser le bouton ne
+    // rien faire.
+    void shell.openExternal('https://github.com/Laurent-67370/picalibre/releases/latest')
+    return
+  }
   autoUpdater.quitAndInstall()
 }
 

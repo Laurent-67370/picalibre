@@ -70,7 +70,7 @@ export async function renderEdited(
 
   // Math partagée avec la preview : spatial (tampon, yeux rouges) puis couleur
   applySpatialOps(data, info.width, info.height, 3, stack.ops)
-  applyColorOps(data, 3, stack.ops)
+  applyColorOps(data, 3, stack.ops, info.width)
 
   // Encodage final
   let out = sharp(data, {
@@ -157,7 +157,11 @@ export async function renderEdited(
     const W = m.width ?? 100
     const H = m.height ?? 100
     const bw = Math.round(borderOp.params.thickness * W)
-    const bottomBw = borderOp.params.style === 'polaroid' ? bw * 4 : bw
+    const isMuseum = borderOp.params.style === 'museum'
+    const topBw = isMuseum ? Math.round(bw * 2.5) : bw
+    const sideBw = isMuseum ? Math.round(bw * 2.5) : bw
+    const bottomBw =
+      borderOp.params.style === 'polaroid' ? bw * 4 : isMuseum ? Math.round(bw * 2.5) : bw
     // Parser la couleur hex en { r, g, b }
     const hexMatch = /^#?([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/.exec(borderOp.params.color)
     const bg = hexMatch
@@ -165,10 +169,10 @@ export async function renderEdited(
       : { r: 255, g: 255, b: 255 }
 
     out = sharp(inter).extend({
-      top: bw,
+      top: topBw,
       bottom: bottomBw,
-      left: bw,
-      right: bw,
+      left: sideBw,
+      right: sideBw,
       background: { r: bg.r, g: bg.g, b: bg.b, alpha: 1 }
     }).removeAlpha()
   }

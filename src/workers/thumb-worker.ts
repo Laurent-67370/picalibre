@@ -96,9 +96,20 @@ async function processItem(item: ThumbItem, cacheDir: string): Promise<ThumbResu
   try {
     // .rotate() sans argument applique l'orientation EXIF
     let base = sharp(sourcePath, { failOn: 'none' }).rotate()
-    let meta = await base.metadata()
+    let meta: sharp.Metadata
+    try {
+      meta = await base.metadata()
+    } catch (metaErr) {
+      // sharp/libvips ne sait pas du tout décoder ce format (RAW propriétaire,
+      // PSD sans plugin) : il lève une exception ici plutôt que de renvoyer
+      // {width: undefined}. C'est le cas RÉEL le plus fréquent pour RAW/PSD
+      // avec la distribution npm standard de sharp (sans libvips-raw/psd).
+      if (!needsFallback) throw metaErr
+      meta = {} as sharp.Metadata
+    }
 
-    // Si sharp ne peut pas lire les dimensions, c'est qu'il ne supporte
+    // Si sharp ne peut pas lire les dimensions (exception ci-dessus, ou objet
+    // vide silencieux selon la version de libvips), c'est qu'il ne supporte
     // pas ce format → fallback exiftool pour extraire la preview embarquée
     if ((!meta.width || !meta.height) && needsFallback) {
       tmpPreview = await extractEmbeddedPreview(sourcePath, item.photoId)
@@ -161,8 +172,24 @@ async function run(items: ThumbItem[], cacheDir: string): Promise<void> {
     while (queue.length > 0) {
       const item = queue.shift()
       if (!item) break
-      const results = await processItem(item, cacheDir)
-      if (results.some((r) => !r.ok)) failed++
+      let results = await processItem(item, cacheDir)
+      if (results.some((r) => !r.ok)) {
+        // Retry unique : les échecs sharp/libvips observés sont parfois
+        // transitoires (contention CPU/mémoire sous charge, cf. le pipeline
+        // vidéo qui traite le même genre de fichiers en parallèle). Sans ce
+        // retry, un item raté était compté (stats.failed) mais jamais
+        // rejoué ni logué — silencieusement absent du résultat final.
+        const err = results.find((r) => !r.ok)?.error
+        console.error(`[thumb-worker] échec photoId=${item.photoId} (nouvelle tentative) :`, err)
+        results = await processItem(item, cacheDir)
+        if (results.some((r) => !r.ok)) {
+          failed++
+          console.error(
+            `[thumb-worker] échec définitif photoId=${item.photoId} :`,
+            results.find((r) => !r.ok)?.error
+          )
+        }
+      }
       pending.push(...results.filter((r) => r.ok))
       if (pending.length >= RESULT_BATCH) flush()
       done++

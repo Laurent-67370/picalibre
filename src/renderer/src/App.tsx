@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { AlbumRow, FaceLite, FolderRow, PersonRow, PhotoRow, ScanProgress, RendererApi } from '@shared/ipc'
+import type { AlbumRow, FaceLite, FolderRow, MergeSnapshot, PersonRow, PhotoRow, ScanProgress, RendererApi } from '@shared/ipc'
+import type { EditStack } from '@shared/edit-engine'
 import MapView from './MapView'
 import Slideshow from './Slideshow'
 import FaceMovie from './FaceMovie'
@@ -165,6 +166,10 @@ export default function App(): JSX.Element {
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null)
   const [batchExportOpen, setBatchExportOpen] = useState(false)
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renamePattern, setRenamePattern] = useState('{name}')
+  const [renameStart, setRenameStart] = useState(1)
+  const [renameBusy, setRenameBusy] = useState(false)
   const [batchSize, setBatchSize] = useState<number | 0>(0)
   const [batchFormat, setBatchFormat] = useState<'jpeg' | 'webp' | 'png'>('jpeg')
   const [batchQuality, setBatchQuality] = useState(90)
@@ -207,6 +212,13 @@ export default function App(): JSX.Element {
   const [fitMode, setFitMode] = useState<'cover' | 'contain'>(
     (localStorage.getItem('picalibre.fit') as 'cover' | 'contain') || 'cover'
   )
+  const [theme, setTheme] = useState<'light' | 'dark'>(
+    localStorage.getItem('picalibre.theme') === 'dark' ? 'dark' : 'light'
+  )
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem('picalibre.theme', theme)
+  }, [theme])
   useEffect(() => localStorage.setItem('picalibre.sort', sortMode), [sortMode])
   useEffect(() => localStorage.setItem('picalibre.minStars', String(minStars)), [minStars])
   useEffect(() => localStorage.setItem('picalibre.typeFilter', typeFilter), [typeFilter])
@@ -230,6 +242,12 @@ export default function App(): JSX.Element {
   const trayHideRef = useRef<(() => Promise<void>) | null>(null)
   const addFolderRef = useRef<(() => Promise<void>) | null>(null)
   const importRef = useRef<(() => Promise<void>) | null>(null)
+  // Une seule ref regroupant toutes les actions déclenchables depuis le menu
+  // applicatif (barre de menus native) — évite de multiplier les refs
+  // individuelles pour chaque fonctionnalité exposée. Peuplée plus bas, une
+  // fois toutes les fonctions du composant définies.
+  const menuActionsRef = useRef<Record<string, () => void>>({})
+  const trayNameInputRef = useRef<HTMLInputElement>(null)
   const [update, setUpdate] = useState<{ status: string; version?: string; percent?: number } | null>(null)
 
   // ---- Screensaver (écran de veille photo) ----
@@ -261,6 +279,60 @@ export default function App(): JSX.Element {
   const [trayName, setTrayName] = useState('')
   const [trayAlbumId, setTrayAlbumId] = useState<number | ''>('')
   const trayIds = useMemo(() => [...tray.keys()], [tray])
+
+  /**
+   * Annulation façon Picasa : un seul niveau, la toute dernière action
+   * destructive/réversible. Un bandeau "Annuler" apparaît quelques
+   * secondes après l'action, et Ctrl/⌘+Z fait la même chose tant qu'il
+   * est affiché. Conçu en union discriminée pour pouvoir couvrir d'autres
+   * actions plus tard (notation, tag…) sans tout réécrire — seul 'hide'
+   * est câblé pour l'instant, l'action la plus fréquente et la plus
+   * "silencieusement destructive" (aucune confirmation avant de masquer).
+   */
+  type LastAction =
+    | { type: 'hide'; photoIds: number[]; wasHidden: boolean; label: string }
+    | { type: 'trash'; snapshot: MergeSnapshot; label: string }
+    | { type: 'batchEdit'; before: Array<{ photoId: number; prevStack: EditStack }>; label: string }
+    | {
+        type: 'batchRename'
+        items: Array<{ id: number; oldPath: string; oldFilename: string; newPath: string; newFilename: string }>
+        label: string
+      }
+  const [lastAction, setLastAction] = useState<LastAction | null>(null)
+  const lastActionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const armUndo = (action: LastAction): void => {
+    setLastAction(action)
+    if (lastActionTimer.current) clearTimeout(lastActionTimer.current)
+    lastActionTimer.current = setTimeout(() => setLastAction(null), 8000)
+  }
+  const undoLastAction = async (): Promise<void> => {
+    if (!lastAction) return
+    if (lastActionTimer.current) clearTimeout(lastActionTimer.current)
+    if (lastAction.type === 'hide') {
+      await window.api.invoke('photos:setHidden', {
+        photoIds: lastAction.photoIds,
+        hidden: lastAction.wasHidden
+      })
+      if (viewRef.current) loadView(viewRef.current)
+    } else if (lastAction.type === 'trash') {
+      await window.api.invoke('duplicates:undoMerge', lastAction.snapshot)
+      window.api.invoke('duplicates:list', undefined).then(setDupGroups)
+      refreshSidebar()
+      if (viewRef.current) loadView(viewRef.current)
+    } else if (lastAction.type === 'batchEdit') {
+      await window.api.invoke('edits:undoBatch', lastAction.before)
+      if (viewRef.current) loadView(viewRef.current)
+    } else if (lastAction.type === 'batchRename') {
+      await window.api.invoke('photos:undoBatchRename', lastAction.items)
+      if (viewRef.current) loadView(viewRef.current)
+    }
+    setLastAction(null)
+  }
+  useEffect(() => {
+    return () => {
+      if (lastActionTimer.current) clearTimeout(lastActionTimer.current)
+    }
+  }, [])
 
   /** Sélection façon explorateur : clic = seule, Ctrl = bascule, Shift = plage. */
   const selectPhoto = (p: PhotoRow, i: number, e: React.MouseEvent): void => {
@@ -447,7 +519,8 @@ export default function App(): JSX.Element {
     const offWS = window.api.on('websync:progress', setWebsyncProgress)
     const offM = window.api.on('menu:action', ({ action }) => {
       if (action === 'addFolder') void addFolderRef.current?.()
-      if (action === 'import') void importRef.current?.()
+      else if (action === 'import') void importRef.current?.()
+      else menuActionsRef.current[action]?.()
     })
     const offU = window.api.on('update:status', (u) => {
       if (u.status === 'error') return
@@ -495,9 +568,14 @@ export default function App(): JSX.Element {
     const group = dupGroups.find((g) => g.hash === hash)
     if (!group) return
     const removeIds = group.photos.filter((p) => p.id !== keepId).map((p) => p.id)
-    await window.api.invoke('duplicates:merge', { keepId, removeIds })
+    const snapshot = await window.api.invoke('duplicates:merge', { keepId, removeIds })
     window.api.invoke('duplicates:list', undefined).then(setDupGroups)
     refreshSidebar()
+    armUndo({
+      type: 'trash',
+      snapshot,
+      label: `${removeIds.length} doublon(s) fusionné(s)`
+    })
   }
 
   const trayExport = async () => {
@@ -547,13 +625,86 @@ export default function App(): JSX.Element {
     alert(`CSV écrit (${r.rows} ligne(s)) : ${destDir}/metadonnees.csv`)
   }
 
+  const trayAutoFix = async () => {
+    if (trayIds.length === 0) return
+    const r = await window.api.invoke('edits:batchAutoFix', { photoIds: trayIds })
+    if (r.before.length > 0) {
+      armUndo({
+        type: 'batchEdit',
+        before: r.before,
+        label: `Correction auto appliquée à ${r.before.length} photo(s)${r.failed.length ? ` (${r.failed.length} échec(s))` : ''}`
+      })
+    } else if (r.failed.length > 0) {
+      alert(`Échec sur ${r.failed.length} photo(s) — vignettes pas encore prêtes ?`)
+    }
+  }
+
+  const trayPasteSettings = async () => {
+    if (trayIds.length === 0) return
+    const raw = localStorage.getItem('picalibre.clipboardStack')
+    if (!raw) {
+      alert('Copie d’abord des réglages depuis l’éditeur (bouton « 📋 Copier les réglages »).')
+      return
+    }
+    const stack = JSON.parse(raw) as EditStack
+    const r = await window.api.invoke('edits:batchApply', {
+      photoIds: trayIds,
+      stack,
+      action: 'paste_lot'
+    })
+    armUndo({
+      type: 'batchEdit',
+      before: r.before,
+      label: `Réglages collés sur ${r.before.length} photo(s)`
+    })
+  }
+
+  const runBatchRename = async () => {
+    if (trayIds.length === 0 || renameBusy) return
+    setRenameBusy(true)
+    try {
+      const r = await window.api.invoke('photos:batchRename', {
+        photoIds: trayIds,
+        pattern: renamePattern,
+        startNumber: renameStart
+      })
+      if (r.renamed.length > 0) {
+        armUndo({
+          type: 'batchRename',
+          items: r.renamed,
+          label: `${r.renamed.length} photo(s) renommée(s)${r.errors.length ? ` (${r.errors.length} échec(s))` : ''}`
+        })
+        if (viewRef.current) loadView(viewRef.current)
+        refreshSidebar()
+      }
+      if (r.errors.length > 0) {
+        alert(
+          `${r.errors.length} fichier(s) non renommé(s) :\n` +
+            r.errors.map((e) => `${e.filename} — ${e.error}`).join('\n')
+        )
+      }
+      setRenameOpen(false)
+    } finally {
+      setRenameBusy(false)
+    }
+  }
+
   const trayHide = async () => {
     const hide = view?.type !== 'hidden'
-    const r = await window.api.invoke('photos:setHidden', { photoIds: trayIds, hidden: hide })
+    const ids = [...trayIds]
+    const r = await window.api.invoke('photos:setHidden', { photoIds: ids, hidden: hide })
     if (!r.ok) {
       alert('Déverrouille les photos masquées d’abord (⚙ Réglages).')
       return
     }
+    armUndo({
+      type: 'hide',
+      photoIds: ids,
+      wasHidden: !hide,
+      label: hide
+        ? `${ids.length} photo(s) masquée(s)`
+        : `${ids.length} photo(s) affichée(s)`
+    })
     setTray(new Map())
     if (viewRef.current) loadView(viewRef.current)
   }
@@ -642,13 +793,18 @@ export default function App(): JSX.Element {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
         e.preventDefault()
         setTray(new Map(shown.map((p) => [p.id, p])))
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (lastAction) {
+          e.preventDefault()
+          void undoLastAction()
+        }
       } else if (e.key === 'Escape') {
         setTray(new Map())
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [photos, editing, lightboxIndex])
+  }, [photos, editing, lightboxIndex, lastAction])
 
   photosRef.current = photos
   trayHideRef.current = trayHide
@@ -677,6 +833,78 @@ export default function App(): JSX.Element {
     if (!trayName.trim() || trayIds.length === 0) return
     await window.api.invoke('tags:addToPhotos', { name: trayName.trim(), photoIds: trayIds })
     setTrayName('')
+  }
+
+  // ---- Actions exposées dans le menu applicatif natif ('menu:action') ----
+  // Beaucoup de ces fonctionnalités n'étaient auparavant accessibles que via
+  // le panier (une fois des photos sélectionnées) ou la barre latérale —
+  // invisibles pour qui ne les avait pas déjà découvertes. Le menu les rend
+  // désormais toutes trouvables, avec un message clair si une sélection est
+  // nécessaire mais absente.
+  const needsSelection = (): boolean => {
+    if (trayIds.length === 0) {
+      alert('Sélectionne d’abord une ou plusieurs photos/vidéos dans la grille (clic, Ctrl+clic pour plusieurs), puis relance cette action.')
+      return true
+    }
+    return false
+  }
+  menuActionsRef.current = {
+    rescan: () => void window.api.invoke('scan:start', {}),
+    goSettings: () => loadView({ type: 'settings' }),
+    goTimeline: () => loadView({ type: 'timeline' }),
+    goMap: () => loadView({ type: 'map' }),
+    goDuplicates: () => loadView({ type: 'duplicates' }),
+    goHidden: () => loadView({ type: 'hidden' }),
+    scanFaces: () => {
+      void window.api.invoke('faces:scan', undefined).then((r) => {
+        if (r.started) setFaceProgress({ done: 0, total: 1 })
+      })
+    },
+    editSelected: () => {
+      if (needsSelection()) return
+      const p = [...tray.values()][0]
+      if (p.media_type === 'video') {
+        alert('L’éditeur ne prend pas encore en charge les vidéos — utilise la lecture dans la visionneuse (double-clic).')
+        return
+      }
+      setEditing(p)
+    },
+    rate0: () => { if (!needsSelection()) trayIds.forEach((id) => void setRating(id, 0)) },
+    rate1: () => { if (!needsSelection()) trayIds.forEach((id) => void setRating(id, 1)) },
+    rate2: () => { if (!needsSelection()) trayIds.forEach((id) => void setRating(id, 2)) },
+    rate3: () => { if (!needsSelection()) trayIds.forEach((id) => void setRating(id, 3)) },
+    rate4: () => { if (!needsSelection()) trayIds.forEach((id) => void setRating(id, 4)) },
+    rate5: () => { if (!needsSelection()) trayIds.forEach((id) => void setRating(id, 5)) },
+    tagSelection: () => {
+      if (needsSelection()) return
+      trayNameInputRef.current?.focus()
+    },
+    toggleHideSelection: () => { if (!needsSelection()) void trayHideRef.current?.() },
+    createAlbum: () => {
+      if (needsSelection()) return
+      trayNameInputRef.current?.focus()
+    },
+    clearSelection: () => setTray(new Map()),
+    slideshow: () => {
+      if (shown.length === 0) {
+        alert('Aucune photo dans la vue courante à faire défiler.')
+        return
+      }
+      setSlideshow(true)
+    },
+    collage: () => { if (!needsSelection()) void trayCollage() },
+    movie: () => { if (!needsSelection()) void trayMovie() },
+    print: () => { if (!needsSelection()) setPrintDialogOpen(true) },
+    exportSelection: () => { if (!needsSelection()) void trayExport() },
+    batchExport: () => { if (!needsSelection()) void trayBatchExport() },
+    emailSelection: () => {
+      if (needsSelection()) return
+      void window.api.invoke('share:email', { photoIds: trayIds })
+    },
+    csvExport: () => { if (!needsSelection()) void trayCsv() },
+    autoFix: () => { if (!needsSelection()) void trayAutoFix() },
+    pasteSettings: () => { if (!needsSelection()) void trayPasteSettings() },
+    batchRename: () => { if (!needsSelection()) setRenameOpen(true) }
   }
 
   // ---- Grille virtualisée ----
@@ -849,14 +1077,14 @@ export default function App(): JSX.Element {
             alignItems: 'center',
             justifyContent: 'center',
             pointerEvents: 'none',
-            border: '3px dashed #f97316',
+            border: '3px dashed var(--accent)',
             borderRadius: 12,
             margin: 10
           }}
         >
           <div style={{ textAlign: 'center', fontSize: 18 }}>
             📥 Dépose ici
-            <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 6 }}>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
               Dossiers → ajoutés au scan · Fichiers → import avec choix de destination
             </div>
           </div>
@@ -867,7 +1095,7 @@ export default function App(): JSX.Element {
         <aside
           style={{
             width: 260,
-            borderRight: '1px solid #333',
+            borderRight: '1px solid var(--border-soft)',
             padding: 12,
             overflow: 'auto',
             flexShrink: 0
@@ -888,10 +1116,10 @@ export default function App(): JSX.Element {
               width: '100%',
               padding: 6,
               marginBottom: 12,
-              background: '#14171c',
-              border: '1px solid #333',
+              background: 'var(--card)',
+              border: '1px solid var(--border-soft)',
               borderRadius: 4,
-              color: '#d7dae0',
+              color: 'var(--text)',
               boxSizing: 'border-box'
             }}
           />
@@ -977,7 +1205,7 @@ export default function App(): JSX.Element {
                     height: 26,
                     borderRadius: '50%',
                     flexShrink: 0,
-                    background: '#14171c',
+                    background: 'var(--card)',
                     backgroundImage: hasBox
                       ? `url("thumb://library/256/${pe.samplePhotoId}")`
                       : undefined,
@@ -1022,7 +1250,7 @@ export default function App(): JSX.Element {
               }}
               style={{
                 ...sidebarItem(view?.type === 'album' && view.id === a.id),
-                outline: dragOverAlbum === a.id ? '2px dashed #f97316' : 'none',
+                outline: dragOverAlbum === a.id ? '2px dashed var(--accent)' : 'none',
                 outlineOffset: -2
               }}
             >
@@ -1051,7 +1279,7 @@ export default function App(): JSX.Element {
         {/* ---- Zone principale ---- */}
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {progress && progress.phase !== 'done' && (
-            <div style={{ padding: '8px 16px', background: '#26313f', fontSize: 13 }}>
+            <div style={{ padding: '8px 16px', background: 'var(--card-2)', fontSize: 13 }}>
               {PHASE_LABEL[progress.phase]}… {progress.filesProcessed}/{progress.filesFound}
             </div>
           )}
@@ -1077,10 +1305,10 @@ export default function App(): JSX.Element {
                 }}
                 style={{
                   padding: 6,
-                  background: '#14171c',
-                  border: '1px solid #333',
+                  background: 'var(--card)',
+                  border: '1px solid var(--border-soft)',
                   borderRadius: 4,
-                  color: '#d7dae0',
+                  color: 'var(--text)',
                   width: 220
                 }}
               />
@@ -1119,7 +1347,7 @@ export default function App(): JSX.Element {
               <select
                 value={mergeTarget}
                 onChange={(e) => setMergeTarget(e.target.value === '' ? '' : Number(e.target.value))}
-                style={{ padding: 6, background: '#14171c', color: '#d7dae0', border: '1px solid #333' }}
+                style={{ padding: 6, background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border-soft)' }}
               >
                 <option value="">Fusionner dans…</option>
                 {persons
@@ -1220,17 +1448,17 @@ export default function App(): JSX.Element {
                           width: '100%',
                           aspectRatio: '1',
                           borderRadius: 8,
-                          background: '#14171c',
+                          background: 'var(--card)',
                           backgroundImage: `url("thumb://library/256/${f.photo_id}")`,
                           backgroundSize: `${100 / f.bbox_w}% ${100 / f.bbox_h}%`,
                           backgroundPosition: `${
                             f.bbox_w < 1 ? (f.bbox_x / (1 - f.bbox_w)) * 100 : 0
                           }% ${f.bbox_h < 1 ? (f.bbox_y / (1 - f.bbox_h)) * 100 : 0}%`,
                           outline: sel
-                            ? '3px solid #2f6feb'
+                            ? '3px solid var(--select)'
                             : f.assignment === 'confirmed'
-                              ? '2px solid #3fb950'
-                              : '1px solid #333',
+                              ? '2px solid var(--success)'
+                              : '1px solid var(--border-soft)',
                           outlineOffset: -2
                         }}
                       />
@@ -1249,7 +1477,28 @@ export default function App(): JSX.Element {
 
           {view?.type === 'person' && manageFaces ? null : view?.type === 'settings' ? (
             <div style={{ flex: 1, overflow: 'auto', padding: 16, maxWidth: 720 }}>
-              <h3 style={{ marginTop: 0 }}>Dossiers surveillés</h3>
+              <h3 style={{ marginTop: 0 }}>🎨 Apparence</h3>
+              <p style={{ fontSize: 13, opacity: 0.7 }}>
+                Clair : palette inspirée de Picasa 3. Sombre : palette navy/orange historique de PicaLibre.
+              </p>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <button
+                  className={theme === 'light' ? 'primary' : undefined}
+                  onClick={() => setTheme('light')}
+                  aria-pressed={theme === 'light'}
+                >
+                  ☀️ Clair
+                </button>
+                <button
+                  className={theme === 'dark' ? 'primary' : undefined}
+                  onClick={() => setTheme('dark')}
+                  aria-pressed={theme === 'dark'}
+                >
+                  🌙 Sombre
+                </button>
+              </div>
+
+              <h3>Dossiers surveillés</h3>
               {roots.map((r) => (
                 <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
                   <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1264,7 +1513,6 @@ export default function App(): JSX.Element {
                       })
                       window.api.invoke('scanRoots:list', undefined).then(setRoots)
                     }}
-                    style={{ padding: 4, background: '#14171c', color: '#d7dae0', border: '1px solid #333' }}
                   >
                     <option value="watch">Surveillé</option>
                     <option value="once">Une fois</option>
@@ -1332,7 +1580,7 @@ export default function App(): JSX.Element {
                   placeholder="Mot de passe…"
                   value={pwInput}
                   onChange={(e) => setPwInput(e.target.value)}
-                  style={{ padding: 6, background: '#14171c', border: '1px solid #333', borderRadius: 4, color: '#d7dae0' }}
+                  style={{ padding: 6, background: 'var(--card)', border: '1px solid var(--border-soft)', borderRadius: 4, color: 'var(--text)' }}
                 />
                 {!privacy.hasPassword || privacy.unlocked ? (
                   <button
@@ -1389,14 +1637,14 @@ export default function App(): JSX.Element {
                   placeholder="https://photos.mondomaine.fr"
                   value={websyncUrl}
                   onChange={(e) => setWebsyncUrl(e.target.value)}
-                  style={{ padding: 6, background: '#14171c', border: '1px solid #333', borderRadius: 4, color: '#d7dae0' }}
+                  style={{ padding: 6, background: 'var(--card)', border: '1px solid var(--border-soft)', borderRadius: 4, color: 'var(--text)' }}
                 />
                 <input
                   type="password"
                   placeholder="Jeton d'accès (SYNC_TOKEN du serveur)"
                   value={websyncToken}
                   onChange={(e) => setWebsyncToken(e.target.value)}
-                  style={{ padding: 6, background: '#14171c', border: '1px solid #333', borderRadius: 4, color: '#d7dae0' }}
+                  style={{ padding: 6, background: 'var(--card)', border: '1px solid var(--border-soft)', borderRadius: 4, color: 'var(--text)' }}
                 />
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
@@ -1452,7 +1700,7 @@ export default function App(): JSX.Element {
                     if (r.ok) loadView({ type: 'hidden' })
                     else alert('Mot de passe incorrect.')
                   }}
-                  style={{ padding: 6, background: '#14171c', border: '1px solid #333', borderRadius: 4, color: '#d7dae0' }}
+                  style={{ padding: 6, background: 'var(--card)', border: '1px solid var(--border-soft)', borderRadius: 4, color: 'var(--text)' }}
                 />
               </div>
             </div>
@@ -1465,7 +1713,7 @@ export default function App(): JSX.Element {
                   <div
                     key={g.hash}
                     style={{
-                      border: '1px solid #333',
+                      border: '1px solid var(--border-soft)',
                       borderRadius: 6,
                       padding: 12,
                       marginBottom: 12
@@ -1550,7 +1798,7 @@ export default function App(): JSX.Element {
               alignItems: 'center',
               gap: 10,
               padding: '6px 16px',
-              borderBottom: '1px solid #26334a',
+              borderBottom: '1px solid var(--border-soft)',
               fontSize: 13,
               flexWrap: 'wrap'
             }}
@@ -1566,7 +1814,7 @@ export default function App(): JSX.Element {
                 <span
                   key={n}
                   onClick={() => setMinStars(minStars === n ? 0 : n)}
-                  style={{ color: n <= minStars ? '#f5c518' : '#475569', fontSize: 15 }}
+                  style={{ color: n <= minStars ? 'var(--star)' : 'var(--border)', fontSize: 15 }}
                 >
                   ★
                 </span>
@@ -1584,7 +1832,7 @@ export default function App(): JSX.Element {
             >
               {fitMode === 'cover' ? '▣ Carré' : '⬒ Ratio'}
             </button>
-            <span style={{ color: '#64748b', marginLeft: 'auto' }}>
+            <span style={{ color: 'var(--muted)', marginLeft: 'auto' }}>
               {shown.length}{shown.length !== photos.length ? ` / ${photos.length}` : ''} élément(s)
             </span>
           </div>
@@ -1621,8 +1869,8 @@ export default function App(): JSX.Element {
                         <span style={{ fontSize: 15, fontWeight: 600, textTransform: 'capitalize' }}>
                           {r.label}
                         </span>
-                        <span style={{ fontSize: 12, color: '#94a3b8' }}>{r.count} élément(s)</span>
-                        <span style={{ flex: 1, height: 1, background: '#26334a', marginBottom: 5 }} />
+                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{r.count} élément(s)</span>
+                        <span style={{ flex: 1, height: 1, background: 'var(--border-soft)', marginBottom: 5 }} />
                       </div>
                     )
                   }
@@ -1670,9 +1918,9 @@ export default function App(): JSX.Element {
                                 width: '100%',
                                 aspectRatio: '1',
                                 borderRadius: 4,
-                                background: '#14171c',
+                                background: 'var(--card)',
                                 cursor: 'pointer',
-                                outline: inTray ? '3px solid #2f6feb' : 'none',
+                                outline: inTray ? '3px solid var(--select)' : 'none',
                                 outlineOffset: -3,
                                 overflow: 'hidden'
                               }}
@@ -1683,7 +1931,7 @@ export default function App(): JSX.Element {
                                   position: 'absolute',
                                   top: 6,
                                   right: 6,
-                                  background: '#2f6feb',
+                                  background: 'var(--select)',
                                   borderRadius: '50%',
                                   width: 20,
                                   height: 20,
@@ -1734,7 +1982,7 @@ export default function App(): JSX.Element {
                                 <span
                                   key={n}
                                   onClick={() => setRating(p.id, p.rating === n ? 0 : n)}
-                                  style={{ color: n <= p.rating ? '#f5c518' : '#444' }}
+                                  style={{ color: n <= p.rating ? 'var(--star)' : 'var(--border)' }}
                                 >
                                   ★
                                 </span>
@@ -1870,8 +2118,8 @@ export default function App(): JSX.Element {
       {update && update.status !== 'available' && (
         <div
           style={{
-            borderTop: '1px solid #333',
-            background: '#1d2d1f',
+            borderTop: '1px solid var(--border-soft)',
+            background: 'color-mix(in srgb, var(--success) 18%, var(--card))',
             padding: '6px 16px',
             fontSize: 13,
             display: 'flex',
@@ -1882,7 +2130,21 @@ export default function App(): JSX.Element {
           {update.status === 'downloading' && (
             <span>⬇️ Mise à jour {update.version ?? ''} en téléchargement… {update.percent ?? 0} %</span>
           )}
-          {update.status === 'ready' && (
+          {update.status === 'ready' && window.api.platform === 'darwin' && (
+            <>
+              <span>
+                ⬇️ PicaLibre {update.version} est disponible. L'installation automatique n'est pas
+                possible sans certificat Apple payant — la page de téléchargement va s'ouvrir.
+              </span>
+              <button onClick={() => window.api.invoke('update:install', undefined)}>
+                Ouvrir la page de téléchargement
+              </button>
+              <button onClick={() => setUpdate(null)} style={{ opacity: 0.7 }}>
+                Plus tard
+              </button>
+            </>
+          )}
+          {update.status === 'ready' && window.api.platform !== 'darwin' && (
             <>
               <span>✅ PicaLibre {update.version} est prête à être installée.</span>
               <button onClick={() => window.api.invoke('update:install', undefined)}>
@@ -1893,6 +2155,33 @@ export default function App(): JSX.Element {
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* ---- Annulation façon Picasa (un seul niveau, ~8s) ---- */}
+      {lastAction && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 74,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 260,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            borderRadius: 999,
+            padding: '8px 10px 8px 18px',
+            boxShadow: '0 8px 24px var(--shadow)',
+            fontSize: 13
+          }}
+        >
+          <span>{lastAction.label}</span>
+          <button className="primary" onClick={() => void undoLastAction()} title="Ctrl/⌘+Z">
+            ↩ Annuler
+          </button>
         </div>
       )}
 
@@ -1924,7 +2213,7 @@ export default function App(): JSX.Element {
                   />
                 ))}
                 {tray.size > 6 && (
-                  <span style={{ fontSize: 12, alignSelf: 'center', color: '#94a3b8' }}>
+                  <span style={{ fontSize: 12, alignSelf: 'center', color: 'var(--muted)' }}>
                     +{tray.size - 6}
                   </span>
                 )}
@@ -1937,6 +2226,7 @@ export default function App(): JSX.Element {
             <div className="ftgroup">
               <span className="ftlabel">Organiser</span>
               <input
+                ref={trayNameInputRef}
                 placeholder="Nom d'album ou tag…"
                 value={trayName}
                 onChange={(e) => setTrayName(e.target.value)}
@@ -2013,13 +2303,26 @@ export default function App(): JSX.Element {
               <button onClick={trayCsv} title="Métadonnées en CSV">
                 📄 CSV
               </button>
+              <button onClick={trayAutoFix} title="Contraste + couleur calculés individuellement pour chaque photo (façon Picasa)">
+                🪄 Correction auto
+              </button>
+              <button
+                onClick={trayPasteSettings}
+                disabled={!localStorage.getItem('picalibre.clipboardStack')}
+                title="Colle les réglages copiés depuis l'éditeur (tuning, filtre, vignette, cadre) sur toute la sélection"
+              >
+                📥 Coller réglages
+              </button>
+              <button onClick={() => setRenameOpen(true)} title="Renommer tous les fichiers sélectionnés selon un modèle">
+                ✏️ Renommer
+              </button>
               <button onClick={trayHide} title="Masquer / démasquer">
                 {view?.type === 'hidden' ? '👁 Démasquer' : '🙈 Masquer'}
               </button>
             </div>
 
             {exportProgress && (
-              <span style={{ fontSize: 12, color: '#94a3b8', flexShrink: 0 }}>
+              <span style={{ fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>
                 {exportProgress.done}/{exportProgress.total}
               </span>
             )}
@@ -2112,6 +2415,89 @@ export default function App(): JSX.Element {
         </div>
       )}
 
+      {/* ---- Renommage en lot ---- */}
+      {renameOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 250,
+            background: '#0f172acc',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={() => !renameBusy && setRenameOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--card)',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              minWidth: 400
+            }}
+          >
+            <h3 style={{ margin: 0 }}>✏️ Renommer en lot ({trayIds.length} fichier(s))</h3>
+            <label style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              Modèle
+              <input
+                value={renamePattern}
+                onChange={(e) => setRenamePattern(e.target.value)}
+                placeholder="{name}"
+              />
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                {'{n}'} = numéro séquentiel · {'{name}'} = nom d'origine · {'{date}'} = date de prise de vue
+              </span>
+            </label>
+            <label style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              Numéro de départ
+              <input
+                type="number"
+                min={0}
+                value={renameStart}
+                onChange={(e) => setRenameStart(Number(e.target.value))}
+                style={{ width: 100 }}
+              />
+            </label>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+              Aperçu :
+              <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                {[...tray.values()].slice(0, 3).map((p, i) => {
+                  const ext = p.filename.slice(p.filename.lastIndexOf('.'))
+                  const base = p.filename.slice(0, p.filename.lastIndexOf('.'))
+                  const date = p.taken_at
+                    ? new Date(p.taken_at * 1000).toISOString().slice(0, 10)
+                    : '????-??-??'
+                  const n = String(renameStart + i).padStart(3, '0')
+                  const preview =
+                    renamePattern.replace(/\{n\}/g, n).replace(/\{name\}/g, base).replace(/\{date\}/g, date) +
+                    ext
+                  return (
+                    <li key={p.id}>
+                      {p.filename} → <strong>{preview}</strong>
+                    </li>
+                  )
+                })}
+                {tray.size > 3 && <li>… et {tray.size - 3} autre(s)</li>}
+              </ul>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setRenameOpen(false)} disabled={renameBusy}>
+                Annuler
+              </button>
+              <button className="primary" onClick={runBatchRename} disabled={renameBusy || !renamePattern.trim()}>
+                {renameBusy ? 'Renommage…' : 'Renommer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ---- Barre de progression de l'export groupé ---- */}
       {batchProgress && (
         <div
@@ -2121,7 +2507,7 @@ export default function App(): JSX.Element {
             left: 0,
             right: 0,
             zIndex: 240,
-            background: '#111827',
+            background: 'var(--bg-elevated)',
             borderTop: '1px solid var(--border)',
             padding: '10px 16px',
             display: 'flex',
@@ -2150,7 +2536,7 @@ export default function App(): JSX.Element {
               }}
             />
           </div>
-          <span style={{ color: '#94a3b8' }}>
+          <span style={{ color: 'var(--muted)' }}>
             {batchProgress.current}/{batchProgress.total}
           </span>
         </div>

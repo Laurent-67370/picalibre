@@ -27,9 +27,12 @@ declare global {
 const SLIDERS: Array<{ type: ColorOpType; label: string; min: number; max: number }> = [
   { type: 'fill_light', label: 'Lumière de remplissage', min: 0, max: 1 },
   { type: 'highlights', label: 'Hautes lumières', min: -1, max: 1 },
+  { type: 'shadows', label: 'Ombres', min: -1, max: 1 },
   { type: 'contrast', label: 'Contraste', min: -1, max: 1 },
   { type: 'saturation', label: 'Saturation', min: -1, max: 1 },
-  { type: 'temperature', label: 'Température', min: -1, max: 1 }
+  { type: 'vibrance', label: 'Vibrance', min: -1, max: 1 },
+  { type: 'temperature', label: 'Température', min: -1, max: 1 },
+  { type: 'hue', label: 'Teinte', min: -1, max: 1 }
 ]
 
 const RATIOS: Array<{ label: string; value: number | null }> = [
@@ -55,7 +58,11 @@ const FILTERS: Array<{ name: FilterName; label: string }> = [
   { name: 'sepia', label: 'Sépia' },
   { name: 'warmify', label: 'Réchauffer' },
   { name: 'cool', label: 'Refroidir' },
-  { name: 'invert', label: 'Négatif' }
+  { name: 'invert', label: 'Négatif' },
+  { name: 'posterize', label: 'Postériser' },
+  { name: 'duotone', label: 'Duoton' },
+  { name: 'crossprocess', label: 'Cross-process' },
+  { name: 'grain', label: 'Grain de film' }
 ]
 
 export default function Editor({
@@ -89,6 +96,7 @@ export default function Editor({
 
   const imgRef = useRef<HTMLImageElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const compareCanvasRef = useRef<HTMLCanvasElement>(null)
   const histRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const rafRef = useRef(0)
@@ -102,6 +110,13 @@ export default function Editor({
   showOriginalRef.current = showOriginal
   const toolRef = useRef(tool)
   toolRef.current = tool
+  // Côte à côte façon Picasa 3 : original et édité affichés simultanément
+  // (plutôt que showOriginal, qui bascule entre les deux sur le même canvas —
+  // resté inutilisé jusqu'ici, aucun bouton ne l'activait).
+  const [compareMode, setCompareMode] = useState(false)
+  const compareModeRef = useRef(compareMode)
+  compareModeRef.current = compareMode
+  const [copiedFlash, setCopiedFlash] = useState(false)
 
   // ---------- Rendu ----------
   const drawHistogram = useCallback(() => {
@@ -140,6 +155,13 @@ export default function Editor({
       }
       renderPreview(img, s, canvas)
       drawHistogram()
+      // Côte à côte : le canvas de gauche reste toujours l'original intact,
+      // indépendamment de showOriginal (qui n'a plus vraiment de sens une
+      // fois le côte-à-côte actif, mais on ne casse rien s'il l'est aussi).
+      const compareCanvas = compareCanvasRef.current
+      if (compareModeRef.current && compareCanvas) {
+        renderPreview(img, emptyStack(), compareCanvas)
+      }
     })
   }, [drawHistogram])
 
@@ -159,7 +181,7 @@ export default function Editor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photo.id])
 
-  useEffect(scheduleRender, [stack, showOriginal, cropMode, scheduleRender])
+  useEffect(scheduleRender, [stack, showOriginal, cropMode, compareMode, scheduleRender])
 
   // ---------- Persistance ----------
   const persist = (next: EditStack, action: string) => {
@@ -353,6 +375,7 @@ export default function Editor({
     const existing = getOp(stackRef.current, 'crop')
     setCropRect(existing ? { ...existing.params } : { x: 0.05, y: 0.05, w: 0.9, h: 0.9 })
     setCropMode(true)
+    setCompareMode(false)
   }
 
   const applyCrop = () => {
@@ -450,6 +473,12 @@ export default function Editor({
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) doUndo()
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) doRedo()
+      const inField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(
+        (e.target as HTMLElement)?.tagName
+      )
+      if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey && !inField && !cropModeRef.current) {
+        setCompareMode((v) => !v)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -464,7 +493,7 @@ export default function Editor({
     width: 14,
     height: 14,
     background: '#fff',
-    border: '2px solid #2f6feb',
+    border: '2px solid var(--select)',
     borderRadius: 2,
     ...pos
   })
@@ -505,6 +534,41 @@ export default function Editor({
           </button>
         </div>
 
+        <button
+          className={compareMode ? 'primary' : undefined}
+          onClick={() => setCompareMode((v) => !v)}
+          disabled={cropMode}
+          title="Comparer original / édité côte à côte (C)"
+          style={{ width: '100%', marginBottom: 12 }}
+        >
+          ⇔ Comparer côte à côte
+        </button>
+
+        <button
+          onClick={() => {
+            // Recadrage/retouche/yeux rouges/texte exclus : n'ont de sens
+            // que sur CETTE photo, pas copiés sur une sélection différente.
+            const copyable = stack.ops.filter(
+              (o) =>
+                o.type !== 'crop' &&
+                o.type !== 'retouch' &&
+                o.type !== 'redeye' &&
+                o.type !== 'text'
+            )
+            localStorage.setItem(
+              'picalibre.clipboardStack',
+              JSON.stringify({ version: 1, ops: copyable })
+            )
+            setCopiedFlash(true)
+            setTimeout(() => setCopiedFlash(false), 1500)
+          }}
+          disabled={cropMode || stack.ops.length === 0}
+          title="Copier les réglages (tuning, filtre, vignette, cadre) pour les coller sur d'autres photos depuis la bibliothèque"
+          style={{ width: '100%', marginBottom: 12 }}
+        >
+          {copiedFlash ? '✔ Réglages copiés' : '📋 Copier les réglages'}
+        </button>
+
         {!cropMode ? (
           <>
             <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
@@ -536,7 +600,7 @@ export default function Editor({
                     setTool(tool === t ? 'none' : t)
                     setPendingDefect(null)
                   }}
-                  style={{ flex: 1, background: tool === t ? '#2f6feb' : undefined, fontSize: 12 }}
+                  style={{ flex: 1, background: tool === t ? 'var(--select)' : undefined, fontSize: 12 }}
                 >
                   {label}
                 </button>
@@ -590,7 +654,7 @@ export default function Editor({
                         'filter'
                       )
                     }
-                    style={{ padding: '4px 10px', fontSize: 12, background: active ? '#2f6feb' : undefined }}
+                    style={{ padding: '4px 10px', fontSize: 12, background: active ? 'var(--select)' : undefined }}
                   >
                     {f.label}
                   </button>
@@ -660,6 +724,27 @@ export default function Editor({
                   )
                 }
                 style={{ width: '100%' }}
+              />
+            </label>
+
+            {/* ---- Vignette ---- */}
+            <div style={{ fontSize: 11, opacity: 0.5, margin: '4px 0 4px' }}>VIGNETTE</div>
+            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+              🔘 Vignette : {Math.round((getOp(stack, 'vignette')?.params.intensity ?? 0) * 100)}
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={getOp(stack, 'vignette')?.params.intensity ?? 0}
+                onChange={(e) =>
+                  applyOp(
+                    { type: 'vignette', params: { intensity: parseFloat(e.target.value) } },
+                    'vignette'
+                  )
+                }
+                style={{ width: '100%' }}
+                title="Assombrit les bords de la photo (style Picasa)"
               />
             </label>
 
@@ -866,6 +951,7 @@ export default function Editor({
                         >
                           <option value="solid">Solid (uniforme)</option>
                           <option value="polaroid">Polaroid (bord bas large)</option>
+                          <option value="museum">Musée (cadre épais uniforme)</option>
                         </select>
                       </label>
                       <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
@@ -973,7 +1059,7 @@ export default function Editor({
                   }}
                   style={{
                     padding: '4px 10px',
-                    background: ratio === r.value ? '#2f6feb' : undefined
+                    background: ratio === r.value ? 'var(--select)' : undefined
                   }}
                 >
                   {r.label}
@@ -1012,18 +1098,58 @@ export default function Editor({
           touchAction: 'none'
         }}
       >
-        <canvas
-          ref={canvasRef}
-          onClick={onCanvasClick}
+        {compareMode && !cropMode && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              marginRight: 16,
+              maxWidth: '48%'
+            }}
+          >
+            <span style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6, letterSpacing: '0.04em' }}>
+              ORIGINAL
+            </span>
+            <canvas
+              ref={compareCanvasRef}
+              style={{
+                maxWidth: '100%',
+                maxHeight: 'calc(100vh - 140px)',
+                objectFit: 'contain',
+                boxShadow: '0 4px 24px #0008',
+                borderRadius: 4
+              }}
+            />
+          </div>
+        )}
+        <div
           style={{
-            maxWidth: '100%',
-            maxHeight: '100%',
-            objectFit: 'contain',
-            boxShadow: '0 4px 24px #0008',
-            borderRadius: 4,
-            cursor: tool !== 'none' && !cropMode ? 'crosshair' : 'default'
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            maxWidth: compareMode && !cropMode ? '48%' : '100%',
+            minWidth: 0
           }}
-        />
+        >
+          {compareMode && !cropMode && (
+            <span style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6, letterSpacing: '0.04em' }}>
+              ÉDITÉ
+            </span>
+          )}
+          <canvas
+            ref={canvasRef}
+            onClick={onCanvasClick}
+            style={{
+              maxWidth: '100%',
+              maxHeight: compareMode && !cropMode ? 'calc(100vh - 140px)' : '100%',
+              objectFit: 'contain',
+              boxShadow: '0 4px 24px #0008',
+              borderRadius: 4,
+              cursor: tool !== 'none' && !cropMode ? 'crosshair' : 'default'
+            }}
+          />
+        </div>
 
         {/* Marqueurs yeux rouges */}
         {tool === 'redeye' &&
@@ -1047,7 +1173,7 @@ export default function Editor({
                     top: d.top + z.y * d.height - rp,
                     width: rp * 2,
                     height: rp * 2,
-                    border: '2px solid #ff5252',
+                    border: '2px solid var(--danger)',
                     borderRadius: '50%',
                     cursor: 'pointer'
                   }}
@@ -1071,7 +1197,7 @@ export default function Editor({
                   top: d.top + pendingDefect.y * d.height - rp,
                   width: rp * 2,
                   height: rp * 2,
-                  border: '2px dashed #f5c518',
+                  border: '2px dashed var(--star)',
                   borderRadius: '50%',
                   pointerEvents: 'none'
                 }}

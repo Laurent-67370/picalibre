@@ -75,8 +75,9 @@ async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
       `SELECT p.id AS photoId, p.filepath, p.hash_xxh3 AS hash
        FROM photos p
        WHERE p.status = 'active' AND p.media_type = 'video' AND p.hash_xxh3 != ''
-         AND NOT EXISTS (
-           SELECT 1 FROM thumbnails t WHERE t.photo_id = p.id AND t.size = 256
+         AND (
+           NOT EXISTS (SELECT 1 FROM thumbnails t WHERE t.photo_id = p.id AND t.size = 256)
+           OR NOT EXISTS (SELECT 1 FROM thumbnails t WHERE t.photo_id = p.id AND t.size = 1024)
          )`
     )
     .all() as { photoId: number; filepath: string; hash: string }[]
@@ -102,8 +103,18 @@ async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
           '-y', '-ss', seek, '-i', item.filepath,
           '-frames:v', '1', '-q:v', '3', tmpFrame
         ])
-        proc.on('error', reject)
-        proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}`))))
+        const killTimer = setTimeout(() => {
+          proc.kill('SIGKILL')
+          reject(new Error('ffmpeg timeout (20s) — process tué'))
+        }, 20_000)
+        proc.on('error', (err) => {
+          clearTimeout(killTimer)
+          reject(err)
+        })
+        proc.on('close', (code) => {
+          clearTimeout(killTimer)
+          code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}`))
+        })
       })
       const base = sharp(tmpFrame, { failOn: 'none' })
       const meta = await base.metadata()
@@ -161,8 +172,9 @@ function thumbsPhase(win: BrowserWindow): Promise<void> {
       `SELECT p.id AS photoId, p.filepath, p.hash_xxh3 AS hash
        FROM photos p
        WHERE p.status = 'active' AND p.media_type = 'image' AND p.hash_xxh3 != ''
-         AND NOT EXISTS (
-           SELECT 1 FROM thumbnails t WHERE t.photo_id = p.id AND t.size = 256
+         AND (
+           NOT EXISTS (SELECT 1 FROM thumbnails t WHERE t.photo_id = p.id AND t.size = 256)
+           OR NOT EXISTS (SELECT 1 FROM thumbnails t WHERE t.photo_id = p.id AND t.size = 1024)
          )`
     )
     .all() as { photoId: number; filepath: string; hash: string }[]
@@ -201,6 +213,9 @@ function thumbsPhase(win: BrowserWindow): Promise<void> {
         case 'thumbs-done':
         case 'error':
           if (msg.type === 'error') console.error('[thumbs]', msg.message)
+          else if (msg.stats?.failed > 0) {
+            console.error('[thumbs] terminé avec échecs :', JSON.stringify(msg.stats))
+          }
           worker.kill()
           resolve()
           break

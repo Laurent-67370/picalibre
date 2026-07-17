@@ -3,6 +3,350 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.12.0] — 2026-07-16
+
+### Ajouté — 3 réglages manquants vs Picasa 3.9
+- **Ombres** : miroir symétrique de « Hautes lumières » (pondéré par
+  l'obscurité au lieu de la clarté) — relève ou assombrit sélectivement
+  les tons foncés, sans quasiment toucher les tons clairs. Distinct de
+  « Lumière de remplissage » (qui ne fait que relever, jamais assombrir).
+- **Vibrance** : saturation « intelligente », boost inversement
+  proportionnel à la saturation déjà présente — protège les teintes déjà
+  vives et les carnations d'une sursaturation, contrairement à
+  « Saturation » qui boost tout uniformément.
+- **Teinte** : rotation de teinte via conversion RGB↔HSV (±180°).
+
+### Vérifié
+- Parité CPU/GPU stricte confirmée par le test dédié (écart max 1/255 sur
+  les 3 nouveaux réglages, comme tous les réglages existants, y compris
+  en chaîne combinée avec les autres opérations).
+- Comportement sémantique vérifié unitairement : Ombres relève un pixel
+  sombre (30→205) sans presque toucher un pixel clair (220→221) ;
+  Vibrance protège un rouge pur déjà saturé (inchangé) tout en boostant
+  une couleur pâle ; Teinte +120° sur un rouge pur donne exactement un
+  vert pur (0,255,0).
+
+## [2.11.0] — 2026-07-16
+
+### Ajouté — édition et renommage en lot (façon Picasa)
+- **✏️ Renommer en lot** : sélectionne des photos/vidéos, choisis un modèle
+  (`{n}` numéro séquentiel, `{name}` nom d'origine, `{date}` date de prise
+  de vue) avec aperçu en direct. Renomme les fichiers **sur le disque**
+  (pas juste dans la bibliothèque), watcher de fichiers désactivé pendant
+  l'opération pour éviter toute interférence, annulable (Ctrl/⌘+Z, comme
+  Masquer/Fusion de doublons).
+- **🪄 Correction auto (lot)** : applique contraste + balance des blancs
+  automatiques à toute une sélection — mais calculés **individuellement**
+  pour chaque photo (pas une valeur copiée), à partir de sa miniature déjà
+  en cache (rapide).
+- **📋 Copier les réglages** (éditeur) → **📥 Coller les réglages** (bac) :
+  copie tuning/filtre/vignette/cadre d'une photo éditée, colle sur toute
+  une sélection. Recadrage, retouche, yeux rouges et texte exclus de la
+  copie (n'ont de sens que sur la photo d'origine).
+- Toutes ces actions accessibles depuis le bac **et** le menu Outils.
+
+### Vérifié
+- Renommage en lot testé de bout en bout sur de vrais fichiers (Xvfb +
+  Electron réel) : 5/5 fichiers renommés sur disque + base, 5/5 restaurés
+  fidèlement après annulation (disque et base).
+- Édition en lot testée de bout en bout : correction auto produit des
+  valeurs de balance des blancs **différentes** par photo (calcul
+  individuel confirmé), le collage de réglages produit des valeurs
+  **identiques** sur toute la sélection (copie fidèle confirmée),
+  annulation groupée vérifiée.
+
+## [2.10.0] — 2026-07-16
+
+### Ajouté — plus d'effets créatifs et de cadres
+- **4 nouveaux filtres** dans l'éditeur : Postériser, Duoton (dégradé
+  navy→orange, identité visuelle PicaLibre), Cross-process, Grain de
+  film — s'ajoutent aux 5 existants (N&B, Sépia, Réchauffer, Refroidir,
+  Négatif). Toujours mélangés par intensité (0-100 %) comme les filtres
+  existants.
+- **Vignette** (nouveau curseur dédié) : assombrissement radial des
+  bords, nul au centre — effet indépendant des filtres, cumulable avec
+  eux.
+- **Cadre « Musée »** : bordure épaisse uniforme, en plus de Solid et
+  Polaroid.
+- *Note technique* : le moteur d'édition garantit une parité stricte
+  CPU (export sharp) / GPU (preview WebGL) — chaque nouveau filtre a été
+  implémenté des deux côtés (JS + GLSL) et vérifié par le test de parité
+  dédié (écart ≤ 1/255 sur les 3 filtres couleur). Exception assumée et
+  documentée pour le grain : sin() perd en précision pour de grands
+  arguments sur GPU (limitation matérielle, pas un bug), sans
+  conséquence pour un effet de bruit stochastique — remplacé par un
+  smoke-test (exécution sans erreur) plutôt qu'une comparaison pixel.
+  Vignette vérifiée par mesure de luminosité réelle (coin/centre passant
+  de 0,93 à 0,24 une fois appliquée à 100 %, capture Xvfb+Electron).
+
+## [2.9.0] — 2026-07-16
+
+### Ajouté — comparaison côte à côte (Éditeur)
+- **⇔ Comparer côte à côte** (raccourci `C`) : affiche l'original et la
+  version éditée simultanément, l'un à côté de l'autre — la fonctionnalité
+  phare de Picasa 3.9, absente jusqu'ici de PicaLibre. Chaque panneau est
+  étiqueté (ORIGINAL / ÉDITÉ), désactivé automatiquement en mode recadrage
+  (qui a besoin du canvas plein pour placer le cadre).
+- *Découverte au passage* : un début d'implémentation orphelin existait
+  déjà (`showOriginal`, un mode bascule original↔édité sur un seul
+  canvas) mais n'était relié à aucun bouton — resté inactif. Le nouveau
+  côte-à-côte le complète sans le retirer.
+- **Vérifié rigoureusement** (pas juste visuellement) : capture réelle
+  (Xvfb + Electron) avec un filtre N&B appliqué, coordonnées exactes des
+  deux canvas récupérées via le DOM, mesure de saturation par zone
+  (179 à gauche vs 36 à droite, confirmant original coloré / édité
+  désaturé) et vérification pixel par pixel de l'espace entre les deux
+  panneaux (0 débordement).
+
+## [2.8.0] — 2026-07-15
+
+### Corrigé — la vraie cause de la vignette manquante intermittente
+- **Root cause identifiée** (après plusieurs pistes explorées en vain :
+  signature macOS, `stream:true`, timeouts ffmpeg) : les requêtes
+  sélectionnant les photos/vidéos à traiter dans le pipeline de
+  miniatures ne vérifiaient l'absence que de la taille **256px** pour
+  décider si un item devait être (re)traité. Si la taille 256 réussissait
+  mais que la 1024 échouait (course avec le watcher de fichiers qui peut
+  déclencher son propre scan pendant qu'un scan explicite est en cours),
+  l'item était **exclu silencieusement de toutes les passes suivantes** —
+  la miniature 1024 ne pouvait plus jamais se générer, y compris via le
+  rescan automatique au démarrage (2.6.0) ou un rescan manuel.
+- Les requêtes (miniatures photo et vidéo) vérifient désormais l'absence
+  de **l'une ou l'autre** taille. Le pipeline devient auto-réparant : un
+  échec partiel sur un item est automatiquement rattrapé à la prochaine
+  passe (mécanisme de rescan déjà existant), au lieu de rester bloqué
+  indéfiniment.
+- **Diagnostic renforcé** : le worker de miniatures (`thumb-worker.ts`)
+  logue désormais chaque échec individuel et retente une fois avant
+  d'abandonner (les échecs sharp/libvips étaient jusqu'ici comptés en
+  silence, sans log ni retry) ; la phase miniatures logue ses statistiques
+  finales en cas d'échec.
+- **Reproduit et vérifié empiriquement** : ~10 % de taux d'échec
+  intermittent avant correctif (reproduit une douzaine de fois sur des
+  lancements réels via Xvfb+Electron, avec inspection directe de la base
+  SQLite pour confirmer précisément quelle miniature manquait) ; 30/30
+  lancements réussis après correctif.
+
+## [2.7.2] — 2026-07-15
+
+### Corrigé
+- **Timeout de téléchargement ffmpeg ramené à 15 s au lieu de 60 s** par
+  une modification de debug local restée par erreur dans le commit 2.7.1
+  — bien trop court pour 77 Mo sur une connexion normale (échouerait
+  systématiquement en dessous de ~40 Mbps soutenus). Repéré en relisant
+  le diff avant publication, jamais publié en release. Revenu à 60 s.
+
+## [2.7.1] — 2026-07-15
+
+### Ajouté — annulation étendue à la fusion de doublons
+- **Annuler (Ctrl/⌘+Z)** couvre maintenant aussi la **fusion de doublons**
+  (vue Doublons) — la seule action réellement destructive de PicaLibre
+  jusqu'ici sans filet : elle fusionne notes/favoris, déplace albums/tags/
+  visages vers la photo gardée, puis met l'autre à la corbeille.
+- Annulation fidèle, pas approximative : un instantané complet est capturé
+  **avant** la fusion (note/favori d'origine de la photo gardée, lignes
+  d'albums/tags de la photo supprimée, identifiants de ses visages) et
+  restauré tel quel. Seule concession pragmatique (façon Picasa, pensé
+  pour un « oups » immédiat plutôt qu'un historique complet) : un tag ou
+  un album que la photo gardée aurait « gagné » pendant la fusion peut
+  rester après annulation — sans perte de données, juste une note en trop
+  possible.
+
+## [2.7.0] — 2026-07-15
+
+### Ajouté — annulation façon Picasa
+- **Annuler (Ctrl/⌘+Z)** pour l'action « Masquer / afficher » : un bandeau
+  discret apparaît en bas de l'écran pendant ~8 s après un masquage ou un
+  démasquage (« 3 photo(s) masquée(s) — ↩ Annuler »), reproduisant le
+  comportement historique de Picasa — un seul niveau d'annulation pour la
+  toute dernière action, plutôt qu'une pile complexe. C'est l'action la
+  plus fréquente et la plus « silencieusement destructive » de PicaLibre
+  (aucune confirmation avant de masquer), donc la première à en profiter.
+  Architecture en union discriminée pour étendre facilement à d'autres
+  actions (notation, tag…) par la suite.
+
+## [2.6.0] — 2026-07-15
+
+### Ajouté — fiabilité et diagnostic
+- **Logs persistants** (`electron-log`) : tous les `console.log`/`console.error`
+  déjà présents dans le code (scanner, pipeline, ffmpeg, updater…) sont
+  désormais aussi écrits dans `userData/logs/main.log` (rotation à 5 Mo).
+  Jusqu'ici, la seule façon de diagnostiquer un échec silencieux (ex. la
+  vignette vidéo qui ne se générait pas) était de relancer l'app depuis un
+  terminal. Accessible via **Aide → Ouvrir le dossier des logs**.
+- **Rescan léger automatique au démarrage** : jusqu'ici, seul le watcher de
+  fichiers démarrait tout seul — si le pipeline avait échoué une fois sur
+  un fichier (miniature vidéo notamment) ou si des fichiers avaient été
+  ajoutés pendant que l'app était fermée, rien ne relançait jamais le
+  traitement sans action explicite (ajout d'un nouveau dossier). Un scan
+  léger se relance désormais automatiquement à chaque lancement, dès qu'au
+  moins un dossier est déjà configuré (désactivé en mode test headless).
+
+### Corrigé — résilience du pipeline vidéo
+- **Timeout de sécurité sur les appels `ffmpeg`** (génération de miniature
+  vidéo, sondage de durée) : un process qui reste bloqué (disque lent,
+  fichier corrompu, environnement CI capricieux) est désormais tué après
+  15-20 s au lieu de figer tout le pipeline indéfiniment.
+- **Retry + timeout sur le téléchargement du binaire ffmpeg** (premier
+  usage vidéo sans ffmpeg système/embarqué) : jusqu'à 3 tentatives avec
+  délai croissant (2 s, 4 s) et timeout de 60 s par tentative, au lieu
+  d'un unique essai sans filet. Fait suite à un échec CI Linux ponctuel
+  (probable aléa réseau) observé sur la 2.5.1, résolu par un simple
+  re-run mais révélant l'absence de résilience à cet endroit.
+
+## [2.5.1] — 2026-07-15
+
+### Corrigé
+- **macOS : la mise à jour se télécharge mais ne s'installe jamais**,
+  même en cliquant sur « Redémarrer et installer ». Cause racine :
+  Squirrel.Mac (le mécanisme d'installation d'electron-updater sur macOS)
+  exige une signature **Developer ID Apple réelle** (payante, 99 $/an)
+  pour remplacer le `.app` en place — c'est documenté par Electron
+  lui-même. La signature ad-hoc de PicaLibre (depuis la 2.3.2) suffit à
+  satisfaire Gatekeeper au premier lancement, mais pas cette validation
+  d'installation-là : `quitAndInstall()` échouait silencieusement, sans
+  aucune erreur visible. Le bouton ouvre désormais la page de release
+  GitHub pour un remplacement manuel du `.app` (comme pour un premier
+  téléchargement), avec un message clair expliquant pourquoi.
+- ⚠️ **Cette mise à jour vers la 2.5.1 elle-même** devra probablement être
+  installée manuellement une dernière fois (le correctif n'est actif
+  qu'une fois la 2.5.1 déjà en place) — les mises à jour suivantes
+  ouvriront correctement la page de téléchargement.
+
+## [2.5.0] — 2026-07-15
+
+### Ajouté — thème clair inspiré de Picasa 3 (par défaut) + thème sombre en option
+- **Nouveau thème clair, par défaut** : palette gris argenté/blanc inspirée
+  de Picasa 3, avec l'orange PicaLibre conservé comme accent principal
+  (cohérence avec le logo et les badges du dépôt) et le bleu de sélection
+  historique repris pour les surbrillances — proche de l'esprit Picasa
+  tout en restant identifiable comme PicaLibre.
+- **Thème sombre navy/orange** conservé à l'identique (mêmes valeurs
+  hexadécimales qu'avant), sélectionnable dans **Réglages → 🎨 Apparence**.
+  Préférence persistée (`localStorage`), appliquée avant le premier rendu
+  pour éviter tout flash du mauvais thème.
+- **Modes immersifs volontairement sombres dans les deux thèmes** :
+  visionneuse plein écran, éditeur, lecteur de film/diaporama, aperçu
+  collage, panneaux flottants de la carte — comme Picasa, Lightroom ou
+  Photos, l'espace de visualisation/retouche reste sombre indépendamment
+  du thème de l'appli, pour ne pas fausser le jugement des couleurs et
+  rester lisible par-dessus des photos ou des tuiles de carte variées.
+- *Note technique* : ~90 couleurs codées en dur remplacées par des tokens
+  CSS (`--bg`, `--card`, `--border`, `--text`, `--muted`, `--select`,
+  `--star`, `--success`, `--danger`…) dans `styles.css` et les composants
+  du renderer. Plusieurs premiers remplacements automatiques s'étaient
+  révélés incorrects par endroits (bordures/texte de panneaux volontai-
+  rement sombres qui suivaient à tort le thème, cassant le contraste en
+  clair) — corrigés après relecture ciblée et vérification par capture
+  d'écran réelle (Xvfb + Electron).
+
+## [2.4.0] — 2026-07-15
+
+### Ajouté — refonte de la barre de menus : tout devient trouvable
+- **Constat** : plusieurs fonctionnalités n'étaient visibles qu'une fois
+  « tombé dessus » — le panier en bas de fenêtre n'affichait Collage, Film,
+  Export groupé, Impression, Email et CSV qu'après avoir déjà sélectionné
+  des photos ; aucun moyen de relancer un scan de la bibliothèque sans
+  rajouter un dossier ; aucune liste de raccourcis clavier.
+- **Nouveau menu « Bibliothèque »** : Chronologie, Carte, Doublons, Photos
+  masquées, Analyser les visages — la navigation qui n'existait qu'en
+  barre latérale est désormais aussi dans la barre de menus.
+- **Nouveau menu « Outils »** : Diaporama, Collage, Film, Impression,
+  Export (simple/groupé), Email, CSV — chaque action indique clairement
+  qu'une sélection est requise si le panier est vide, au lieu de rester
+  invisible.
+- **Menu « Édition » enrichi** : Éditer la sélection, Noter (0 à 5 ★),
+  Taguer, Créer un album, Masquer/afficher, Vider la sélection — en plus
+  des rôles natifs (Annuler/Copier/Coller…).
+- **Menu « Fichier »** : nouvelle entrée **Rescanner la bibliothèque**
+  (Ctrl/⌘+Maj+R) — comble un vrai manque identifié en 2.3.x : le pipeline
+  de miniatures ne se relançait jamais automatiquement au démarrage,
+  seul un nouvel ajout de dossier le déclenchait.
+- **Aide → Raccourcis clavier** : liste complète (clic, Ctrl/⌘+clic,
+  Maj+clic, double-clic, glisser-déposer, molette, flèches, E) — plus
+  aucun geste caché.
+- *Note technique* : accélérateurs choisis en évitant deux conflits
+  potentiels — `E` n'est **pas** un raccourci global (aurait cassé la
+  frappe de la lettre « e » dans tous les champs texte de l'app) et reste
+  scindé à la visionneuse ; `Ctrl/⌘+R` (déjà pris par le rôle natif
+  « Recharger ») a été évité au profit de `Ctrl/⌘+Maj+R` pour Rescanner.
+
+## [2.3.4] — 2026-07-15
+
+### Corrigé
+- **Lecture vidéo toujours impossible malgré le lecteur ajouté en 2.3.3** :
+  le schéma `thumb://` était enregistré sans le privilège **`stream: true`**
+  (`protocol.registerSchemesAsPrivileged`). Sans lui, Chromium refuse de
+  traiter `thumb://library/orig/{id}` comme une source média valide pour
+  `<video>` — échec entièrement silencieux, aucune erreur visible côté
+  renderer. C'est la cause racine confirmée en testant sur machine réelle
+  (Mac mini M4) : le lecteur ajouté en 2.3.3 ne se déclenchait jamais.
+- **Seek vidéo cassé (corollaire)** : le handler `orig` refaisait un
+  `net.fetch` neuf sans transmettre les en-têtes `Range` de la requête
+  d'origine — chaque déplacement dans la barre de progression aurait
+  re-téléchargé le fichier depuis le début (`currentTime` revenant
+  toujours à 0, bug documenté d'Electron sur ce pattern). Les en-têtes de
+  la requête entrante sont désormais transmis à `net.fetch`.
+
+## [2.3.3] — 2026-07-15
+
+### Ajouté
+- **Lecture vidéo dans la visionneuse plein écran** : `Lightbox.tsx` ne
+  contenait aucune balise `<video>` — le double-clic sur un fichier vidéo
+  ouvrait la même visionneuse que pour les images, qui tentait d'afficher
+  le flux `.mp4` (servi par `thumb://library/orig/{id}`) dans une balise
+  `<img>`, incapable de le lire. Résultat : rien ne s'affichait et aucune
+  lecture n'était possible. Ajout d'un lecteur `<video controls autoPlay>`
+  natif dédié pour `media_type === 'video'`, avec navigation ← → conservée
+  et zoom/pan/molette/édition désactivés (non pertinents pour une vidéo).
+
+### Connu — vignette vidéo dans la grille
+- La génération de miniature vidéo (frame ffmpeg → cache webp) reste
+  déléguée au pipeline de fond (`videoThumbsPhase`) ; ses erreurs ne sont
+  loggées qu'en console (jamais remontées à l'UI). Si une vignette reste
+  vide durablement, lancer l'app depuis un terminal pour capturer le
+  message `[video-thumb] ...` exact.
+
+## [2.3.2] — 2026-07-15
+
+### Corrigé
+- **macOS : message Gatekeeper « L'app est endommagée » sur Apple Silicon**.
+  Sans certificat Apple Developer, electron-builder ne signait pas le
+  `.app` — sur arm64, un bundle non signé déclenche ce message trompeur au
+  lieu du simple avertissement « développeur non identifié » obtenu sur
+  Intel. Ajout d'un hook `afterPack` qui signe le bundle en ad-hoc
+  (`codesign --deep --force --sign -`) juste avant la mise en DMG/zip —
+  suffisant pour satisfaire Gatekeeper localement, sans notarisation.
+
+## [2.3.1] — 2026-07-14
+
+### Corrigé — vérification approfondie des fonctionnalités 2.0.0→2.3.0
+- **Bug critique : le scan plantait entièrement sur les machines à 1-2 cœurs
+  logiques.** Le partitionnement multi-worker du scanner (`partitionRoots`)
+  faisait un modulo par zéro (`partitions.length - 1 === 0`) lors de la
+  répartition round-robin des sous-dossiers quand un seul worker était
+  disponible → `TypeError: Cannot read properties of undefined (reading
+  'roots')`, scan totalement bloqué (aucune photo jamais indexée). Corrigé :
+  sur machine mono/bi-cœur, un seul worker pleinement récursif scanne tout,
+  sans partitionnement shallow/récursif qui n'a pas de sens à un seul worker.
+- **Fallback RAW/PSD jamais déclenché** : `sharp(...).metadata()` lève une
+  exception sur un format non supporté par libvips (RAW propriétaire, PSD
+  sans plugin) au lieu de renvoyer `{width: undefined}` comme le supposait le
+  code — l'exception remontait directement au bloc catch englobant, court-
+  circuitant le fallback `exiftool.extractPreview()`. Corrigé avec un
+  try/catch dédié autour de `.metadata()`. **Limite structurelle à connaître**
+  (pas un bug) : le fallback ne peut réussir que si le fichier RAW/PSD a une
+  preview JPEG intégrée — quasi systématique pour les RAW d'appareils photo,
+  variable pour les PSD selon l'option « Maximiser la compatibilité ».
+- Nouveau script de non-régression `scripts/test-raw-psd-fallback.ts`.
+
+### Vérifié — tests réels effectués (pas de simulation)
+- Bordures/cadres (DSL `border`) : dimensions exactes, couleur pixel-parfaite,
+  variante polaroid, déterminisme — validé sur export sharp réel.
+- Géolocalisation : 3 photos avec vraies coordonnées EXIF GPS (Tour Eiffel,
+  Strasbourg, Nice) → extraction EXIF correcte, carte Leaflet rendue avec les
+  3 marqueurs et 20 tuiles OSM chargées (sonde DOM + capture d'écran réelle).
+
 ## [2.3.0] — 2026-07-14
 
 ### Ajouté — Géolocalisation et carte interactive

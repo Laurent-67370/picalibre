@@ -23,7 +23,15 @@ type ColorOp = Extract<
 export function colorOpsOf(ops: EditOp[]): ColorOp[] {
   return ops.filter(
     (o): o is ColorOp =>
-      o.type !== 'crop' && o.type !== 'straighten' && o.type !== 'redeye' && o.type !== 'retouch' && o.type !== 'text' && o.type !== 'border' && o.type !== 'blur' && o.type !== 'sharpen'
+      o.type !== 'crop' &&
+      o.type !== 'straighten' &&
+      o.type !== 'redeye' &&
+      o.type !== 'retouch' &&
+      o.type !== 'text' &&
+      o.type !== 'border' &&
+      o.type !== 'blur' &&
+      o.type !== 'sharpen' &&
+      o.type !== 'vignette'
   )
 }
 
@@ -58,7 +66,11 @@ function glslFor(op: ColorOp, i: number): { decl: string; body: string } {
             dot(c, vec3(0.272, 0.534, 0.131)));`,
         warmify: `vec3 e = vec3(l) + (c - vec3(l)) * 1.15 + vec3(28.0, 6.0, -22.0);`,
         cool: `vec3 e = vec3(l) + (c - vec3(l)) * 1.05 + vec3(-22.0, 0.0, 26.0);`,
-        invert: `vec3 e = vec3(255.0) - c;`
+        invert: `vec3 e = vec3(255.0) - c;`,
+        posterize: `float pstep = 255.0 / 4.0; vec3 e = floor(c / pstep + 0.5) * pstep;`,
+        duotone: `vec3 e = mix(vec3(15.0, 23.0, 42.0), vec3(249.0, 115.0, 22.0), l / 255.0);`,
+        crossprocess: `vec3 e = vec3(c.r, c.g + 15.0, c.b < 128.0 ? c.b * 0.7 : c.b + (c.b - 128.0) * 0.5);`,
+        grain: `float gh = fract(sin(dot(v_uv, vec2(12.9898, 78.233))) * 43758.5453); vec3 e = c + vec3((gh - 0.5) * 45.0);`
       }
       return {
         decl: `uniform float ${u};`,
@@ -75,6 +87,11 @@ function glslFor(op: ColorOp, i: number): { decl: string; body: string } {
         decl: `uniform float ${u};`,
         body: `{ float l = ${LUMA} / 255.0; float w = ${u} * l * l; c += w * (vec3(255.0) - c); }`
       }
+    case 'shadows':
+      return {
+        decl: `uniform float ${u};`,
+        body: `{ float l = ${LUMA} / 255.0; float w = ${u} * (1.0 - l) * (1.0 - l); c += w * (vec3(255.0) - c); }`
+      }
     case 'contrast':
       return {
         decl: `uniform float ${u};`,
@@ -85,10 +102,53 @@ function glslFor(op: ColorOp, i: number): { decl: string; body: string } {
         decl: `uniform float ${u};`,
         body: `{ float lum = ${LUMA}; c = vec3(lum) + (c - vec3(lum)) * (1.0 + ${u}); }`
       }
+    case 'vibrance':
+      return {
+        decl: `uniform float ${u};`,
+        body: `{
+          float mx = max(c.r, max(c.g, c.b));
+          float mn = min(c.r, min(c.g, c.b));
+          float cur = mx <= 0.0 ? 0.0 : (mx - mn) / mx;
+          float k = 1.0 + ${u} * (1.0 - cur);
+          float lum = ${LUMA};
+          c = vec3(lum) + (c - vec3(lum)) * k;
+        }`
+      }
     case 'temperature':
       return {
         decl: `uniform float ${u};`,
         body: `{ c.r += ${u} * 40.0; c.b -= ${u} * 40.0; }`
+      }
+    case 'hue':
+      return {
+        decl: `uniform float ${u};`,
+        body: `{
+          float mx = max(c.r, max(c.g, c.b));
+          float mn = min(c.r, min(c.g, c.b));
+          float d = mx - mn;
+          float h = 0.0;
+          if (d > 0.0001) {
+            if (mx == c.r) h = mod((c.g - c.b) / d, 6.0);
+            else if (mx == c.g) h = (c.b - c.r) / d + 2.0;
+            else h = (c.r - c.g) / d + 4.0;
+            h *= 60.0;
+            if (h < 0.0) h += 360.0;
+          }
+          float s = mx <= 0.0 ? 0.0 : d / mx;
+          float val = mx / 255.0;
+          h = mod(h + ${u} * 180.0 + 360.0, 360.0);
+          float cc = val * s;
+          float x = cc * (1.0 - abs(mod(h / 60.0, 2.0) - 1.0));
+          float m = val - cc;
+          vec3 e;
+          if (h < 60.0) e = vec3(cc, x, 0.0);
+          else if (h < 120.0) e = vec3(x, cc, 0.0);
+          else if (h < 180.0) e = vec3(0.0, cc, x);
+          else if (h < 240.0) e = vec3(0.0, x, cc);
+          else if (h < 300.0) e = vec3(x, 0.0, cc);
+          else e = vec3(cc, 0.0, x);
+          c = (e + m) * 255.0;
+        }`
       }
   }
 }

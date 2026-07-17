@@ -57,6 +57,15 @@ async function partitionRoots(roots: string[]): Promise<WorkerPartition[]> {
 
   // Cas 2 : une seule racine → partitionner par sous-dossiers de premier niveau
   const root = roots[0]
+
+  // Une seule machine mono/bi-cœur (MAX_WORKERS=1) : le découpage shallow +
+  // N workers récursifs n'a pas de sens avec un seul worker disponible — un
+  // worker unique, pleinement récursif, scanne tout. Évite aussi la division
+  // par zéro plus bas (partitions.length - 1 === 0) lors du round-robin.
+  if (MAX_WORKERS <= 1) {
+    return [{ roots: [root], shallow: false }]
+  }
+
   const subDirs: string[] = []
   try {
     const handle = await opendir(root)
@@ -89,8 +98,13 @@ async function partitionRoots(roots: string[]): Promise<WorkerPartition[]> {
 
   // S'il reste des sous-dossiers (plus que MAX_WORKERS−1), les répartir
   // sur les workers récursifs existants en round-robin.
+  // Cas particulier : un seul worker récursif existe (ou aucun, MAX_WORKERS=1
+  // sur une machine à 1-2 cœurs) → pas de round-robin possible, modulo par
+  // zéro sinon (partitions.length - 1 === 0) → NaN → crash. Tout rejoint
+  // alors le worker "shallow" (indice 0), qui devient de facto récursif.
+  const recursiveWorkerCount = partitions.length - 1
   for (let i = MAX_WORKERS - 1; i < subDirs.length; i++) {
-    const targetIdx = 1 + ((i - (MAX_WORKERS - 1)) % (partitions.length - 1))
+    const targetIdx = recursiveWorkerCount > 0 ? 1 + ((i - (MAX_WORKERS - 1)) % recursiveWorkerCount) : 0
     partitions[targetIdx].roots.push(subDirs[i])
   }
 

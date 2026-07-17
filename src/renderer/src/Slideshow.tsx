@@ -252,13 +252,13 @@ export default function Slideshow({
           left: 0,
           right: 0,
           height: 3,
-          background: '#333'
+          background: 'var(--border-soft)'
         }}
       >
         <div
           style={{
             height: '100%',
-            background: 'var(--accent, #f97316)',
+            background: 'var(--accent)',
             width: `${progress * 100}%`,
             transition: playing ? 'none' : 'width 0.2s ease'
           }}
@@ -319,7 +319,7 @@ export default function Slideshow({
             {currentPhoto?.filename}
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ fontSize: 11, color: '#94a3b8', userSelect: 'none' }}>Durée</span>
+            <span style={{ fontSize: 11, color: 'var(--muted)', userSelect: 'none' }}>Durée</span>
             <input
               type="range"
               min={MIN_DURATION}
@@ -329,7 +329,7 @@ export default function Slideshow({
               onChange={(e) => setDuration(Number(e.target.value))}
               style={{ width: 80, padding: 0 }}
             />
-            <span style={{ fontSize: 11, color: '#94a3b8', userSelect: 'none', minWidth: 30 }}>
+            <span style={{ fontSize: 11, color: 'var(--muted)', userSelect: 'none', minWidth: 30 }}>
               {duration}s
             </span>
           </span>
@@ -344,7 +344,7 @@ export default function Slideshow({
         <div
           style={{
             fontSize: 11,
-            color: '#94a3b8',
+            color: 'var(--muted)',
             textShadow: '0 1px 4px #000',
             userSelect: 'none'
           }}

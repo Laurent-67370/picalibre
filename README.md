@@ -1,12 +1,155 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.3.0-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.12.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
 Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
+
+📄 [Politique de signature de code](CODE_SIGNING.md) — comment les installeurs sont signés et comment vérifier leur intégrité.
+
+## 🆕 Quoi de neuf en 2.12.0
+
+- 🎚️ **3 nouveaux réglages** : Ombres (relève/assombrit sélectivement les
+  tons foncés), Vibrance (saturation intelligente qui protège les teintes
+  déjà vives), Teinte (rotation ±180°).
+
+## 🆕 Quoi de neuf en 2.11.0
+
+- ✏️ **Renommage en lot** : modèle personnalisable ({n}/{name}/{date}),
+  aperçu en direct, annulable.
+- 🪄 **Correction auto en lot** : contraste/balance des blancs calculés
+  individuellement pour chaque photo sélectionnée.
+- 📋 **Copier/coller les réglages** entre l'éditeur et une sélection de
+  photos (tuning, filtre, vignette, cadre).
+
+## 🆕 Quoi de neuf en 2.10.0
+
+- 🎨 **4 nouveaux filtres** : Postériser, Duoton, Cross-process, Grain de
+  film (en plus de N&B, Sépia, Réchauffer, Refroidir, Négatif).
+- 🔘 **Vignette** : assombrissement radial des bords, curseur dédié.
+- 🖼️ **Cadre « Musée »** : bordure épaisse uniforme.
+
+## 🆕 Quoi de neuf en 2.9.0
+
+- ⇔ **Comparaison côte à côte** dans l'éditeur (raccourci `C`) : original
+  et édité affichés simultanément, l'un à côté de l'autre — la
+  fonctionnalité phare de Picasa 3.9, maintenant dans PicaLibre.
+
+## 🆕 Quoi de neuf en 2.8.0
+
+- 🎯 **La vraie cause de la vignette manquante, enfin trouvée** : une
+  requête ne vérifiait que la taille 256px pour décider si une
+  miniature restait à générer — un échec partiel sur la taille 1024px
+  laissait l'item exclu pour toujours, même après un rescan. Corrigé :
+  le pipeline est désormais auto-réparant. Reproduit ~10 % du temps et
+  vérifié disparu (30/30) après correctif.
+
+## 🆕 Quoi de neuf en 2.7.2
+
+- 🔧 Correctif interne : timeout de téléchargement du binaire ffmpeg
+  ramené à sa valeur normale (60 s au lieu de 15 s par erreur).
+
+## 🆕 Quoi de neuf en 2.7.1
+
+- ↩️ **Annuler (Ctrl/⌘+Z) étendu à la fusion de doublons** : la seule
+  action vraiment destructive de PicaLibre a maintenant son filet — un
+  instantané complet (notes, favoris, albums, tags, visages) est capturé
+  avant la fusion et restauré fidèlement en cas d'annulation.
+
+## 🆕 Quoi de neuf en 2.7.0
+
+- ↩️ **Annuler façon Picasa (Ctrl/⌘+Z)** : après avoir masqué ou démasqué
+  des photos, un bandeau "Annuler" apparaît quelques secondes — un seul
+  niveau d'annulation pour la dernière action, comme dans Picasa.
+
+## 🆕 Quoi de neuf en 2.6.0
+
+- 🧾 **Logs persistants** (Aide → Ouvrir le dossier des logs) : fini les
+  lancements depuis un terminal pour diagnostiquer un souci.
+- 🔄 **Rescan automatique au démarrage** : un échec ponctuel du pipeline
+  (miniature vidéo par ex.) ou des fichiers ajoutés app fermée sont
+  désormais retraités tout seuls, sans avoir à rajouter le dossier.
+- 🛡️ **Résilience ffmpeg** : timeout de sécurité si un process reste
+  bloqué, retry automatique (3 tentatives) si le téléchargement du
+  binaire échoue.
+
+## 🆕 Quoi de neuf en 2.5.1
+
+- 🔄 **Correction de la mise à jour macOS** : le bouton « Redémarrer et
+  installer » ne faisait rien (Squirrel.Mac exige un certificat Apple
+  payant pour remplacer l'app en place, absent ici). Il ouvre désormais
+  la page de téléchargement pour un remplacement manuel, avec un message
+  clair. *Cette mise à jour-ci devra encore être installée manuellement
+  une dernière fois — les suivantes s'ouvriront automatiquement.*
+
+## 🆕 Quoi de neuf en 2.5.0
+
+- 🎨 **Thème clair inspiré de Picasa 3, par défaut** : palette gris
+  argenté/blanc, accent orange PicaLibre conservé, sélection bleue façon
+  Picasa. Le thème sombre navy/orange historique reste disponible dans
+  **Réglages → Apparence**. La visionneuse, l'éditeur et les autres modes
+  immersifs restent volontairement sombres dans les deux thèmes (comme
+  Picasa, Lightroom ou Photos), pour ne pas fausser le jugement des
+  couleurs des photos.
+
+## 🆕 Quoi de neuf en 2.4.0
+
+- 📋 **Refonte de la barre de menus — tout devient trouvable** : nouveaux
+  menus **Bibliothèque** (Chronologie, Carte, Doublons, Photos masquées,
+  Analyser les visages) et **Outils** (Diaporama, Collage, Film,
+  Impression, Export, Email, CSV) ; menu **Édition** enrichi (éditer,
+  noter, taguer, créer un album, masquer) ; nouvelle entrée **Rescanner
+  la bibliothèque** (Ctrl/⌘+Maj+R) ; **Aide → Raccourcis clavier** avec
+  la liste complète des gestes (clic, glisser-déposer, molette, flèches…).
+  Plus aucune fonctionnalité cachée derrière une sélection préalable.
+
+## 🆕 Quoi de neuf en 2.3.4
+
+- 🎬 **Lecture vidéo enfin fonctionnelle** : le lecteur ajouté en 2.3.3 ne
+  se déclenchait jamais — il manquait le privilège `stream: true` sur le
+  schéma `thumb://`, sans lequel Electron/Chromium refuse silencieusement
+  de traiter une source vidéo personnalisée. Le seek (barre de
+  progression) est également corrigé au passage.
+
+## 🆕 Quoi de neuf en 2.3.3
+
+- ▶️ **Lecture vidéo dans la visionneuse plein écran** : le double-clic sur
+  une vidéo ouvrait jusqu'ici une visionneuse image-only, incapable
+  d'afficher un flux `.mp4`. Ajout d'un lecteur natif avec contrôles
+  (lecture, pause, volume, plein écran), navigation ← → conservée entre
+  vidéos et photos d'une même sélection.
+
+## 🆕 Quoi de neuf en 2.3.2
+
+- 🍎 **macOS : correction du message Gatekeeper « L'app est endommagée »
+  sur Apple Silicon** : le bundle `.app` n'était pas signé (pas de
+  certificat Apple Developer), ce qui déclenche ce message trompeur sur
+  arm64 au lieu du simple avertissement « développeur non identifié ».
+  L'app est désormais signée en ad-hoc pendant le build — plus besoin de
+  passer par `xattr -cr` après le téléchargement.
+
+## 🆕 Quoi de neuf en 2.3.1
+
+- 🐛 **Bug critique corrigé : scan bloqué sur machines à 1-2 cœurs** : le
+  partitionnement multi-worker du scanner (`partitionRoots`) provoquait une
+  division par zéro (`partitions.length - 1 === 0`) lors de la répartition
+  round-robin sur les machines mono/bi-cœur, bloquant tout scan
+  (`TypeError`, aucune photo jamais indexée). Corrigé : un seul worker
+  pleinement récursif scanne désormais tout sur ces machines, sans
+  partitionnement inutile.
+- 📷 **Fallback RAW/PSD réparé** : `sharp(...).metadata()` levait une
+  exception sur les formats non supportés par libvips (RAW propriétaire,
+  PSD sans plugin) au lieu de déclencher le fallback
+  `exiftool.extractPreview()`. Corrigé avec un try/catch dédié — le
+  fallback fonctionne dès que le fichier a une preview JPEG intégrée
+  (quasi systématique pour les RAW d'appareils photo).
+- ✅ **Vérification approfondie des fonctionnalités 2.0.0→2.3.0** : tests
+  réels (pas de simulation) sur les bordures/cadres (export sharp
+  pixel-parfait) et la géolocalisation (3 photos avec vraies coordonnées
+  EXIF GPS, carte Leaflet rendue avec ses marqueurs et tuiles OSM).
 
 ## 🆕 Quoi de neuf en 2.3.0
 

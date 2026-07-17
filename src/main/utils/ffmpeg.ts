@@ -76,15 +76,33 @@ async function downloadFfmpeg(dest: string): Promise<void> {
   const asset = assetName()
   if (!asset) throw new Error(`plateforme non supportée : ${process.platform}-${process.arch}`)
   const url = `${FFMPEG_RELEASE}/${asset}`
-  console.log('[ffmpeg] téléchargement unique du binaire :', url)
-  const res = await net.fetch(url)
-  if (!res.ok || !res.body) throw new Error(`téléchargement ffmpeg : HTTP ${res.status}`)
   await mkdir(join(app.getPath('userData'), 'bin'), { recursive: true })
   const tmp = dest + '.part'
-  await pipeline(Readable.fromWeb(res.body as never), createWriteStream(tmp))
-  await chmod(tmp, 0o755)
-  await rename(tmp, dest)
-  console.log('[ffmpeg] installé dans', dest)
+
+  let lastErr: unknown
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      console.log(`[ffmpeg] téléchargement du binaire (tentative ${attempt}/3) :`, url)
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 60_000)
+      try {
+        const res = await net.fetch(url, { signal: controller.signal })
+        if (!res.ok || !res.body) throw new Error(`téléchargement ffmpeg : HTTP ${res.status}`)
+        await pipeline(Readable.fromWeb(res.body as never), createWriteStream(tmp))
+      } finally {
+        clearTimeout(timer)
+      }
+      await chmod(tmp, 0o755)
+      await rename(tmp, dest)
+      console.log('[ffmpeg] installé dans', dest)
+      return
+    } catch (err) {
+      lastErr = err
+      console.error(`[ffmpeg] échec tentative ${attempt}/3 :`, (err as Error).message)
+      if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 2000)) // 2s, 4s
+    }
+  }
+  throw new Error(`téléchargement ffmpeg échoué après 3 tentatives : ${(lastErr as Error)?.message}`)
 }
 
 let _resolved: string | null = null
