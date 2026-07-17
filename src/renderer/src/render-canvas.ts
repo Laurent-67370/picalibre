@@ -16,6 +16,7 @@ import {
   applySpatialOps,
   cropRectPx,
   straightenAngle,
+  getBlurRadius,
   getTextOp,
   getBorderOp
 } from '@shared/edit-engine'
@@ -66,6 +67,12 @@ export function renderPreview(
   target.width = rect.width
   target.height = rect.height
   const ctx = target.getContext('2d', { willReadFrequently: true })!
+
+  // Flou spatial : ctx.filter appliqué lors du drawImage (avant colorOps)
+  const blurRadius = getBlurRadius(stack)
+  if (blurRadius > 0) {
+    ctx.filter = `blur(${blurRadius}px)`
+  }
   ctx.drawImage(
     stage,
     rect.left,
@@ -77,13 +84,15 @@ export function renderPreview(
     rect.width,
     rect.height
   )
+  ctx.filter = 'none'
 
   // --- Pixels : spatial (CPU, zones locales) puis couleur (GPU si possible) ---
   const hasSpatial = stack.ops.some((o) => o.type === 'redeye' || o.type === 'retouch')
   const hasColor = colorOpsOf(stack.ops).length > 0
   const hasText = stack.ops.some((o) => o.type === 'text')
   const hasBorder = stack.ops.some((o) => o.type === 'border')
-  if (!hasSpatial && !hasColor && !hasText && !hasBorder) return
+  const hasBlur = blurRadius > 0
+  if (!hasSpatial && !hasColor && !hasText && !hasBorder && !hasBlur) return
 
   // Si pas d'op pixel mais texte/bordure seul → dessiner directement
   if (!hasSpatial && !hasColor && (hasText || hasBorder)) {

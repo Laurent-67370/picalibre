@@ -623,6 +623,26 @@ export default function Editor({
               </label>
             )}
 
+            {/* ---- Flou ---- */}
+            <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>FLOU</div>
+            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+              Rayon : {(getOp(stack, 'blur')?.params.radius ?? 0).toFixed(1)}px
+              <input
+                type="range"
+                min={0}
+                max={20}
+                step={0.5}
+                value={getOp(stack, 'blur')?.params.radius ?? 0}
+                onChange={(e) =>
+                  applyOp(
+                    { type: 'blur', params: { radius: parseFloat(e.target.value) } },
+                    'blur'
+                  )
+                }
+                style={{ width: '100%' }}
+              />
+            </label>
+
             {/* ---- Texte sur photo ---- */}
             <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>TEXTE</div>
             {(() => {

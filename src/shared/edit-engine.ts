@@ -16,6 +16,9 @@
 
 export type ColorOpType = 'fill_light' | 'highlights' | 'contrast' | 'saturation' | 'temperature'
 
+/** Effets basés sur le flou — opérations SPATIALES (pas des colorOps). */
+export type BlurEffectType = 'blur' | 'sharpen' | 'softfocus' | 'glow' | 'orton'
+
 export type FilterName = 'bw' | 'sepia' | 'warmify' | 'cool' | 'invert'
 
 export interface RedeyeZone {
@@ -67,6 +70,7 @@ export type EditOp =
   | { type: 'retouch'; params: { strokes: RetouchStroke[] } }
   | { type: 'text'; params: TextOpParams }
   | { type: 'border'; params: BorderOpParams }
+  | { type: 'blur'; params: { radius: number } } // rayon du flou en px (0..20)
   | { type: ColorOpType; params: { value: number } } // -1..1 (fill_light : 0..1)
 
 export interface EditStack {
@@ -98,7 +102,8 @@ export function upsertOp(stack: EditStack, op: EditOp): EditStack {
     (op.type === 'redeye' && op.params.zones.length === 0) ||
     (op.type === 'retouch' && op.params.strokes.length === 0) ||
     (op.type === 'text' && op.params.content.trim() === '') ||
-    (op.type === 'border' && op.params.thickness <= 0)
+    (op.type === 'border' && op.params.thickness <= 0) ||
+    (op.type === 'blur' && op.params.radius <= 0)
   if (!isNeutral) ops.push(op)
   return { version: 1, ops }
 }
@@ -134,7 +139,8 @@ export function applyColorOps(
       o.type !== 'redeye' &&
       o.type !== 'retouch' &&
       o.type !== 'text' &&
-      o.type !== 'border'
+      o.type !== 'border' &&
+      o.type !== 'blur'
   )
   if (colorOps.length === 0) return
 
@@ -266,6 +272,11 @@ export function cropRectPx(
 
 export function straightenAngle(stack: EditStack): number {
   return getOp(stack, 'straighten')?.params.angle ?? 0
+}
+
+/** Récupère le rayon de flou du stack (0 si absent). */
+export function getBlurRadius(stack: EditStack): number {
+  return getOp(stack, 'blur')?.params.radius ?? 0
 }
 
 /**

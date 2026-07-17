@@ -15,6 +15,7 @@ import {
   applySpatialOps,
   cropRectPx,
   straightenAngle,
+  getBlurRadius,
   getTextOp,
   getBorderOp,
   escapeSvgText,
@@ -48,6 +49,12 @@ export async function renderEdited(
   const meta = await pass2.metadata()
   const rect = cropRectPx(stack, meta.width ?? 0, meta.height ?? 0)
   if (rect) pass2 = pass2.extract(rect)
+
+  // Flou spatial (opération spatiale, appliquée AVANT les colorOps)
+  const blurRadius = getBlurRadius(stack)
+  if (blurRadius > 0) {
+    pass2 = pass2.blur(blurRadius)
+  }
 
   const { data, info } = await pass2
     .removeAlpha()
