@@ -18,6 +18,9 @@ import {
   straightenAngle,
   getBlurRadius,
   getSharpenAmount,
+  getSoftFocusIntensity,
+  getGlowIntensity,
+  getOrtonIntensity,
   getTextOp,
   getBorderOp
 } from '@shared/edit-engine'
@@ -112,6 +115,73 @@ export function renderPreview(
     ctx.putImageData(orig, 0, 0)
   }
 
+  // Doucette/softfocus : blend(image, blur(image), intensity) —
+  // globalAlpha pour composite la version floutée par-dessus l'original.
+  const softFocusIntensity = getSoftFocusIntensity(stack)
+  if (softFocusIntensity > 0) {
+    const blurred = document.createElement('canvas')
+    blurred.width = rect.width
+    blurred.height = rect.height
+    const bctx = blurred.getContext('2d', { willReadFrequently: true })!
+    bctx.filter = `blur(6px)`
+    bctx.drawImage(target, 0, 0)
+    bctx.filter = 'none'
+    ctx.globalAlpha = softFocusIntensity
+    ctx.drawImage(blurred, 0, 0)
+    ctx.globalAlpha = 1
+  }
+
+  // Glow : image + blur(bright_parts) — sur-expose, floute, composite en screen.
+  const glowIntensity = getGlowIntensity(stack)
+  if (glowIntensity > 0) {
+    const glowCanvas = document.createElement('canvas')
+    glowCanvas.width = rect.width
+    glowCanvas.height = rect.height
+    const gctx = glowCanvas.getContext('2d', { willReadFrequently: true })!
+    // Sur-exposer
+    gctx.filter = 'brightness(1.3) blur(10px)'
+    gctx.drawImage(target, 0, 0)
+    gctx.filter = 'none'
+    // Screen blend par pixels
+    const orig = ctx.getImageData(0, 0, rect.width, rect.height)
+    const glow = gctx.getImageData(0, 0, rect.width, rect.height)
+    const od = orig.data
+    const gd = glow.data
+    const t = glowIntensity
+    for (let i = 0; i < od.length; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        const screen = 255 - ((255 - od[i + c]) * (255 - gd[i + c])) / 255
+        od[i + c] = Math.round(od[i + c] * (1 - t) + screen * t)
+      }
+    }
+    ctx.putImageData(orig, 0, 0)
+  }
+
+  // Orton : blend(overexposed, blur(large), 0.5) —
+  // sur-expose, floute largement, blend à 50% avec l'original.
+  const ortonIntensity = getOrtonIntensity(stack)
+  if (ortonIntensity > 0) {
+    const ortonCanvas = document.createElement('canvas')
+    ortonCanvas.width = rect.width
+    ortonCanvas.height = rect.height
+    const octx = ortonCanvas.getContext('2d', { willReadFrequently: true })!
+    octx.filter = 'brightness(1.4) blur(15px)'
+    octx.drawImage(target, 0, 0)
+    octx.filter = 'none'
+    // Blend pixel par pixel à 50% pondéré par intensity
+    const orig = ctx.getImageData(0, 0, rect.width, rect.height)
+    const orton = octx.getImageData(0, 0, rect.width, rect.height)
+    const od = orig.data
+    const id = orton.data
+    const t = ortonIntensity * 0.5
+    for (let i = 0; i < od.length; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        od[i + c] = Math.round(od[i + c] * (1 - t) + id[i + c] * t)
+      }
+    }
+    ctx.putImageData(orig, 0, 0)
+  }
+
   // --- Pixels : spatial (CPU, zones locales) puis couleur (GPU si possible) ---
   const hasSpatial = stack.ops.some(
     (o) => o.type === 'redeye' || o.type === 'retouch' || o.type === 'vignette'
@@ -121,7 +191,10 @@ export function renderPreview(
   const hasBorder = stack.ops.some((o) => o.type === 'border')
   const hasBlur = blurRadius > 0
   const hasSharpen = sharpenAmount > 0
-  if (!hasSpatial && !hasColor && !hasText && !hasBorder && !hasBlur && !hasSharpen) return
+  const hasSoftFocus = softFocusIntensity > 0
+  const hasGlow = glowIntensity > 0
+  const hasOrton = ortonIntensity > 0
+  if (!hasSpatial && !hasColor && !hasText && !hasBorder && !hasBlur && !hasSharpen && !hasSoftFocus && !hasGlow && !hasOrton) return
 
   // Si pas d'op pixel mais texte/bordure seul → dessiner directement
   if (!hasSpatial && !hasColor && (hasText || hasBorder)) {

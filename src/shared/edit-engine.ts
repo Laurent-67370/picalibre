@@ -90,6 +90,9 @@ export type EditOp =
   | { type: 'border'; params: BorderOpParams }
   | { type: 'blur'; params: { radius: number } } // rayon du flou en px (0..20)
   | { type: 'sharpen'; params: { amount: number } } // unsharp mask, 0..1
+  | { type: 'softfocus'; params: { intensity: number } } // doucette : blend(image, blur(image), intensity), 0..1
+  | { type: 'glow'; params: { intensity: number } } // glow : image + blur(bright_parts), 0..1
+  | { type: 'orton'; params: { intensity: number } } // ortone : blend(overexposed, blur(large), 0.5), 0..1
   | { type: ColorOpType; params: { value: number } } // -1..1 (fill_light : 0..1)
 
 export interface EditStack {
@@ -124,7 +127,10 @@ export function upsertOp(stack: EditStack, op: EditOp): EditStack {
     (op.type === 'text' && op.params.content.trim() === '') ||
     (op.type === 'border' && op.params.thickness <= 0) ||
     (op.type === 'blur' && op.params.radius <= 0) ||
-    (op.type === 'sharpen' && op.params.amount <= 0)
+    (op.type === 'sharpen' && op.params.amount <= 0) ||
+    (op.type === 'softfocus' && op.params.intensity <= 0) ||
+    (op.type === 'glow' && op.params.intensity <= 0) ||
+    (op.type === 'orton' && op.params.intensity <= 0)
   if (!isNeutral) ops.push(op)
   return { version: 1, ops }
 }
@@ -164,6 +170,9 @@ export function applyColorOps(
       o.type !== 'border' &&
       o.type !== 'blur' &&
       o.type !== 'sharpen' &&
+      o.type !== 'softfocus' &&
+      o.type !== 'glow' &&
+      o.type !== 'orton' &&
       o.type !== 'vignette'
   )
   if (colorOps.length === 0) return
@@ -402,6 +411,21 @@ export function getBlurRadius(stack: EditStack): number {
 /** Récupère le montant de netteté du stack (0 si absent). */
 export function getSharpenAmount(stack: EditStack): number {
   return getOp(stack, 'sharpen')?.params.amount ?? 0
+}
+
+/** Récupère l'intensité doucette/softfocus du stack (0 si absent). */
+export function getSoftFocusIntensity(stack: EditStack): number {
+  return getOp(stack, 'softfocus')?.params.intensity ?? 0
+}
+
+/** Récupère l'intensité glow du stack (0 si absent). */
+export function getGlowIntensity(stack: EditStack): number {
+  return getOp(stack, 'glow')?.params.intensity ?? 0
+}
+
+/** Récupère l'intensité Orton du stack (0 si absent). */
+export function getOrtonIntensity(stack: EditStack): number {
+  return getOp(stack, 'orton')?.params.intensity ?? 0
 }
 
 /**

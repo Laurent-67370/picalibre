@@ -31,6 +31,9 @@ export function colorOpsOf(ops: EditOp[]): ColorOp[] {
       o.type !== 'border' &&
       o.type !== 'blur' &&
       o.type !== 'sharpen' &&
+      o.type !== 'softfocus' &&
+      o.type !== 'glow' &&
+      o.type !== 'orton' &&
       o.type !== 'vignette'
   )
 }

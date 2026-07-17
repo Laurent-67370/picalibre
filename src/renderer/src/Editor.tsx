@@ -748,6 +748,69 @@ export default function Editor({
               />
             </label>
 
+            {/* ---- Doucette / Soft Focus ---- */}
+            <div style={{ fontSize: 11, opacity: 0.5, margin: '4px 0 4px' }}>DOUCETTE</div>
+            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+              Intensité : {Math.round((getOp(stack, 'softfocus')?.params.intensity ?? 0) * 100)}
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={getOp(stack, 'softfocus')?.params.intensity ?? 0}
+                onChange={(e) =>
+                  applyOp(
+                    { type: 'softfocus', params: { intensity: parseFloat(e.target.value) } },
+                    'softfocus'
+                  )
+                }
+                style={{ width: '100%' }}
+                title="Fusionne l'image avec une version floutée (adoucissement de portrait)"
+              />
+            </label>
+
+            {/* ---- Glow ---- */}
+            <div style={{ fontSize: 11, opacity: 0.5, margin: '4px 0 4px' }}>GLOW</div>
+            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+              Intensité : {Math.round((getOp(stack, 'glow')?.params.intensity ?? 0) * 100)}
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={getOp(stack, 'glow')?.params.intensity ?? 0}
+                onChange={(e) =>
+                  applyOp(
+                    { type: 'glow', params: { intensity: parseFloat(e.target.value) } },
+                    'glow'
+                  )
+                }
+                style={{ width: '100%' }}
+                title="Halo lumineux sur les parties claires (mode screen)"
+              />
+            </label>
+
+            {/* ---- Orton ---- */}
+            <div style={{ fontSize: 11, opacity: 0.5, margin: '4px 0 4px' }}>ORTON</div>
+            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+              Intensité : {Math.round((getOp(stack, 'orton')?.params.intensity ?? 0) * 100)}
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={getOp(stack, 'orton')?.params.intensity ?? 0}
+                onChange={(e) =>
+                  applyOp(
+                    { type: 'orton', params: { intensity: parseFloat(e.target.value) } },
+                    'orton'
+                  )
+                }
+                style={{ width: '100%' }}
+                title="Effet Orton : sur-exposition + flou large + blend (rêveur)"
+              />
+            </label>
+
             {/* ---- Texte sur photo ---- */}
             <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>TEXTE</div>
             {(() => {
