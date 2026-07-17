@@ -15,6 +15,7 @@ import {
   getTextOp,
   getBorderOp,
   getTiltShiftParams,
+  getHdrIntensity,
   TiltShiftParams,
   upsertOp
 } from '@shared/edit-engine'
@@ -894,6 +895,27 @@ export default function Editor({
                 </>
               )
             })()}
+
+            {/* ---- Pseudo-HDR ---- */}
+            <div style={{ fontSize: 11, opacity: 0.5, margin: '4px 0 4px' }}>PSEUDO-HDR</div>
+            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+              Intensité : {Math.round((getOp(stack, 'hdr')?.params.intensity ?? 0) * 100)}
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={getOp(stack, 'hdr')?.params.intensity ?? 0}
+                onChange={(e) =>
+                  applyOp(
+                    { type: 'hdr', params: { intensity: parseFloat(e.target.value) } },
+                    'hdr'
+                  )
+                }
+                style={{ width: '100%' }}
+                title="Pseudo-HDR : local tone mapping (boost des détails + compression de dynamique)"
+              />
+            </label>
 
             {/* ---- Texte sur photo ---- */}
             <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>TEXTE</div>

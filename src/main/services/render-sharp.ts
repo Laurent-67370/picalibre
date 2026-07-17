@@ -200,6 +200,40 @@ export async function renderEdited(
     })
   }
 
+  // Pseudo-HDR : local tone mapping
+  // Étape 1 : flou léger (radius ~5px) → image basse fréquence
+  // Étape 2 : high_freq = image - blurred (détails)
+  // Étape 3 : hdr = image + intensity * high_freq * 2 (boost des détails locaux)
+  // Étape 4 : tone compression : hdr / (1 + hdr/255) (Reinhard)
+  const hdrIntensity = getHdrIntensity(stack)
+  if (hdrIntensity > 0) {
+    const origBuf = await pass2.clone().raw().toBuffer({ resolveWithObject: true })
+    const W = origBuf.info.width
+    const H = origBuf.info.height
+    const ch = origBuf.info.channels
+    const blurBuf = await pass2
+      .blur(5)
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const od = origBuf.data
+    const bd = blurBuf.data
+    const t = hdrIntensity
+
+    for (let i = 0; i < od.length; i += ch) {
+      for (let c = 0; c < 3; c++) {
+        const px = od[i + c]
+        const highFreq = px - bd[i + c] // détail local
+        const hdr = px + t * highFreq * 2 // boost des détails
+        // Tone mapping Reinhard : hdr / (1 + hdr/255)
+        const mapped = (hdr * 255) / (255 + hdr)
+        od[i + c] = Math.max(0, Math.min(255, Math.round(mapped)))
+      }
+    }
+    pass2 = sharp(od, {
+      raw: { width: W, height: H, channels: ch }
+    })
+  }
+
   const { data, info } = await pass2
     .removeAlpha()
     .raw()

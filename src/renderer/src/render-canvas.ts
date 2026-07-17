@@ -236,6 +236,40 @@ export function renderPreview(
     ctx.putImageData(orig, 0, 0)
   }
 
+  // Pseudo-HDR : local tone mapping
+  // Étape 1 : flou léger (radius ~5px) → image basse fréquence
+  // Étape 2 : high_freq = image - blurred (détails)
+  // Étape 3 : hdr = image + intensity * high_freq * 2 (boost des détails locaux)
+  // Étape 4 : tone compression : hdr / (1 + hdr/255) (Reinhard)
+  const hdrIntensity = getHdrIntensity(stack)
+  if (hdrIntensity > 0) {
+    const blurred = document.createElement('canvas')
+    blurred.width = rect.width
+    blurred.height = rect.height
+    const bctx = blurred.getContext('2d', { willReadFrequently: true })!
+    bctx.filter = 'blur(5px)'
+    bctx.drawImage(target, 0, 0)
+    bctx.filter = 'none'
+
+    const orig = ctx.getImageData(0, 0, rect.width, rect.height)
+    const blur = bctx.getImageData(0, 0, rect.width, rect.height)
+    const od = orig.data
+    const bd = blur.data
+    const t = hdrIntensity
+
+    for (let i = 0; i < od.length; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        const px = od[i + c]
+        const highFreq = px - bd[i + c] // détail local
+        const hdr = px + t * highFreq * 2 // boost des détails
+        // Tone mapping Reinhard : hdr / (1 + hdr/255)
+        const mapped = (hdr * 255) / (255 + hdr)
+        od[i + c] = Math.max(0, Math.min(255, Math.round(mapped)))
+      }
+    }
+    ctx.putImageData(orig, 0, 0)
+  }
+
   // --- Pixels : spatial (CPU, zones locales) puis couleur (GPU si possible) ---
   const hasSpatial = stack.ops.some(
     (o) => o.type === 'redeye' || o.type === 'retouch' || o.type === 'vignette'
@@ -249,7 +283,8 @@ export function renderPreview(
   const hasGlow = glowIntensity > 0
   const hasOrton = ortonIntensity > 0
   const hasTiltShift = !!(tiltShiftParams && tiltShiftParams.blurRadius > 0)
-  if (!hasSpatial && !hasColor && !hasText && !hasBorder && !hasBlur && !hasSharpen && !hasSoftFocus && !hasGlow && !hasOrton && !hasTiltShift) return
+  const hasHdr = hdrIntensity > 0
+  if (!hasSpatial && !hasColor && !hasText && !hasBorder && !hasBlur && !hasSharpen && !hasSoftFocus && !hasGlow && !hasOrton && !hasTiltShift && !hasHdr) return
 
   // Si pas d'op pixel mais texte/bordure seul → dessiner directement
   if (!hasSpatial && !hasColor && (hasText || hasBorder)) {
