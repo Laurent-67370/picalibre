@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.14.1-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.14.2-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -9,6 +9,14 @@ Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
 
 📄 [Politique de signature de code](CODE_SIGNING.md) — comment les installeurs sont signés et comment vérifier leur intégrité.
+
+## 🆕 Quoi de neuf en 2.14.2
+
+- 🔧 **Contraste du texte dans l'éditeur** : le panneau de l'éditeur (fond
+  `#111418`) force maintenant la couleur du texte en `#e2e8f0` (gris clair).
+  Les titres de sections sont en `#cbd5e1` avec opacity 1 (au lieu de 0.85),
+  les textes d'aide en `#94a3b8` avec opacity 0.9. Fini le gris sur bleu
+  illisible — tout est nettement contrasté quel que soit le thème.
 
 ## 🆕 Quoi de neuf en 2.14.1
 

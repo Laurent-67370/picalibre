@@ -3,6 +3,19 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.14.2] — 2026-07-17
+
+### Corrigé — Contraste du texte dans l'éditeur
+- **Cause racine** : l'éditeur a un fond `#111418` (presque noir) mais les
+  labels et titres héritaient de la couleur du thème. En thème clair,
+  `--text` = `#1e293b` (gris foncé) → gris foncé sur fond noir, illisible.
+- **Fix** : `color: '#e2e8f0'` (gris clair) forcé sur le conteneur et le
+  panneau `aside` de l'éditeur, quel que soit le thème.
+- **Titres de sections** : `color: '#cbd5e1'`, opacity 1 (au lieu de 0.85).
+- **Textes d'aide** (pipette, yeux rouges, tampon) : `color: '#94a3b8'`,
+  opacity 0.9 (au lieu de 0.75).
+- **Boutons de navigation rapide** : `color: '#e2e8f0'` ajouté.
+
 ## [2.14.1] — 2026-07-17
 
 ### Corrigé — Lisibilité et accessibilité de l'éditeur

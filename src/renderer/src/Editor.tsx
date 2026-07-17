@@ -502,7 +502,7 @@ export default function Editor({
   })
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#111418', display: 'flex', zIndex: 100 }}>
+    <div style={{ position: 'fixed', inset: 0, background: '#111418', display: 'flex', zIndex: 100, color: '#e2e8f0' }}>
       {/* -------- Panneau outils -------- */}
       <aside
         style={{
@@ -513,7 +513,8 @@ export default function Editor({
           overflowX: 'hidden',
           flexShrink: 0,
           fontSize: 14,
-          scrollbarWidth: 'thin'
+          scrollbarWidth: 'thin',
+          color: '#e2e8f0'
         }}
       >
         <button onClick={onClose} style={{ marginBottom: 12 }}>
@@ -590,7 +591,7 @@ export default function Editor({
                 const el = document.getElementById(`editor-section-${id}`)
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
-              style={{ fontSize: 12, padding: '3px 8px', background: '#1e2530', border: '1px solid #3a4150', borderRadius: 4 }}
+              style={{ fontSize: 12, padding: '3px 8px', background: '#1e2530', border: '1px solid #3a4150', borderRadius: 4, color: '#e2e8f0' }}
             >
               {label}
             </button>
@@ -613,7 +614,7 @@ export default function Editor({
               </button>
             </div>
 
-            <div id="editor-section-tuning" style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', marginBottom: 4 }}>OUTILS</div>
+            <div id="editor-section-tuning" style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', marginBottom: 4 }}>OUTILS</div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
               {(
                 [
@@ -635,18 +636,18 @@ export default function Editor({
               ))}
             </div>
             {tool === 'white' && (
-              <p style={{ fontSize: 12, opacity: 0.75, margin: '0 0 8px' }}>
+              <p style={{ fontSize: 12, opacity: 0.9, margin: '0 0 8px', color: '#94a3b8' }}>
                 Clique une zone qui devrait être blanche/grise neutre.
               </p>
             )}
             {tool === 'redeye' && (
-              <p style={{ fontSize: 12, opacity: 0.75, margin: '0 0 8px' }}>
+              <p style={{ fontSize: 12, opacity: 0.9, margin: '0 0 8px', color: '#94a3b8' }}>
                 Clique sur chaque œil rouge. Clique un cercle pour le retirer.
               </p>
             )}
             {tool === 'retouch' && (
               <>
-                <p style={{ fontSize: 12, opacity: 0.75, margin: '0 0 6px' }}>
+                <p style={{ fontSize: 12, opacity: 0.9, margin: '0 0 6px', color: '#94a3b8' }}>
                   1er clic : le défaut · 2e clic : la zone propre à copier.
                   {pendingDefect && ' → choisis la source…'}
                 </p>
@@ -665,7 +666,7 @@ export default function Editor({
               </>
             )}
 
-            <div id="editor-section-filtres" style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '8px 0 4px' }}>EFFETS</div>
+            <div id="editor-section-filtres" style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '8px 0 4px' }}>EFFETS</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
               {FILTERS.map((f) => {
                 const cur = getOp(stack, 'filter')
@@ -716,9 +717,9 @@ export default function Editor({
             )}
 
             {/* ---- Flou ---- */}
-            <div id="editor-section-effects" style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '12px 0 4px', paddingTop: 8, borderTop: '1px solid #2a2f38' }}>EFFETS AVANCÉS</div>
+            <div id="editor-section-effects" style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '12px 0 4px', paddingTop: 8, borderTop: '1px solid #2a2f38' }}>EFFETS AVANCÉS</div>
 
-            <div style={{ fontSize: 12, opacity: 0.7, margin: '4px 0 2px', fontWeight: 500 }}>Flou</div>
+            <div style={{ fontSize: 12, opacity: 1, margin: '4px 0 2px', fontWeight: 500, color: '#94a3b8' }}>Flou</div>
             <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
               Rayon : {(getOp(stack, 'blur')?.params.radius ?? 0).toFixed(1)}px
               <input
@@ -738,7 +739,7 @@ export default function Editor({
             </label>
 
             {/* ---- Netteté ---- */}
-            <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '4px 0 4px' }}>NETTETÉ</div>
+            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>NETTETÉ</div>
             <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
               Amount : {Math.round((getOp(stack, 'sharpen')?.params.amount ?? 0) * 100)}
               <input
@@ -758,7 +759,7 @@ export default function Editor({
             </label>
 
             {/* ---- Vignette ---- */}
-            <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '4px 0 4px' }}>VIGNETTE</div>
+            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>VIGNETTE</div>
             <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
               🔘 Vignette : {Math.round((getOp(stack, 'vignette')?.params.intensity ?? 0) * 100)}
               <input
@@ -779,7 +780,7 @@ export default function Editor({
             </label>
 
             {/* ---- Doucette / Soft Focus ---- */}
-            <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '4px 0 4px' }}>DOUCETTE</div>
+            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>DOUCETTE</div>
             <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
               Intensité : {Math.round((getOp(stack, 'softfocus')?.params.intensity ?? 0) * 100)}
               <input
@@ -800,7 +801,7 @@ export default function Editor({
             </label>
 
             {/* ---- Glow ---- */}
-            <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '4px 0 4px' }}>GLOW</div>
+            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>GLOW</div>
             <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
               Intensité : {Math.round((getOp(stack, 'glow')?.params.intensity ?? 0) * 100)}
               <input
@@ -821,7 +822,7 @@ export default function Editor({
             </label>
 
             {/* ---- Orton ---- */}
-            <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '4px 0 4px' }}>ORTON</div>
+            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>ORTON</div>
             <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
               Intensité : {Math.round((getOp(stack, 'orton')?.params.intensity ?? 0) * 100)}
               <input
@@ -842,7 +843,7 @@ export default function Editor({
             </label>
 
             {/* ---- Tilt-shift ---- */}
-            <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '4px 0 4px' }}>TILT-SHIFT</div>
+            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>TILT-SHIFT</div>
             {(() => {
               const tsOp = getOp(stack, 'tiltshift')
               const tsParams: TiltShiftParams = tsOp?.params ?? {
@@ -924,7 +925,7 @@ export default function Editor({
             })()}
 
             {/* ---- Pseudo-HDR ---- */}
-            <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '4px 0 4px' }}>PSEUDO-HDR</div>
+            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>PSEUDO-HDR</div>
             <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
               Intensité : {Math.round((getOp(stack, 'hdr')?.params.intensity ?? 0) * 100)}
               <input
@@ -945,7 +946,7 @@ export default function Editor({
             </label>
 
             {/* ---- Texte sur photo ---- */}
-            <div id="editor-section-texte" style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '12px 0 4px', paddingTop: 8, borderTop: '1px solid #2a2f38' }}>TEXTE</div>
+            <div id="editor-section-texte" style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '12px 0 4px', paddingTop: 8, borderTop: '1px solid #2a2f38' }}>TEXTE</div>
             {(() => {
               const textOp = getTextOp(stack)
               const textParams: TextOpParams = textOp?.params ?? {
@@ -1106,7 +1107,7 @@ export default function Editor({
             })()}
 
             {/* ---- Bordure / cadre ---- */}
-            <div id="editor-section-cadre" style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '12px 0 4px', paddingTop: 8, borderTop: '1px solid #2a2f38' }}>CADRE</div>
+            <div id="editor-section-cadre" style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '12px 0 4px', paddingTop: 8, borderTop: '1px solid #2a2f38' }}>CADRE</div>
             {(() => {
               const borderOp = getBorderOp(stack)
               const borderParams: BorderOpParams = borderOp?.params ?? {
