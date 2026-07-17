@@ -3,6 +3,68 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.14.0] — 2026-07-17
+
+### Ajouté — Tilt-shift (flou radial/linéaire)
+- Type `tiltshift` au DSL EditStack avec params : mode (`radial`/`linear`),
+  focusX, focusY, focusRadius, blurRadius.
+- Mode radial : cercle net centré sur (focusX, focusY).
+- Mode linéaire : bande horizontale nette.
+- Transition douce entre zone nette et zone floue (50% du rayon).
+- Aperçu visuel de la zone nette (cercle/bande pointillée).
+- Sliders UI : mode, focusX, focusY, focusRadius, blurRadius.
+- Opération spatiale (exclue de colorOps).
+
+### Ajouté — Pseudo-HDR (local tone mapping)
+- Type `hdr` au DSL EditStack avec param `intensity` (0..1).
+- Algorithme : flou léger (radius ~5px) → extraction haute fréquence
+  (image - blur) → boost des détails (image + intensity * high_freq * 2) →
+  compression de dynamique Reinhard (hdr / (1 + hdr/255)).
+- Slider UI : intensité 0..1.
+- Opération spatiale (exclue de colorOps).
+
+## [2.13.0] — 2026-07-17
+
+### Ajouté — Brique flou (blur foundation)
+- Type `blur` au DSL EditStack avec param `radius` (0..20px).
+- Opération spatiale (modifie les pixels voisins, pas juste la couleur).
+- `render-sharp.ts` : `sharp.blur(radius)` pour l'export.
+- `render-canvas.ts` : `ctx.filter = blur(${radius}px)` pour le CPU.
+- `render-webgl.ts` : exclu de `colorOpsOf()` (opération spatiale).
+- `Editor.tsx` : slider Rayon 0..20px.
+
+### Ajouté — Netteté (sharpen / unsharp mask)
+- Type `sharpen` au DSL avec param `amount` (0..1).
+- Algorithme : `image + amount * (image - blur(image))` (unsharp mask).
+- `render-sharp.ts` : `sharp.sharpen({ sigma: 1.0, m1: amount*500, m2: amount*500 })`.
+- `render-canvas.ts` : canvas offscreen avec flou + unsharp mask pixel par pixel.
+- `Editor.tsx` : slider Amount 0..100.
+
+### Ajouté — Doucette (soft focus)
+- Type `softfocus` au DSL avec param `intensity` (0..1).
+- Algorithme : `blend(image, blur(image, 6px), intensity)`.
+- `render-sharp.ts` : composite avec opacité (pixel blend lerp).
+- `render-canvas.ts` : `globalAlpha` + `ctx.filter` blur.
+- `Editor.tsx` : slider intensité.
+
+### Ajouté — Glow (halo lumineux)
+- Type `glow` au DSL avec param `intensity` (0..1).
+- Algorithme : `image + screen-blend(brightness×1.3, blur(10px))`.
+- `render-sharp.ts` : threshold + blur + composite screen (pixel blend).
+- `render-canvas.ts` : ImageData + blend pixel par pixel.
+- `Editor.tsx` : slider intensité.
+
+### Ajouté — Orton
+- Type `orton` au DSL avec param `intensity` (0..1).
+- Algorithme : `blend(brightness×1.4, blur(15px), 0.5)` — sur-exposition + flou + blend.
+- `render-sharp.ts` : brightness + blur + composite (pixel blend).
+- `render-canvas.ts` : ImageData + blend pixel par pixel.
+- `Editor.tsx` : slider intensité.
+
+### Parité preview/export
+- Tous les effets garantissent la parité preview/export (même algorithme
+  pixel par pixel entre render-sharp, render-canvas et render-webgl).
+
 ## [2.12.0] — 2026-07-16
 
 ### Ajouté — 3 réglages manquants vs Picasa 3.9
