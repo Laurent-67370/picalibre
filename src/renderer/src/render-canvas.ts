@@ -21,6 +21,8 @@ import {
   getSoftFocusIntensity,
   getGlowIntensity,
   getOrtonIntensity,
+  getTiltShiftParams,
+  getHdrIntensity,
   getTextOp,
   getBorderOp
 } from '@shared/edit-engine'
@@ -182,6 +184,58 @@ export function renderPreview(
     ctx.putImageData(orig, 0, 0)
   }
 
+  // Tilt-shift : flou gaussien sur toute l'image, puis blend avec l'originale
+  // selon un masque de distance (net au centre, flou sur les bords).
+  // Mode radial : cercle net centré sur (focusX, focusY) avec rayon focusRadius.
+  // Mode linear : bande nette horizontale centrée sur focusY, hauteur 2×focusRadius.
+  const tiltShiftParams = getTiltShiftParams(stack)
+  if (tiltShiftParams && tiltShiftParams.blurRadius > 0) {
+    const { mode, focusX, focusY, focusRadius, blurRadius } = tiltShiftParams
+    const blurred = document.createElement('canvas')
+    blurred.width = rect.width
+    blurred.height = rect.height
+    const bctx = blurred.getContext('2d', { willReadFrequently: true })!
+    bctx.filter = `blur(${blurRadius}px)`
+    bctx.drawImage(target, 0, 0)
+    bctx.filter = 'none'
+
+    const orig = ctx.getImageData(0, 0, rect.width, rect.height)
+    const blur = bctx.getImageData(0, 0, rect.width, rect.height)
+    const od = orig.data
+    const bd = blur.data
+    const rPx = focusRadius * rect.width
+    const cx = focusX * rect.width
+    const cy = focusY * rect.height
+    // Zone de transition : 50% du rayon en plus (adoucissement du masque)
+    const transition = rPx * 0.5
+
+    for (let y = 0; y < rect.height; y++) {
+      for (let x = 0; x < rect.width; x++) {
+        let dist: number
+        if (mode === 'radial') {
+          dist = Math.hypot(x - cx, y - cy)
+        } else {
+          // linear : distance verticale à la ligne de mise au point
+          dist = Math.abs(y - cy)
+        }
+        // Masque : 0 dans la zone nette (→ original), 1 au-delà (→ flou)
+        let t: number
+        if (dist <= rPx) {
+          t = 0
+        } else if (dist >= rPx + transition) {
+          t = 1
+        } else {
+          t = (dist - rPx) / transition
+        }
+        const i = (y * rect.width + x) * 4
+        for (let c = 0; c < 3; c++) {
+          od[i + c] = Math.round(od[i + c] * (1 - t) + bd[i + c] * t)
+        }
+      }
+    }
+    ctx.putImageData(orig, 0, 0)
+  }
+
   // --- Pixels : spatial (CPU, zones locales) puis couleur (GPU si possible) ---
   const hasSpatial = stack.ops.some(
     (o) => o.type === 'redeye' || o.type === 'retouch' || o.type === 'vignette'
@@ -194,7 +248,8 @@ export function renderPreview(
   const hasSoftFocus = softFocusIntensity > 0
   const hasGlow = glowIntensity > 0
   const hasOrton = ortonIntensity > 0
-  if (!hasSpatial && !hasColor && !hasText && !hasBorder && !hasBlur && !hasSharpen && !hasSoftFocus && !hasGlow && !hasOrton) return
+  const hasTiltShift = !!(tiltShiftParams && tiltShiftParams.blurRadius > 0)
+  if (!hasSpatial && !hasColor && !hasText && !hasBorder && !hasBlur && !hasSharpen && !hasSoftFocus && !hasGlow && !hasOrton && !hasTiltShift) return
 
   // Si pas d'op pixel mais texte/bordure seul → dessiner directement
   if (!hasSpatial && !hasColor && (hasText || hasBorder)) {

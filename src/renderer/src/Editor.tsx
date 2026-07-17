@@ -14,6 +14,8 @@ import {
   getOp,
   getTextOp,
   getBorderOp,
+  getTiltShiftParams,
+  TiltShiftParams,
   upsertOp
 } from '@shared/edit-engine'
 import { renderPreview } from './render-canvas'
@@ -811,6 +813,88 @@ export default function Editor({
               />
             </label>
 
+            {/* ---- Tilt-shift ---- */}
+            <div style={{ fontSize: 11, opacity: 0.5, margin: '4px 0 4px' }}>TILT-SHIFT</div>
+            {(() => {
+              const tsOp = getOp(stack, 'tiltshift')
+              const tsParams: TiltShiftParams = tsOp?.params ?? {
+                mode: 'radial',
+                focusX: 0.5,
+                focusY: 0.5,
+                focusRadius: 0.2,
+                blurRadius: 0
+              }
+              const updateTiltShift = (partial: Partial<TiltShiftParams>): void => {
+                applyOp(
+                  { type: 'tiltshift', params: { ...tsParams, ...partial } },
+                  'tiltshift'
+                )
+              }
+              return (
+                <>
+                  <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                    Mode
+                    <select
+                      value={tsParams.mode}
+                      onChange={(e) => updateTiltShift({ mode: e.target.value as 'radial' | 'linear' })}
+                      style={{ width: '100%', marginTop: 4 }}
+                    >
+                      <option value="radial">Radial (cercle net)</option>
+                      <option value="linear">Linéaire (bande nette)</option>
+                    </select>
+                  </label>
+                  <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                    Focus X : {(tsParams.focusX * 100).toFixed(0)}%
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={tsParams.focusX}
+                      onChange={(e) => updateTiltShift({ focusX: parseFloat(e.target.value) })}
+                      style={{ width: '100%' }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                    Focus Y : {(tsParams.focusY * 100).toFixed(0)}%
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={tsParams.focusY}
+                      onChange={(e) => updateTiltShift({ focusY: parseFloat(e.target.value) })}
+                      style={{ width: '100%' }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                    Rayon zone nette : {(tsParams.focusRadius * 100).toFixed(0)}%
+                    <input
+                      type="range"
+                      min={0.02}
+                      max={0.5}
+                      step={0.01}
+                      value={tsParams.focusRadius}
+                      onChange={(e) => updateTiltShift({ focusRadius: parseFloat(e.target.value) })}
+                      style={{ width: '100%' }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+                    Flou : {tsParams.blurRadius.toFixed(1)}px
+                    <input
+                      type="range"
+                      min={0}
+                      max={20}
+                      step={0.5}
+                      value={tsParams.blurRadius}
+                      onChange={(e) => updateTiltShift({ blurRadius: parseFloat(e.target.value) })}
+                      style={{ width: '100%' }}
+                    />
+                  </label>
+                </>
+              )
+            })()}
+
             {/* ---- Texte sur photo ---- */}
             <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>TEXTE</div>
             {(() => {
@@ -1262,6 +1346,51 @@ export default function Editor({
                   height: rp * 2,
                   border: '2px dashed var(--star)',
                   borderRadius: '50%',
+                  pointerEvents: 'none'
+                }}
+              />
+            )
+          })()}
+
+        {/* Aperçu zone nette tilt-shift */}
+        {!cropMode &&
+          getTiltShiftParams(stack) &&
+          getTiltShiftParams(stack)!.blurRadius > 0 &&
+          (() => {
+            const d = canvasDisp()
+            if (!d) return null
+            const ts = getTiltShiftParams(stack)!
+            const rPx = ts.focusRadius * d.width
+            const cx = ts.focusX * d.width
+            const cy = ts.focusY * d.height
+            if (ts.mode === 'radial') {
+              return (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: d.left + cx - rPx,
+                    top: d.top + cy - rPx * (d.height / d.width),
+                    width: rPx * 2,
+                    height: rPx * 2 * (d.height / d.width),
+                    border: '2px dashed rgba(255,255,255,0.7)',
+                    borderRadius: '50%',
+                    pointerEvents: 'none'
+                  }}
+                />
+              )
+            }
+            // linear : bande horizontale
+            const bandH = ts.focusRadius * d.width
+            return (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: d.left,
+                  top: d.top + ts.focusY * d.height - bandH,
+                  width: d.width,
+                  height: bandH * 2,
+                  borderTop: '2px dashed rgba(255,255,255,0.7)',
+                  borderBottom: '2px dashed rgba(255,255,255,0.7)',
                   pointerEvents: 'none'
                 }}
               />

@@ -25,7 +25,14 @@ export type ColorOpType =
   | 'hue'
 
 /** Effets basés sur le flou — opérations SPATIALES (pas des colorOps). */
-export type BlurEffectType = 'blur' | 'sharpen' | 'softfocus' | 'glow' | 'orton'
+export type BlurEffectType =
+  | 'blur'
+  | 'sharpen'
+  | 'softfocus'
+  | 'glow'
+  | 'orton'
+  | 'tiltshift'
+  | 'hdr'
 
 export type FilterName =
   | 'bw'
@@ -77,6 +84,15 @@ export interface TextOpParams {
   fontWeight: string // 'normal' | 'bold'
 }
 
+/** Paramètres du tilt-shift (flou radial/linéaire). */
+export interface TiltShiftParams {
+  mode: 'radial' | 'linear' // radial = cercle net, linear = bande nette horizontale
+  focusX: number // 0..1, position normalisée du centre de mise au point X
+  focusY: number // 0..1, position normalisée du centre de mise au point Y
+  focusRadius: number // 0..0.5, rayon de la zone nette (normalisé / largeur)
+  blurRadius: number // 0..20, intensité du flou en dehors de la zone nette
+}
+
 export type EditOp =
   | { type: 'crop'; params: { x: number; y: number; w: number; h: number } }
   | { type: 'straighten'; params: { angle: number } } // degrés, -15..15
@@ -93,6 +109,8 @@ export type EditOp =
   | { type: 'softfocus'; params: { intensity: number } } // doucette : blend(image, blur(image), intensity), 0..1
   | { type: 'glow'; params: { intensity: number } } // glow : image + blur(bright_parts), 0..1
   | { type: 'orton'; params: { intensity: number } } // ortone : blend(overexposed, blur(large), 0.5), 0..1
+  | { type: 'tiltshift'; params: TiltShiftParams } // flou radial/linéaire : zone nette au centre
+  | { type: 'hdr'; params: { intensity: number } } // pseudo-HDR : local tone mapping, 0..1
   | { type: ColorOpType; params: { value: number } } // -1..1 (fill_light : 0..1)
 
 export interface EditStack {
@@ -130,7 +148,9 @@ export function upsertOp(stack: EditStack, op: EditOp): EditStack {
     (op.type === 'sharpen' && op.params.amount <= 0) ||
     (op.type === 'softfocus' && op.params.intensity <= 0) ||
     (op.type === 'glow' && op.params.intensity <= 0) ||
-    (op.type === 'orton' && op.params.intensity <= 0)
+    (op.type === 'orton' && op.params.intensity <= 0) ||
+    (op.type === 'tiltshift' && op.params.blurRadius <= 0) ||
+    (op.type === 'hdr' && op.params.intensity <= 0)
   if (!isNeutral) ops.push(op)
   return { version: 1, ops }
 }
@@ -173,6 +193,8 @@ export function applyColorOps(
       o.type !== 'softfocus' &&
       o.type !== 'glow' &&
       o.type !== 'orton' &&
+      o.type !== 'tiltshift' &&
+      o.type !== 'hdr' &&
       o.type !== 'vignette'
   )
   if (colorOps.length === 0) return
@@ -426,6 +448,16 @@ export function getGlowIntensity(stack: EditStack): number {
 /** Récupère l'intensité Orton du stack (0 si absent). */
 export function getOrtonIntensity(stack: EditStack): number {
   return getOp(stack, 'orton')?.params.intensity ?? 0
+}
+
+/** Récupère les paramètres tilt-shift du stack (undefined si absent). */
+export function getTiltShiftParams(stack: EditStack): TiltShiftParams | undefined {
+  return getOp(stack, 'tiltshift')?.params
+}
+
+/** Récupère l'intensité pseudo-HDR du stack (0 si absent). */
+export function getHdrIntensity(stack: EditStack): number {
+  return getOp(stack, 'hdr')?.params.intensity ?? 0
 }
 
 /**

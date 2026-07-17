@@ -20,10 +20,13 @@ import {
   getSoftFocusIntensity,
   getGlowIntensity,
   getOrtonIntensity,
+  getTiltShiftParams,
+  getHdrIntensity,
   getTextOp,
   getBorderOp,
   escapeSvgText,
-  hexToSvgFill
+  hexToSvgFill,
+  TiltShiftParams
 } from '../../shared/edit-engine'
 
 export interface ExportOptions {
@@ -145,6 +148,55 @@ export async function renderEdited(
         height: origBuf.info.height,
         channels: origBuf.info.channels
       }
+    })
+  }
+
+  // Tilt-shift : flou gaussien sur toute l'image, puis blend avec l'originale
+  // selon un masque de distance (net au centre, flou sur les bords).
+  // Mode radial : cercle net centré sur (focusX, focusY) avec rayon focusRadius.
+  // Mode linear : bande nette horizontale centrée sur focusY, hauteur 2×focusRadius.
+  const tiltShiftParams = getTiltShiftParams(stack)
+  if (tiltShiftParams && tiltShiftParams.blurRadius > 0) {
+    const tsParams: TiltShiftParams = tiltShiftParams
+    const origBuf = await pass2.clone().raw().toBuffer({ resolveWithObject: true })
+    const W = origBuf.info.width
+    const H = origBuf.info.height
+    const ch = origBuf.info.channels
+    const blurBuf = await pass2
+      .blur(tsParams.blurRadius)
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const od = origBuf.data
+    const bd = blurBuf.data
+    const rPx = tsParams.focusRadius * W
+    const cx = tsParams.focusX * W
+    const cy = tsParams.focusY * H
+    const transition = rPx * 0.5
+
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        let dist: number
+        if (tsParams.mode === 'radial') {
+          dist = Math.hypot(x - cx, y - cy)
+        } else {
+          dist = Math.abs(y - cy)
+        }
+        let t: number
+        if (dist <= rPx) {
+          t = 0
+        } else if (dist >= rPx + transition) {
+          t = 1
+        } else {
+          t = (dist - rPx) / transition
+        }
+        const i = (y * W + x) * ch
+        for (let c = 0; c < 3; c++) {
+          od[i + c] = Math.round(od[i + c] * (1 - t) + bd[i + c] * t)
+        }
+      }
+    }
+    pass2 = sharp(od, {
+      raw: { width: W, height: H, channels: ch }
     })
   }
 

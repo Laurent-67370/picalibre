@@ -34,6 +34,8 @@ export function colorOpsOf(ops: EditOp[]): ColorOp[] {
       o.type !== 'softfocus' &&
       o.type !== 'glow' &&
       o.type !== 'orton' &&
+      o.type !== 'tiltshift' &&
+      o.type !== 'hdr' &&
       o.type !== 'vignette'
   )
 }
