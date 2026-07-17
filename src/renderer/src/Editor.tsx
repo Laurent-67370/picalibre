@@ -643,6 +643,26 @@ export default function Editor({
               />
             </label>
 
+            {/* ---- Netteté ---- */}
+            <div style={{ fontSize: 11, opacity: 0.5, margin: '4px 0 4px' }}>NETTETÉ</div>
+            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+              Amount : {Math.round((getOp(stack, 'sharpen')?.params.amount ?? 0) * 100)}
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={getOp(stack, 'sharpen')?.params.amount ?? 0}
+                onChange={(e) =>
+                  applyOp(
+                    { type: 'sharpen', params: { amount: parseFloat(e.target.value) } },
+                    'sharpen'
+                  )
+                }
+                style={{ width: '100%' }}
+              />
+            </label>
+
             {/* ---- Texte sur photo ---- */}
             <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>TEXTE</div>
             {(() => {

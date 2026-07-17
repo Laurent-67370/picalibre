@@ -71,6 +71,7 @@ export type EditOp =
   | { type: 'text'; params: TextOpParams }
   | { type: 'border'; params: BorderOpParams }
   | { type: 'blur'; params: { radius: number } } // rayon du flou en px (0..20)
+  | { type: 'sharpen'; params: { amount: number } } // unsharp mask, 0..1
   | { type: ColorOpType; params: { value: number } } // -1..1 (fill_light : 0..1)
 
 export interface EditStack {
@@ -103,7 +104,8 @@ export function upsertOp(stack: EditStack, op: EditOp): EditStack {
     (op.type === 'retouch' && op.params.strokes.length === 0) ||
     (op.type === 'text' && op.params.content.trim() === '') ||
     (op.type === 'border' && op.params.thickness <= 0) ||
-    (op.type === 'blur' && op.params.radius <= 0)
+    (op.type === 'blur' && op.params.radius <= 0) ||
+    (op.type === 'sharpen' && op.params.amount <= 0)
   if (!isNeutral) ops.push(op)
   return { version: 1, ops }
 }
@@ -140,7 +142,8 @@ export function applyColorOps(
       o.type !== 'retouch' &&
       o.type !== 'text' &&
       o.type !== 'border' &&
-      o.type !== 'blur'
+      o.type !== 'blur' &&
+      o.type !== 'sharpen'
   )
   if (colorOps.length === 0) return
 
@@ -277,6 +280,11 @@ export function straightenAngle(stack: EditStack): number {
 /** Récupère le rayon de flou du stack (0 si absent). */
 export function getBlurRadius(stack: EditStack): number {
   return getOp(stack, 'blur')?.params.radius ?? 0
+}
+
+/** Récupère le montant de netteté du stack (0 si absent). */
+export function getSharpenAmount(stack: EditStack): number {
+  return getOp(stack, 'sharpen')?.params.amount ?? 0
 }
 
 /**

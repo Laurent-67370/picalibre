@@ -17,6 +17,7 @@ import {
   cropRectPx,
   straightenAngle,
   getBlurRadius,
+  getSharpenAmount,
   getTextOp,
   getBorderOp
 } from '@shared/edit-engine'
@@ -86,13 +87,39 @@ export function renderPreview(
   )
   ctx.filter = 'none'
 
+  // Netteté (unsharp mask) : result = original + amount * (original - blurred)
+  const sharpenAmount = getSharpenAmount(stack)
+  if (sharpenAmount > 0) {
+    // Créer une version floutée de l'image courante
+    const blurred = document.createElement('canvas')
+    blurred.width = rect.width
+    blurred.height = rect.height
+    const bctx = blurred.getContext('2d', { willReadFrequently: true })!
+    bctx.filter = 'blur(1px)'
+    bctx.drawImage(target, 0, 0)
+    bctx.filter = 'none'
+
+    // Unsharp mask sur les pixels
+    const orig = ctx.getImageData(0, 0, rect.width, rect.height)
+    const blur = bctx.getImageData(0, 0, rect.width, rect.height)
+    const od = orig.data
+    const bd = blur.data
+    for (let i = 0; i < od.length; i += 4) {
+      od[i] = Math.max(0, Math.min(255, od[i] + sharpenAmount * (od[i] - bd[i])))
+      od[i + 1] = Math.max(0, Math.min(255, od[i + 1] + sharpenAmount * (od[i + 1] - bd[i + 1])))
+      od[i + 2] = Math.max(0, Math.min(255, od[i + 2] + sharpenAmount * (od[i + 2] - bd[i + 2])))
+    }
+    ctx.putImageData(orig, 0, 0)
+  }
+
   // --- Pixels : spatial (CPU, zones locales) puis couleur (GPU si possible) ---
   const hasSpatial = stack.ops.some((o) => o.type === 'redeye' || o.type === 'retouch')
   const hasColor = colorOpsOf(stack.ops).length > 0
   const hasText = stack.ops.some((o) => o.type === 'text')
   const hasBorder = stack.ops.some((o) => o.type === 'border')
   const hasBlur = blurRadius > 0
-  if (!hasSpatial && !hasColor && !hasText && !hasBorder && !hasBlur) return
+  const hasSharpen = sharpenAmount > 0
+  if (!hasSpatial && !hasColor && !hasText && !hasBorder && !hasBlur && !hasSharpen) return
 
   // Si pas d'op pixel mais texte/bordure seul → dessiner directement
   if (!hasSpatial && !hasColor && (hasText || hasBorder)) {

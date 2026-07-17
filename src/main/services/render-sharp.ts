@@ -16,6 +16,7 @@ import {
   cropRectPx,
   straightenAngle,
   getBlurRadius,
+  getSharpenAmount,
   getTextOp,
   getBorderOp,
   escapeSvgText,
@@ -54,6 +55,12 @@ export async function renderEdited(
   const blurRadius = getBlurRadius(stack)
   if (blurRadius > 0) {
     pass2 = pass2.blur(blurRadius)
+  }
+
+  // Netteté (unsharp mask) : image + amount * (image - blur(image))
+  const sharpenAmount = getSharpenAmount(stack)
+  if (sharpenAmount > 0) {
+    pass2 = pass2.sharpen({ sigma: 1.0, m1: sharpenAmount * 500, m2: sharpenAmount * 500 })
   }
 
   const { data, info } = await pass2
