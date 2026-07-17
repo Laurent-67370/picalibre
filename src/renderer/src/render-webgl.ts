@@ -85,6 +85,11 @@ function glslFor(op: ColorOp, i: number): { decl: string; body: string } {
         decl: `uniform float ${u};`,
         body: `{ float l = ${LUMA} / 255.0; float w = ${u} * l * l; c += w * (vec3(255.0) - c); }`
       }
+    case 'shadows':
+      return {
+        decl: `uniform float ${u};`,
+        body: `{ float l = ${LUMA} / 255.0; float w = ${u} * (1.0 - l) * (1.0 - l); c += w * (vec3(255.0) - c); }`
+      }
     case 'contrast':
       return {
         decl: `uniform float ${u};`,
@@ -95,10 +100,53 @@ function glslFor(op: ColorOp, i: number): { decl: string; body: string } {
         decl: `uniform float ${u};`,
         body: `{ float lum = ${LUMA}; c = vec3(lum) + (c - vec3(lum)) * (1.0 + ${u}); }`
       }
+    case 'vibrance':
+      return {
+        decl: `uniform float ${u};`,
+        body: `{
+          float mx = max(c.r, max(c.g, c.b));
+          float mn = min(c.r, min(c.g, c.b));
+          float cur = mx <= 0.0 ? 0.0 : (mx - mn) / mx;
+          float k = 1.0 + ${u} * (1.0 - cur);
+          float lum = ${LUMA};
+          c = vec3(lum) + (c - vec3(lum)) * k;
+        }`
+      }
     case 'temperature':
       return {
         decl: `uniform float ${u};`,
         body: `{ c.r += ${u} * 40.0; c.b -= ${u} * 40.0; }`
+      }
+    case 'hue':
+      return {
+        decl: `uniform float ${u};`,
+        body: `{
+          float mx = max(c.r, max(c.g, c.b));
+          float mn = min(c.r, min(c.g, c.b));
+          float d = mx - mn;
+          float h = 0.0;
+          if (d > 0.0001) {
+            if (mx == c.r) h = mod((c.g - c.b) / d, 6.0);
+            else if (mx == c.g) h = (c.b - c.r) / d + 2.0;
+            else h = (c.r - c.g) / d + 4.0;
+            h *= 60.0;
+            if (h < 0.0) h += 360.0;
+          }
+          float s = mx <= 0.0 ? 0.0 : d / mx;
+          float val = mx / 255.0;
+          h = mod(h + ${u} * 180.0 + 360.0, 360.0);
+          float cc = val * s;
+          float x = cc * (1.0 - abs(mod(h / 60.0, 2.0) - 1.0));
+          float m = val - cc;
+          vec3 e;
+          if (h < 60.0) e = vec3(cc, x, 0.0);
+          else if (h < 120.0) e = vec3(x, cc, 0.0);
+          else if (h < 180.0) e = vec3(0.0, cc, x);
+          else if (h < 240.0) e = vec3(0.0, x, cc);
+          else if (h < 300.0) e = vec3(x, 0.0, cc);
+          else e = vec3(cc, 0.0, x);
+          c = (e + m) * 255.0;
+        }`
       }
   }
 }

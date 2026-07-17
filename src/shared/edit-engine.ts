@@ -14,7 +14,15 @@
  * s'applique à la preview 1024 px et à l'export pleine résolution.
  */
 
-export type ColorOpType = 'fill_light' | 'highlights' | 'contrast' | 'saturation' | 'temperature'
+export type ColorOpType =
+  | 'fill_light'
+  | 'highlights'
+  | 'shadows'
+  | 'contrast'
+  | 'saturation'
+  | 'vibrance'
+  | 'temperature'
+  | 'hue'
 
 export type FilterName =
   | 'bw'
@@ -267,6 +275,17 @@ export function applyColorOps(
           b += w * (255 - b)
           break
         }
+        case 'shadows': {
+          // Miroir de highlights, pondéré par l'obscurité (1-l) au lieu de
+          // la clarté : v>0 éclaircit les ombres, v<0 les assombrit (plus
+          // de contraste dans les tons foncés). Distinct de fill_light
+          // (qui ne fait que relever, jamais assombrir).
+          const w = v * (1 - l) * (1 - l)
+          r += w * (255 - r)
+          g += w * (255 - g)
+          b += w * (255 - b)
+          break
+        }
         case 'contrast': {
           const k = 1 + v
           r = (r - 128) * k + 128
@@ -282,10 +301,56 @@ export function applyColorOps(
           b = lum + (b - lum) * k
           break
         }
+        case 'vibrance': {
+          // Saturation « intelligente » : boost inversement proportionnel à
+          // la saturation déjà présente — protège les teintes déjà vives
+          // (et les carnations) d'une sursaturation, contrairement à
+          // 'saturation' qui boost tout uniformément.
+          const mx = Math.max(r, g, b)
+          const mn = Math.min(r, g, b)
+          const cur = mx === 0 ? 0 : (mx - mn) / mx
+          const k = 1 + v * (1 - cur)
+          const lum = l * 255
+          r = lum + (r - lum) * k
+          g = lum + (g - lum) * k
+          b = lum + (b - lum) * k
+          break
+        }
         case 'temperature': {
           // v>0 réchauffe (R+, B-), v<0 refroidit
           r += v * 40
           b -= v * 40
+          break
+        }
+        case 'hue': {
+          // Rotation de teinte via HSV (v ∈ [-1,1] → ±180°)
+          const mx = Math.max(r, g, b)
+          const mn = Math.min(r, g, b)
+          const d = mx - mn
+          let h = 0
+          if (d !== 0) {
+            if (mx === r) h = (((g - b) / d) % 6)
+            else if (mx === g) h = (b - r) / d + 2
+            else h = (r - g) / d + 4
+            h *= 60
+            if (h < 0) h += 360
+          }
+          const s = mx === 0 ? 0 : d / mx
+          const val = mx / 255
+          h = (h + v * 180 + 360) % 360
+          const cc = val * s
+          const x = cc * (1 - Math.abs(((h / 60) % 2) - 1))
+          const m = val - cc
+          let rr = 0, gg = 0, bb = 0
+          if (h < 60) { rr = cc; gg = x; bb = 0 }
+          else if (h < 120) { rr = x; gg = cc; bb = 0 }
+          else if (h < 180) { rr = 0; gg = cc; bb = x }
+          else if (h < 240) { rr = 0; gg = x; bb = cc }
+          else if (h < 300) { rr = x; gg = 0; bb = cc }
+          else { rr = cc; gg = 0; bb = x }
+          r = (rr + m) * 255
+          g = (gg + m) * 255
+          b = (bb + m) * 255
           break
         }
       }

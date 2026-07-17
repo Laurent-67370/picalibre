@@ -27,9 +27,12 @@ declare global {
 const SLIDERS: Array<{ type: ColorOpType; label: string; min: number; max: number }> = [
   { type: 'fill_light', label: 'Lumière de remplissage', min: 0, max: 1 },
   { type: 'highlights', label: 'Hautes lumières', min: -1, max: 1 },
+  { type: 'shadows', label: 'Ombres', min: -1, max: 1 },
   { type: 'contrast', label: 'Contraste', min: -1, max: 1 },
   { type: 'saturation', label: 'Saturation', min: -1, max: 1 },
-  { type: 'temperature', label: 'Température', min: -1, max: 1 }
+  { type: 'vibrance', label: 'Vibrance', min: -1, max: 1 },
+  { type: 'temperature', label: 'Température', min: -1, max: 1 },
+  { type: 'hue', label: 'Teinte', min: -1, max: 1 }
 ]
 
 const RATIOS: Array<{ label: string; value: number | null }> = [

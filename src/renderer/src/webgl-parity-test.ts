@@ -45,9 +45,12 @@ const CASES: Array<[string, EditOp[]]> = [
   ['filtre crossprocess', [{ type: 'filter', params: { name: 'crossprocess', intensity: 0.8 } }]],
   ['fill_light', [{ type: 'fill_light', params: { value: 0.5 } }]],
   ['highlights', [{ type: 'highlights', params: { value: -0.4 } }]],
+  ['shadows', [{ type: 'shadows', params: { value: 0.5 } }]],
   ['contrast', [{ type: 'contrast', params: { value: 0.35 } }]],
   ['saturation', [{ type: 'saturation', params: { value: -0.3 } }]],
+  ['vibrance', [{ type: 'vibrance', params: { value: 0.6 } }]],
   ['temperature', [{ type: 'temperature', params: { value: 0.6 } }]],
+  ['hue', [{ type: 'hue', params: { value: 0.4 } }]],
   [
     'chaîne complète',
     [
@@ -55,9 +58,12 @@ const CASES: Array<[string, EditOp[]]> = [
       { type: 'wb', params: { r: 1.1, g: 1.0, b: 0.9 } },
       { type: 'fill_light', params: { value: 0.35 } },
       { type: 'highlights', params: { value: -0.25 } },
+      { type: 'shadows', params: { value: 0.3 } },
       { type: 'contrast', params: { value: 0.3 } },
       { type: 'saturation', params: { value: 0.2 } },
+      { type: 'vibrance', params: { value: 0.3 } },
       { type: 'temperature', params: { value: 0.4 } },
+      { type: 'hue', params: { value: -0.2 } },
       { type: 'filter', params: { name: 'sepia', intensity: 0.5 } }
     ]
   ]

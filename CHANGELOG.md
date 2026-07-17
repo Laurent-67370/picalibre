@@ -3,6 +3,29 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.12.0] — 2026-07-16
+
+### Ajouté — 3 réglages manquants vs Picasa 3.9
+- **Ombres** : miroir symétrique de « Hautes lumières » (pondéré par
+  l'obscurité au lieu de la clarté) — relève ou assombrit sélectivement
+  les tons foncés, sans quasiment toucher les tons clairs. Distinct de
+  « Lumière de remplissage » (qui ne fait que relever, jamais assombrir).
+- **Vibrance** : saturation « intelligente », boost inversement
+  proportionnel à la saturation déjà présente — protège les teintes déjà
+  vives et les carnations d'une sursaturation, contrairement à
+  « Saturation » qui boost tout uniformément.
+- **Teinte** : rotation de teinte via conversion RGB↔HSV (±180°).
+
+### Vérifié
+- Parité CPU/GPU stricte confirmée par le test dédié (écart max 1/255 sur
+  les 3 nouveaux réglages, comme tous les réglages existants, y compris
+  en chaîne combinée avec les autres opérations).
+- Comportement sémantique vérifié unitairement : Ombres relève un pixel
+  sombre (30→205) sans presque toucher un pixel clair (220→221) ;
+  Vibrance protège un rouge pur déjà saturé (inchangé) tout en boostant
+  une couleur pâle ; Teinte +120° sur un rouge pur donne exactement un
+  vert pur (0,255,0).
+
 ## [2.11.0] — 2026-07-16
 
 ### Ajouté — édition et renommage en lot (façon Picasa)
