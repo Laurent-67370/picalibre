@@ -506,11 +506,14 @@ export default function Editor({
       {/* -------- Panneau outils -------- */}
       <aside
         style={{
-          width: 300,
+          width: 330,
           borderRight: '1px solid #333',
           padding: 16,
-          overflow: 'auto',
-          flexShrink: 0
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          flexShrink: 0,
+          fontSize: 14,
+          scrollbarWidth: 'thin'
         }}
       >
         <button onClick={onClose} style={{ marginBottom: 12 }}>
@@ -572,6 +575,28 @@ export default function Editor({
           {copiedFlash ? '✔ Réglages copiés' : '📋 Copier les réglages'}
         </button>
 
+        {/* Navigation rapide vers les sections */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12, padding: '6px 0', borderTop: '1px solid #2a2f38', borderBottom: '1px solid #2a2f38' }}>
+          {[
+            ['tuning', 'Réglages'],
+            ['filtres', 'Filtres'],
+            ['effects', 'Effets'],
+            ['texte', 'Texte'],
+            ['cadre', 'Cadre']
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => {
+                const el = document.getElementById(`editor-section-${id}`)
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }}
+              style={{ fontSize: 12, padding: '3px 8px', background: '#1e2530', border: '1px solid #3a4150', borderRadius: 4 }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         {!cropMode ? (
           <>
             <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
@@ -588,7 +613,7 @@ export default function Editor({
               </button>
             </div>
 
-            <div style={{ fontSize: 11, opacity: 0.5, marginBottom: 4 }}>OUTILS</div>
+            <div id="editor-section-tuning" style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', marginBottom: 4 }}>OUTILS</div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
               {(
                 [
@@ -625,7 +650,7 @@ export default function Editor({
                   1er clic : le défaut · 2e clic : la zone propre à copier.
                   {pendingDefect && ' → choisis la source…'}
                 </p>
-                <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                   Taille : {(retouchRadius * 100).toFixed(0)}
                   <input
                     type="range"
@@ -640,7 +665,7 @@ export default function Editor({
               </>
             )}
 
-            <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>EFFETS</div>
+            <div id="editor-section-filtres" style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '8px 0 4px' }}>EFFETS</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
               {FILTERS.map((f) => {
                 const cur = getOp(stack, 'filter')
@@ -665,7 +690,7 @@ export default function Editor({
               })}
             </div>
             {getOp(stack, 'filter') && (
-              <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+              <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
                 Intensité : {(((getOp(stack, 'filter')?.params.intensity ?? 0) as number) * 100).toFixed(0)}
                 <input
                   type="range"
@@ -691,8 +716,10 @@ export default function Editor({
             )}
 
             {/* ---- Flou ---- */}
-            <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>FLOU</div>
-            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+            <div id="editor-section-effects" style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '12px 0 4px', paddingTop: 8, borderTop: '1px solid #2a2f38' }}>EFFETS AVANCÉS</div>
+
+            <div style={{ fontSize: 12, opacity: 0.7, margin: '4px 0 2px', fontWeight: 500 }}>Flou</div>
+            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
               Rayon : {(getOp(stack, 'blur')?.params.radius ?? 0).toFixed(1)}px
               <input
                 type="range"
@@ -711,8 +738,8 @@ export default function Editor({
             </label>
 
             {/* ---- Netteté ---- */}
-            <div style={{ fontSize: 11, opacity: 0.5, margin: '4px 0 4px' }}>NETTETÉ</div>
-            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '4px 0 4px' }}>NETTETÉ</div>
+            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
               Amount : {Math.round((getOp(stack, 'sharpen')?.params.amount ?? 0) * 100)}
               <input
                 type="range"
@@ -731,8 +758,8 @@ export default function Editor({
             </label>
 
             {/* ---- Vignette ---- */}
-            <div style={{ fontSize: 11, opacity: 0.5, margin: '4px 0 4px' }}>VIGNETTE</div>
-            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '4px 0 4px' }}>VIGNETTE</div>
+            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
               🔘 Vignette : {Math.round((getOp(stack, 'vignette')?.params.intensity ?? 0) * 100)}
               <input
                 type="range"
@@ -752,8 +779,8 @@ export default function Editor({
             </label>
 
             {/* ---- Doucette / Soft Focus ---- */}
-            <div style={{ fontSize: 11, opacity: 0.5, margin: '4px 0 4px' }}>DOUCETTE</div>
-            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '4px 0 4px' }}>DOUCETTE</div>
+            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
               Intensité : {Math.round((getOp(stack, 'softfocus')?.params.intensity ?? 0) * 100)}
               <input
                 type="range"
@@ -773,8 +800,8 @@ export default function Editor({
             </label>
 
             {/* ---- Glow ---- */}
-            <div style={{ fontSize: 11, opacity: 0.5, margin: '4px 0 4px' }}>GLOW</div>
-            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '4px 0 4px' }}>GLOW</div>
+            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
               Intensité : {Math.round((getOp(stack, 'glow')?.params.intensity ?? 0) * 100)}
               <input
                 type="range"
@@ -794,8 +821,8 @@ export default function Editor({
             </label>
 
             {/* ---- Orton ---- */}
-            <div style={{ fontSize: 11, opacity: 0.5, margin: '4px 0 4px' }}>ORTON</div>
-            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '4px 0 4px' }}>ORTON</div>
+            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
               Intensité : {Math.round((getOp(stack, 'orton')?.params.intensity ?? 0) * 100)}
               <input
                 type="range"
@@ -815,7 +842,7 @@ export default function Editor({
             </label>
 
             {/* ---- Tilt-shift ---- */}
-            <div style={{ fontSize: 11, opacity: 0.5, margin: '4px 0 4px' }}>TILT-SHIFT</div>
+            <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '4px 0 4px' }}>TILT-SHIFT</div>
             {(() => {
               const tsOp = getOp(stack, 'tiltshift')
               const tsParams: TiltShiftParams = tsOp?.params ?? {
@@ -833,7 +860,7 @@ export default function Editor({
               }
               return (
                 <>
-                  <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                  <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                     Mode
                     <select
                       value={tsParams.mode}
@@ -844,7 +871,7 @@ export default function Editor({
                       <option value="linear">Linéaire (bande nette)</option>
                     </select>
                   </label>
-                  <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                  <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                     Focus X : {(tsParams.focusX * 100).toFixed(0)}%
                     <input
                       type="range"
@@ -856,7 +883,7 @@ export default function Editor({
                       style={{ width: '100%' }}
                     />
                   </label>
-                  <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                  <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                     Focus Y : {(tsParams.focusY * 100).toFixed(0)}%
                     <input
                       type="range"
@@ -868,7 +895,7 @@ export default function Editor({
                       style={{ width: '100%' }}
                     />
                   </label>
-                  <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                  <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                     Rayon zone nette : {(tsParams.focusRadius * 100).toFixed(0)}%
                     <input
                       type="range"
@@ -880,7 +907,7 @@ export default function Editor({
                       style={{ width: '100%' }}
                     />
                   </label>
-                  <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+                  <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
                     Flou : {tsParams.blurRadius.toFixed(1)}px
                     <input
                       type="range"
@@ -897,8 +924,8 @@ export default function Editor({
             })()}
 
             {/* ---- Pseudo-HDR ---- */}
-            <div style={{ fontSize: 11, opacity: 0.5, margin: '4px 0 4px' }}>PSEUDO-HDR</div>
-            <label style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '4px 0 4px' }}>PSEUDO-HDR</div>
+            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
               Intensité : {Math.round((getOp(stack, 'hdr')?.params.intensity ?? 0) * 100)}
               <input
                 type="range"
@@ -918,7 +945,7 @@ export default function Editor({
             </label>
 
             {/* ---- Texte sur photo ---- */}
-            <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>TEXTE</div>
+            <div id="editor-section-texte" style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '12px 0 4px', paddingTop: 8, borderTop: '1px solid #2a2f38' }}>TEXTE</div>
             {(() => {
               const textOp = getTextOp(stack)
               const textParams: TextOpParams = textOp?.params ?? {
@@ -951,7 +978,7 @@ export default function Editor({
                   />
                   {textParams.content.trim() !== '' && (
                     <>
-                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                      <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                         Police
                         <select
                           value={textParams.fontFamily}
@@ -965,7 +992,7 @@ export default function Editor({
                           <option value="fantasy">Fantasy</option>
                         </select>
                       </label>
-                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                      <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                         Graisse
                         <select
                           value={textParams.fontWeight}
@@ -976,7 +1003,7 @@ export default function Editor({
                           <option value="bold">Gras</option>
                         </select>
                       </label>
-                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                      <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                         Taille : {(textParams.fontSize * 100).toFixed(0)}% de la largeur
                         <input
                           type="range"
@@ -988,7 +1015,7 @@ export default function Editor({
                           style={{ width: '100%' }}
                         />
                       </label>
-                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                      <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                         Couleur
                         <input
                           type="color"
@@ -997,7 +1024,7 @@ export default function Editor({
                           style={{ width: '100%', height: 30, marginTop: 4, padding: 0 }}
                         />
                       </label>
-                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                      <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                         Position X : {(textParams.x * 100).toFixed(0)}%
                         <input
                           type="range"
@@ -1009,7 +1036,7 @@ export default function Editor({
                           style={{ width: '100%' }}
                         />
                       </label>
-                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                      <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                         Position Y : {(textParams.y * 100).toFixed(0)}%
                         <input
                           type="range"
@@ -1021,7 +1048,7 @@ export default function Editor({
                           style={{ width: '100%' }}
                         />
                       </label>
-                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                      <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                         Opacité : {Math.round(textParams.opacity * 100)}%
                         <input
                           type="range"
@@ -1043,7 +1070,7 @@ export default function Editor({
                       </label>
                       {textParams.shadow && (
                         <>
-                          <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                          <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                             Couleur de l'ombre
                             <input
                               type="color"
@@ -1052,7 +1079,7 @@ export default function Editor({
                               style={{ width: '100%', height: 30, marginTop: 4, padding: 0 }}
                             />
                           </label>
-                          <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                          <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                             Flou : {(textParams.shadowBlur * 1000).toFixed(1)}‰
                             <input
                               type="range"
@@ -1079,7 +1106,7 @@ export default function Editor({
             })()}
 
             {/* ---- Bordure / cadre ---- */}
-            <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>CADRE</div>
+            <div id="editor-section-cadre" style={{ fontSize: 13, opacity: 0.85, fontWeight: 600, letterSpacing: '0.3px', margin: '12px 0 4px', paddingTop: 8, borderTop: '1px solid #2a2f38' }}>CADRE</div>
             {(() => {
               const borderOp = getBorderOp(stack)
               const borderParams: BorderOpParams = borderOp?.params ?? {
@@ -1111,7 +1138,7 @@ export default function Editor({
                   </label>
                   {borderOp && (
                     <>
-                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                      <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                         Style
                         <select
                           value={borderParams.style}
@@ -1123,7 +1150,7 @@ export default function Editor({
                           <option value="museum">Musée (cadre épais uniforme)</option>
                         </select>
                       </label>
-                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                      <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                         Épaisseur : {Math.round(borderParams.thickness * 100)}% de la largeur
                         <input
                           type="range"
@@ -1135,7 +1162,7 @@ export default function Editor({
                           style={{ width: '100%' }}
                         />
                       </label>
-                      <label style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                      <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
                         Couleur
                         <input
                           type="color"
