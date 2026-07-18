@@ -123,6 +123,7 @@ type View =
   | { type: 'map' }
   | { type: 'duplicates' }
   | { type: 'hidden' }
+  | { type: 'trash' }
   | { type: 'settings' }
 
 const PHASE_LABEL: Record<ScanProgress['phase'], string> = {
@@ -244,6 +245,7 @@ export default function App(): JSX.Element {
   const anchorIndex = useRef<number>(-1)
   const photosRef = useRef<PhotoRow[]>([])
   const trayHideRef = useRef<(() => Promise<void>) | null>(null)
+  const trayTrashRef = useRef<(() => Promise<void>) | null>(null)
   const addFolderRef = useRef<(() => Promise<void>) | null>(null)
   const importRef = useRef<(() => Promise<void>) | null>(null)
   // Une seule ref regroupant toutes les actions déclenchables depuis le menu
@@ -303,6 +305,8 @@ export default function App(): JSX.Element {
         label: string
       }
     | { type: 'folderRemove'; folderId: number; photoIds: number[]; label: string }
+    | { type: 'moveToTrash'; photoIds: number[]; label: string }
+    | { type: 'restoreFromTrash'; photoIds: number[]; label: string }
   const [lastAction, setLastAction] = useState<LastAction | null>(null)
   const lastActionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const armUndo = (action: LastAction): void => {
@@ -336,6 +340,14 @@ export default function App(): JSX.Element {
         photoIds: lastAction.photoIds
       })
       window.api.invoke('folders:tree', undefined).then(setFolders)
+      if (viewRef.current) loadView(viewRef.current)
+    } else if (lastAction.type === 'moveToTrash') {
+      await window.api.invoke('photos:undoTrash', { photoIds: lastAction.photoIds })
+      refreshSidebar()
+      if (viewRef.current) loadView(viewRef.current)
+    } else if (lastAction.type === 'restoreFromTrash') {
+      await window.api.invoke('photos:trash', { photoIds: lastAction.photoIds })
+      refreshSidebar()
       if (viewRef.current) loadView(viewRef.current)
     }
     setLastAction(null)
@@ -422,6 +434,10 @@ export default function App(): JSX.Element {
       })
       return
     }
+    if (v.type === 'trash') {
+      window.api.invoke('photos:trashed', undefined).then(setPhotos)
+      return
+    }
     // Filtres passés au main pour filtrage SQL (minStars, typeFilter) et tri (sortMode)
     const filters = {
       minStars: minStarsRef.current,
@@ -482,7 +498,7 @@ export default function App(): JSX.Element {
   // Recharger la vue courante quand les filtres/tri changent — les filtres
   // étant maintenant appliqués côté SQL, il faut refaire la requête IPC.
   useEffect(() => {
-    if (viewRef.current && !['map', 'duplicates', 'settings', 'hidden'].includes(viewRef.current.type)) {
+    if (viewRef.current && !['map', 'duplicates', 'settings', 'hidden', 'trash'].includes(viewRef.current.type)) {
       loadView(viewRef.current)
     }
   }, [minStars, typeFilter, sortMode, loadView])
@@ -521,6 +537,7 @@ export default function App(): JSX.Element {
       if (action === 'edit' && i >= 0) setEditing(photosRef.current[i])
       if (action === 'tagFocus') document.querySelector<HTMLInputElement>('.ft input')?.focus()
       if (action === 'hide') void trayHideRef.current?.()
+      if (action === 'trash') void trayTrashRef.current?.()
     })
     window.api.invoke('websync:getConfig', undefined).then((cfg) => {
       if (cfg) {
@@ -721,6 +738,63 @@ export default function App(): JSX.Element {
     if (viewRef.current) loadView(viewRef.current)
   }
 
+  /** Mettre à la corbeille (bac) : réversible, comme trayHide — bandeau
+   * "↩ Annuler" pendant 8s, aucune confirmation (cohérent avec le reste
+   * de l'app : seule la suppression définitive demande confirmation). */
+  const trayTrash = async () => {
+    const ids = [...trayIds]
+    if (ids.length === 0) return
+    await window.api.invoke('photos:trash', { photoIds: ids })
+    armUndo({
+      type: 'moveToTrash',
+      photoIds: ids,
+      label: `${ids.length} photo(s)/vidéo(s) mise(s) à la corbeille`
+    })
+    setTray(new Map())
+    refreshSidebar()
+    if (viewRef.current) loadView(viewRef.current)
+  }
+
+  /** Restaurer depuis la vue Corbeille — réversible aussi (repasse en
+   * corbeille via le bandeau Annuler). */
+  const trayRestoreFromTrash = async () => {
+    const ids = [...trayIds]
+    if (ids.length === 0) return
+    await window.api.invoke('photos:undoTrash', { photoIds: ids })
+    armUndo({
+      type: 'restoreFromTrash',
+      photoIds: ids,
+      label: `${ids.length} photo(s)/vidéo(s) restaurée(s)`
+    })
+    setTray(new Map())
+    refreshSidebar()
+    if (viewRef.current) loadView(viewRef.current)
+  }
+
+  /** Suppression définitive — irréversible, seule action de la Corbeille
+   * qui touche réellement au fichier sur le disque. Confirmation requise. */
+  const trayDeleteForever = async () => {
+    const ids = [...trayIds]
+    if (ids.length === 0) return
+    const word = ids.length > 1 ? `ces ${ids.length} photos/vidéos` : 'cette photo/vidéo'
+    if (
+      !confirm(
+        `Supprimer définitivement ${word} ? Le ou les fichiers seront effacés du disque. Cette action est irréversible.`
+      )
+    )
+      return
+    const r = await window.api.invoke('photos:deleteForever', { photoIds: ids })
+    setTray(new Map())
+    refreshSidebar()
+    if (viewRef.current) loadView(viewRef.current)
+    if (r.errors.length > 0) {
+      alert(
+        `${r.deleted} supprimée(s). ${r.errors.length} erreur(s) :\n` +
+          r.errors.map((e) => `${e.filename} — ${e.error}`).join('\n')
+      )
+    }
+  }
+
   const relocate = async () => {
     const newRoot = await window.api.invoke('dialog:pickFolder', undefined)
     if (!newRoot) return
@@ -828,6 +902,7 @@ export default function App(): JSX.Element {
 
   photosRef.current = photos
   trayHideRef.current = trayHide
+  trayTrashRef.current = trayTrash
   addFolderRef.current = addFolder
   importRef.current = runImport
 
@@ -875,6 +950,7 @@ export default function App(): JSX.Element {
     goMap: () => loadView({ type: 'map' }),
     goDuplicates: () => loadView({ type: 'duplicates' }),
     goHidden: () => loadView({ type: 'hidden' }),
+    goTrash: () => loadView({ type: 'trash' }),
     scanFaces: () => {
       void window.api.invoke('faces:scan', undefined).then((r) => {
         if (r.started) setFaceProgress({ done: 0, total: 1 })
@@ -900,6 +976,7 @@ export default function App(): JSX.Element {
       trayNameInputRef.current?.focus()
     },
     toggleHideSelection: () => { if (!needsSelection()) void trayHideRef.current?.() },
+    trashSelection: () => { if (!needsSelection()) void trayTrashRef.current?.() },
     createAlbum: () => {
       if (needsSelection()) return
       trayNameInputRef.current?.focus()
@@ -1204,6 +1281,12 @@ export default function App(): JSX.Element {
             style={sidebarItem(view?.type === 'hidden')}
           >
             🙈 Masquées
+          </div>
+          <div
+            onClick={() => loadView({ type: 'trash' })}
+            style={sidebarItem(view?.type === 'trash')}
+          >
+            🗑 Corbeille
           </div>
           <div
             onClick={() => loadView({ type: 'settings' })}
@@ -2405,6 +2488,24 @@ export default function App(): JSX.Element {
               <button onClick={trayHide} title="Masquer / démasquer">
                 {view?.type === 'hidden' ? '👁 Démasquer' : '🙈 Masquer'}
               </button>
+              {view?.type === 'trash' ? (
+                <>
+                  <button onClick={trayRestoreFromTrash} title="Restaurer depuis la corbeille">
+                    ♻ Restaurer
+                  </button>
+                  <button
+                    onClick={trayDeleteForever}
+                    title="Supprimer définitivement du disque (irréversible)"
+                    style={{ color: '#f87171' }}
+                  >
+                    ⛔ Supprimer définitivement
+                  </button>
+                </>
+              ) : (
+                <button onClick={trayTrash} title="Mettre à la corbeille (récupérable ensuite)">
+                  🗑 Corbeille
+                </button>
+              )}
             </div>
 
             {exportProgress && (

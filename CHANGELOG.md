@@ -3,6 +3,35 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.21.0] — 2026-07-19
+
+### Ajouté — Corbeille
+- **🗑 Mettre à la corbeille** (clic droit sur une photo, bouton du bac,
+  ou Édition → menu, sélection multiple) : retire la sélection de toutes
+  les vues normales sans toucher au fichier sur le disque. Réversible
+  comme les autres actions de l'app (bandeau ↩ Annuler, 8s).
+- **Vue « 🗑 Corbeille »** dans la barre latérale et le menu Bibliothèque :
+  liste tout ce qui a été mis à la corbeille.
+- **♻ Restaurer** depuis la vue Corbeille — repasse en actif, réversible
+  aussi (repasse en corbeille via ↩ Annuler si besoin).
+- **⛔ Supprimer définitivement** depuis la vue Corbeille — confirmation
+  requise, seule action de la Corbeille qui touche réellement au disque :
+  le fichier est effacé et la ligne base supprimée (albums/tags/visages
+  associés nettoyés automatiquement). Irréversible.
+- S'appuie sur le statut `status='trashed'` déjà présent dans le schéma
+  depuis la toute première version (déjà utilisé en interne pour la
+  fusion de doublons et le retrait de dossier) — cohérent avec le reste
+  du système d'annulation, aucune migration de base nécessaire.
+
+### Vérifié (Xvfb + Electron réel, roundtrip IPC complet)
+- Mise à la corbeille de 3 photos : statut `trashed` confirmé en base,
+  disparition de la vue dossier (0 encore actives), apparition dans la
+  vue Corbeille.
+- Restauration d'une photo : retour à `status='active'` confirmé.
+- Suppression définitive des 2 restantes : fichiers présents avant
+  (vérifié sur disque), absents après (vérifié sur disque) ; lignes
+  base entièrement supprimées après (vérifié par requête directe).
+
 ## [2.20.3] — 2026-07-18
 
 ### Amélioré — transition du diaporama plus fluide

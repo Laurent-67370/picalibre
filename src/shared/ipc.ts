@@ -184,6 +184,13 @@ export interface IpcInvokeMap {
     res: void
   }
   'photos:hidden': { req: void; res: PhotoRow[] }
+  'photos:trash': { req: { photoIds: number[] }; res: { ok: boolean; error?: string } }
+  'photos:undoTrash': { req: { photoIds: number[] }; res: void }
+  'photos:trashed': { req: void; res: PhotoRow[] }
+  'photos:deleteForever': {
+    req: { photoIds: number[] }
+    res: { deleted: number; errors: Array<{ id: number; filename: string; error: string }> }
+  }
   'video:extractFrame': { req: { photoId: number; atSeconds: number }; res: { outPath: string } }
   'photos:setTrim': {
     req: { photoId: number; trimStartMs: number | null; trimEndMs: number | null }
@@ -256,7 +263,7 @@ export interface IpcEventMap {
     total: number
     message?: string
   }
-  'photo:action': { action: 'open' | 'edit' | 'tagFocus' | 'hide'; photoId: number }
+  'photo:action': { action: 'open' | 'edit' | 'tagFocus' | 'hide' | 'trash'; photoId: number }
   'menu:action': { action: 'addFolder' | 'import' }
   'update:status': {
     status: 'available' | 'downloading' | 'ready' | 'error'

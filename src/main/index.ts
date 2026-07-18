@@ -19,7 +19,7 @@ Object.assign(console, log.functions)
 import { pathToFileURL } from 'node:url'
 import { join, dirname, basename, extname } from 'node:path'
 import { spawn } from 'node:child_process'
-import { writeFile, access, rename as fsRename } from 'node:fs/promises'
+import { writeFile, access, rename as fsRename, unlink as fsUnlink } from 'node:fs/promises'
 import sharp from 'sharp'
 import { resolveHeicInput } from '../shared/heic'
 import { initDb, getDb } from './db'
@@ -479,6 +479,10 @@ function registerIpc(): void {
         click: () => sendAction('hide')
       },
       {
+        label: selectedCount > 1 ? `🗑 Mettre la sélection à la corbeille (${selectedCount})` : '🗑 Mettre à la corbeille',
+        click: () => sendAction('trash')
+      },
+      {
         label: '📂 Afficher dans le dossier',
         click: () => {
           const ph = getDb().prepare('SELECT filepath FROM photos WHERE id = ?').get(photoId) as
@@ -660,6 +664,65 @@ function registerIpc(): void {
     return getDb()
       .prepare(`SELECT ${GRID_COLS} FROM photos WHERE is_hidden = 1 AND status = 'active' ORDER BY taken_at DESC`)
       .all()
+  })
+
+  /**
+   * Corbeille (façon Picasa/Poubelle système) : "Mettre à la corbeille"
+   * passe status='active' → 'trashed' — le fichier reste intact sur le
+   * disque, la photo disparaît simplement de toutes les vues normales
+   * (déjà garanti par les requêtes existantes filtrant status='active').
+   * Réversible via photos:undoTrash (bandeau "↩ Annuler", même mécanisme
+   * que les autres actions) OU depuis la vue Corbeille elle-même.
+   * photos:deleteForever est la seule action qui touche réellement au
+   * disque et à la base — irréversible, confirmation requise côté UI.
+   */
+  ipcMain.handle('photos:trash', (_e, { photoIds }: { photoIds: number[] }) => {
+    const db = getDb()
+    const stmt = db.prepare("UPDATE photos SET status = 'trashed' WHERE id = ? AND status = 'active'")
+    const tx = db.transaction((ids: number[]) => {
+      for (const id of ids) stmt.run(id)
+    })
+    tx(photoIds)
+    return { ok: true }
+  })
+  ipcMain.handle('photos:undoTrash', (_e, { photoIds }: { photoIds: number[] }) => {
+    const db = getDb()
+    const stmt = db.prepare("UPDATE photos SET status = 'active' WHERE id = ? AND status = 'trashed'")
+    const tx = db.transaction((ids: number[]) => {
+      for (const id of ids) stmt.run(id)
+    })
+    tx(photoIds)
+  })
+  ipcMain.handle('photos:trashed', () =>
+    getDb()
+      .prepare(`SELECT ${GRID_COLS} FROM photos WHERE status = 'trashed' ORDER BY taken_at DESC`)
+      .all()
+  )
+  ipcMain.handle('photos:deleteForever', async (_e, { photoIds }: { photoIds: number[] }) => {
+    const db = getDb()
+    const rows = db
+      .prepare(
+        `SELECT id, filepath, filename FROM photos WHERE id IN (${photoIds.map(() => '?').join(',') || 'NULL'}) AND status = 'trashed'`
+      )
+      .all(...photoIds) as { id: number; filepath: string; filename: string }[]
+    const errors: Array<{ id: number; filename: string; error: string }> = []
+    let deleted = 0
+    const del = db.prepare('DELETE FROM photos WHERE id = ?')
+    for (const row of rows) {
+      try {
+        await fsUnlink(row.filepath)
+      } catch (err) {
+        // Fichier déjà absent du disque (déplacé/supprimé manuellement) :
+        // on continue quand même à nettoyer la base, ce n'est pas bloquant.
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+          errors.push({ id: row.id, filename: row.filename, error: (err as Error).message })
+          continue
+        }
+      }
+      del.run(row.id)
+      deleted++
+    }
+    return { deleted, errors }
   })
 
   /**
@@ -1293,7 +1356,8 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_SLIDESHOW',
     'PICALIBRE_TEST_FOLDER_REMOVE',
     'PICALIBRE_TEST_LIGHTBOX_CONTRAST',
-    'PICALIBRE_TEST_BATCHEDIT'
+    'PICALIBRE_TEST_BATCHEDIT',
+    'PICALIBRE_TEST_TRASH'
   ].some((k) => !!process.env[k])
   if (!isTestMode) {
     const hasRoots = getDb().prepare('SELECT 1 FROM scan_roots LIMIT 1').get()
@@ -1648,7 +1712,101 @@ app.whenReady().then(() => {
   }
 
   // Test headless du renommage en lot + annulation :
-  // PICALIBRE_TEST_RENAME=<dossier>
+  // Test headless de la Corbeille : PICALIBRE_TEST_TRASH=<dossier>
+  const trashTestDir = process.env.PICALIBRE_TEST_TRASH
+  if (trashTestDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(trashTestDir)
+    startScan(mainWindow)
+    const t0t = Date.now()
+    const ivt = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos >= 3 && thumbs >= photos * 2) || Date.now() - t0t > 60000) {
+        clearInterval(ivt)
+        const db = getDb()
+        const fs = await import('node:fs/promises')
+        const rows = db
+          .prepare("SELECT id, filepath, filename FROM photos WHERE status = 'active' ORDER BY id LIMIT 3")
+          .all() as Array<{ id: number; filepath: string; filename: string }>
+        const ids = rows.map((r) => r.id)
+        console.log('[trash-test] photos de départ:', JSON.stringify(rows))
+
+        // 1) Mettre à la corbeille
+        const r1 = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:trash', { photoIds: ${JSON.stringify(ids)} })`
+        )
+        const statusesAfterTrash = db
+          .prepare(`SELECT id, status FROM photos WHERE id IN (${ids.join(',')})`)
+          .all()
+        console.log('[trash-test] photos:trash résultat:', JSON.stringify(r1), 'statuts:', JSON.stringify(statusesAfterTrash))
+
+        // 2) Vérifier qu'elles apparaissent dans la vue Corbeille et plus
+        //    dans la vue dossier normale
+        const trashedList = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:trashed', undefined).then(r => r.map(p => p.id))`
+        )
+        console.log('[trash-test] vue Corbeille contient:', JSON.stringify(trashedList))
+        const stillInFolder = db
+          .prepare(
+            `SELECT COUNT(*) c FROM photos WHERE id IN (${ids.join(',')}) AND status = 'active'`
+          )
+          .get() as { c: number }
+        console.log('[trash-test] encore actives (doit être 0):', stillInFolder.c)
+
+        // 3) Restaurer le premier, vérifier son retour en 'active'
+        const restoreId = ids[0]
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:undoTrash', { photoIds: [${restoreId}] })`
+        )
+        const afterRestore = db.prepare('SELECT status FROM photos WHERE id = ?').get(restoreId) as {
+          status: string
+        }
+        console.log('[trash-test] statut après restauration id=' + restoreId + ':', afterRestore.status)
+
+        // 4) Supprimer définitivement les 2 restantes — vérifier fichier ET
+        //    ligne DB réellement absents ensuite
+        const deleteIds = ids.slice(1)
+        const filesBefore = await Promise.all(
+          rows
+            .filter((r) => deleteIds.includes(r.id))
+            .map(async (r) => ({
+              id: r.id,
+              existedBefore: await fs
+                .access(r.filepath)
+                .then(() => true)
+                .catch(() => false)
+            }))
+        )
+        console.log('[trash-test] fichiers présents avant suppression définitive:', JSON.stringify(filesBefore))
+        const r2 = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:deleteForever', { photoIds: ${JSON.stringify(deleteIds)} })`
+        )
+        console.log('[trash-test] photos:deleteForever résultat:', JSON.stringify(r2))
+        const filesAfter = await Promise.all(
+          rows
+            .filter((r) => deleteIds.includes(r.id))
+            .map(async (r) => ({
+              id: r.id,
+              existsAfter: await fs
+                .access(r.filepath)
+                .then(() => true)
+                .catch(() => false)
+            }))
+        )
+        console.log('[trash-test] fichiers présents après suppression définitive (doit être false):', JSON.stringify(filesAfter))
+        const rowsAfter = db
+          .prepare(`SELECT id FROM photos WHERE id IN (${deleteIds.join(',')})`)
+          .all()
+        console.log('[trash-test] lignes DB restantes après suppression (doit être []):', JSON.stringify(rowsAfter))
+
+        console.log('[trash-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
+  // Test headless du renommage en lot : PICALIBRE_TEST_RENAME=<dossier>
   const renameTestDir = process.env.PICALIBRE_TEST_RENAME
   if (renameTestDir) {
     getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(renameTestDir)

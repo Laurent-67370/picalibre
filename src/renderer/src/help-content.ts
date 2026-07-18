@@ -9,7 +9,7 @@ export interface HelpTopic {
   title: string
   keywords: string[]
   body: string
-  action?: { label: string; view: 'timeline' | 'map' | 'duplicates' | 'hidden' | 'settings' }
+  action?: { label: string; view: 'timeline' | 'map' | 'duplicates' | 'hidden' | 'trash' | 'settings' }
 }
 
 export const HELP_TOPICS: HelpTopic[] = [
@@ -106,6 +106,14 @@ Pour retirer un SOUS-dossier précis (sans toucher au reste du dossier racine) :
     keywords: ['masquer', 'cacher', 'privé', 'mot de passe', 'confidentialité'],
     body: `Masquer une sélection (clic droit → Masquer, ou bouton du bac) la retire de toutes les vues normales. Un mot de passe optionnel (Réglages) peut verrouiller l'accès à la vue Masquées. Rien ne quitte jamais ton ordinateur : PicaLibre est 100 % local, aucun cloud.`,
     action: { label: 'Ouvrir les Photos masquées', view: 'hidden' }
+  },
+  {
+    id: 'trash',
+    category: 'Bibliothèque',
+    title: 'Corbeille',
+    keywords: ['corbeille', 'supprimer', 'effacer', 'restaurer', 'suppression définitive'],
+    body: `« 🗑 Mettre à la corbeille » (clic droit, bac, ou Édition → menu) retire la sélection de toutes les vues normales sans toucher au fichier — récupérable via ↩ Annuler juste après, ou depuis la vue Corbeille (♻ Restaurer). Dans la vue Corbeille, « ⛔ Supprimer définitivement » efface réellement le ou les fichiers du disque après confirmation : cette action-là, contrairement à toutes les autres, est irréversible.`,
+    action: { label: 'Ouvrir la Corbeille', view: 'trash' }
   },
 
   // ---- Éditeur ----

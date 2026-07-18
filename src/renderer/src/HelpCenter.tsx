@@ -12,7 +12,7 @@ export default function HelpCenter({
   onNavigate
 }: {
   onClose: () => void
-  onNavigate: (view: 'timeline' | 'map' | 'duplicates' | 'hidden' | 'settings') => void
+  onNavigate: (view: 'timeline' | 'map' | 'duplicates' | 'hidden' | 'trash' | 'settings') => void
 }): JSX.Element {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<HelpTopic | null>(null)

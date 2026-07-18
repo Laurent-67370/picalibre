@@ -127,6 +127,7 @@ export function buildAppMenu(win: BrowserWindow): void {
         { label: 'Taguer la sélection…', click: act('tagSelection') },
         { label: 'Créer un album avec la sélection…', click: act('createAlbum') },
         { label: 'Masquer / afficher la sélection', click: act('toggleHideSelection') },
+        { label: '🗑 Mettre la sélection à la corbeille', click: act('trashSelection') },
         { type: 'separator' },
         { label: 'Vider la sélection (Échap)', click: act('clearSelection') }
       ]
@@ -138,6 +139,7 @@ export function buildAppMenu(win: BrowserWindow): void {
         { label: '🗺 Carte', click: act('goMap') },
         { label: '⧉ Doublons', click: act('goDuplicates') },
         { label: '🙈 Photos masquées', click: act('goHidden') },
+        { label: '🗑 Corbeille', click: act('goTrash') },
         { type: 'separator' },
         { label: '🔍 Analyser les visages (détection des personnes)', click: act('scanFaces') }
       ]
