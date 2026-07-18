@@ -735,8 +735,20 @@ function registerIpc(): void {
     const ph = db.prepare('SELECT filepath FROM photos WHERE id = ?').get(photoId) as
       | { filepath: string }
       | undefined
-    if (!ph) throw new Error('Vidéo introuvable')
+    if (!ph) throw new Error('Vidéo introuvable dans la bibliothèque')
+    if (!(await access(ph.filepath).then(() => true).catch(() => false))) {
+      throw new Error(`Fichier vidéo source introuvable sur le disque : ${ph.filepath}`)
+    }
     const ff = await getFfmpegPath()
+    if (!(await access(ff).then(() => true).catch(() => false))) {
+      // Ne devrait plus arriver depuis le renforcement de getFfmpegPath()
+      // (revérification avant de renvoyer un chemin mémorisé), mais un
+      // message clair vaut mieux qu'un ENOTDIR cryptique si ça arrive.
+      throw new Error(
+        `ffmpeg introuvable au chemin résolu (${ff}). Réessaie — un nouveau ` +
+          `téléchargement automatique va être tenté au prochain essai.`
+      )
+    }
     const dir = dirname(ph.filepath)
     const base = basename(ph.filepath, extname(ph.filepath))
     const tsLabel = Math.max(0, atSeconds).toFixed(2).replace('.', '-')
@@ -746,6 +758,7 @@ function registerIpc(): void {
       outPath = join(dir, `${base}_frame_${tsLabel}s_${n}.jpg`)
       n++
     }
+    console.log('[extractFrame] ffmpeg:', ff, '| source:', ph.filepath, '| sortie:', outPath)
     await new Promise<void>((resolve, reject) => {
       const proc = spawn(ff, [
         '-y', '-ss', String(Math.max(0, atSeconds)), '-i', ph.filepath,
@@ -755,13 +768,17 @@ function registerIpc(): void {
         proc.kill('SIGKILL')
         reject(new Error('ffmpeg timeout (20s) — process tué'))
       }, 20_000)
+      let stderr = ''
+      proc.stderr?.on('data', (d) => (stderr += d.toString()))
       proc.on('error', (err) => {
         clearTimeout(killTimer)
-        reject(err)
+        reject(new Error(`Impossible de lancer ffmpeg (${ff}) : ${err.message}`))
       })
       proc.on('close', (code) => {
         clearTimeout(killTimer)
-        code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}`))
+        code === 0
+          ? resolve()
+          : reject(new Error(`ffmpeg a échoué (code ${code})\n${stderr.slice(-400)}`))
       })
     })
     startScan(mainWindow) // rescan immédiat plutôt que d'attendre le debounce du watcher

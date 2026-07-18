@@ -3,6 +3,36 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.18.1] — 2026-07-18
+
+### Corrigé — « spawn ENOTDIR » lors de l'extraction d'image fixe
+- Signalé par Laurent avec une capture d'écran réelle : échec de
+  l'extraction d'image sur un appareil en conditions réelles, hors de
+  l'environnement de développement où toute la vérification de cette
+  session a eu lieu — un angle mort assumé (voir note ci-dessous).
+- **Cause probable identifiée** : `getFfmpegPath()` mémorise le chemin
+  résolu pour toute la durée du process, sans jamais revérifier qu'il
+  reste valide. Si le binaire résolu devient inaccessible entre-temps
+  (profil nettoyé, cache vidé, disque externe débranché…), tout appel
+  ffmpeg suivant échoue avec une erreur système cryptique au lieu de
+  retenter une résolution propre.
+- **Correctif** : le chemin mémorisé est revérifié (`access()`) avant
+  chaque utilisation ; s'il n'existe plus, une nouvelle résolution
+  complète est relancée automatiquement (système → embarqué → cache →
+  téléchargement), au lieu d'échouer silencieusement sur un chemin mort.
+- En complément : messages d'erreur nettement plus clairs dans
+  l'extraction d'image (vidéo source manquante, ffmpeg introuvable,
+  sortie ffmpeg incluse) plutôt qu'un ENOTDIR brut sans contexte.
+
+### Limite honnête de cette correction
+Je n'ai pas pu reproduire l'environnement exact où l'erreur est survenue
+(l'intégralité des tests de cette session tourne en environnement de
+développement Linux/Xvfb, jamais sur un build empaqueté réel). Ce
+correctif répare la cause la plus probable identifiée à la lecture du
+code, mais sans confirmation sur l'appareil concerné. À revérifier après
+mise à jour — et si le problème persiste, le nouveau message d'erreur
+détaillé (au lieu du ENOTDIR brut) donnera de quoi diagnostiquer plus loin.
+
 ## [2.18.0] — 2026-07-18
 
 ### Ajouté — les 3 derniers écarts vs Picasa 3.9, fermés

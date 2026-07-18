@@ -109,7 +109,19 @@ let _resolved: string | null = null
 let _resolving: Promise<string> | null = null
 
 export function getFfmpegPath(): Promise<string> {
-  if (_resolved) return Promise.resolve(_resolved)
+  if (_resolved) {
+    // Ne pas faire confiance aveuglément à un chemin résolu il y a
+    // longtemps (mémorisé pour la durée du process) : si le binaire a
+    // disparu entre-temps (profil nettoyé, cache vidé manuellement...),
+    // mieux vaut relancer toute la résolution qu'échouer avec une erreur
+    // cryptique (ENOTDIR/ENOENT) au moment du spawn.
+    return exists(_resolved).then((ok) => {
+      if (ok) return _resolved as string
+      console.warn('[ffmpeg] chemin mémorisé introuvable, nouvelle résolution :', _resolved)
+      _resolved = null
+      return getFfmpegPath()
+    })
+  }
   if (_resolving) return _resolving
 
   _resolving = (async () => {
