@@ -3,6 +3,25 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.20.1] — 2026-07-18
+
+### Ajouté — script d'auto-correction macOS (Gatekeeper)
+- Signalé par Laurent : PicaLibre n'étant pas signé par un certificat
+  Apple Developer payant (voir CODE_SIGNING.md), macOS bloque parfois
+  son lancement après téléchargement (« l'app est endommagée »),
+  nécessitant de taper `xattr -cr /Applications/PicaLibre.app` dans le
+  Terminal après chaque mise à jour.
+- **Ajouté** : `Corriger PicaLibre si besoin.command`, présent dans
+  chaque release à côté des installeurs. Se télécharge une fois,
+  se garde où on veut, se double-clique après chaque future mise à
+  jour si besoin — plus besoin d'ouvrir le Terminal ni de retaper la
+  commande à chaque fois.
+- **Solution définitive documentée** (CODE_SIGNING.md) : rejoindre
+  l'Apple Developer Program (99 $/an) pour une notarisation Apple —
+  élimine complètement le problème, mais nécessite une démarche
+  personnelle du propriétaire du compte Apple Developer (identité
+  vérifiée par Apple), non automatisable par ce dépôt seul.
+
 ## [2.20.0] — 2026-07-18
 
 ### Ajouté — retirer un sous-dossier précis de la bibliothèque
