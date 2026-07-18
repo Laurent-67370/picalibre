@@ -1254,6 +1254,7 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_VIDEO_FEATURES',
     'PICALIBRE_TEST_EDITOR_TABS',
     'PICALIBRE_TEST_MAP_LIGHTBOX',
+    'PICALIBRE_TEST_LIGHTBOX_CONTRAST',
     'PICALIBRE_TEST_BATCHEDIT'
   ].some((k) => !!process.env[k])
   if (!isTestMode) {
@@ -1915,6 +1916,57 @@ app.whenReady().then(() => {
           })
         )
         console.log('[editor-tabs-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
+  // Test headless : contraste du texte de la Lightbox en thème clair
+  // (bug signalé : texte gris/sombre illisible sur le fond toujours
+  // sombre de la Lightbox). PICALIBRE_TEST_LIGHTBOX_CONTRAST=<dossier>
+  const lbContrastDir = process.env.PICALIBRE_TEST_LIGHTBOX_CONTRAST
+  if (lbContrastDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(lbContrastDir)
+    startScan(mainWindow)
+    const t0c = Date.now()
+    const ivc = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos > 0 && thumbs >= photos * 2) || Date.now() - t0c > 60000) {
+        clearInterval(ivc)
+        const theme = await mainWindow.webContents.executeJavaScript(
+          `document.documentElement.dataset.theme || 'light (par défaut)'`
+        )
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === 'Passer'); if (b) b.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 300))
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Chronologie')); if (el) el.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 800))
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const im = document.querySelector('main figure canvas'); if (im) im.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })()`
+        )
+        await new Promise((r) => setTimeout(r, 1200))
+        const colors = await mainWindow.webContents.executeJavaScript(
+          `(() => {
+            const filenameSpan = [...document.querySelectorAll('span')].find(s => s.style.fontWeight === '600' && /\\.(jpg|jpeg|png)/i.test(s.textContent))
+            const counterSpan = [...document.querySelectorAll('span')].find(s => /^\\d+ \\/ \\d+$/.test(s.textContent.trim()))
+            const topBar = filenameSpan ? filenameSpan.closest('div') : null
+            return {
+              filenameFound: !!filenameSpan,
+              filenameColor: filenameSpan ? getComputedStyle(filenameSpan).color : null,
+              filenameText: filenameSpan ? filenameSpan.textContent : null,
+              counterFound: !!counterSpan,
+              counterColor: counterSpan ? getComputedStyle(counterSpan).color : null,
+              topBarBg: topBar ? getComputedStyle(topBar).backgroundColor : null
+            }
+          })()`
+        )
+        console.log('[lightbox-contrast-test] thème:', theme, '—', JSON.stringify(colors))
+        console.log('[lightbox-contrast-test] TERMINÉ')
         exitTest(0)
       }
     }, 500)

@@ -211,14 +211,15 @@ export default function Lightbox({
           gap: 12,
           padding: '10px 16px',
           background: '#0f172a',
-          borderBottom: '1px solid var(--border)'
+          borderBottom: '1px solid #334155',
+          color: '#e2e8f0'
         }}
       >
         <button onClick={onClose} title="Fermer (Échap)">
           ← Bibliothèque
         </button>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>{photo.filename}</span>
-        <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>{photo.filename}</span>
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>
           {index + 1} / {photos.length}
         </span>
         <span style={{ fontSize: 14, letterSpacing: 2, cursor: 'pointer', userSelect: 'none' }}>
@@ -226,7 +227,7 @@ export default function Lightbox({
             <span
               key={n}
               onClick={() => onRate(photo.id, photo.rating === n ? 0 : n)}
-              style={{ color: n <= photo.rating ? 'var(--star)' : 'var(--border)' }}
+              style={{ color: n <= photo.rating ? '#f5c518' : '#475569' }}
             >
               ★
             </span>
@@ -234,7 +235,7 @@ export default function Lightbox({
         </span>
         <span style={{ flex: 1 }} />
         {!isVideo && zoom > 1.01 && (
-          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{Math.round(zoom * 100)} % — glisser pour naviguer</span>
+          <span style={{ fontSize: 12, color: '#94a3b8' }}>{Math.round(zoom * 100)} % — glisser pour naviguer</span>
         )}
         {!isVideo && (
           <button className="primary" onClick={() => onEdit(photo)} title="Ouvrir dans l'éditeur (E)">

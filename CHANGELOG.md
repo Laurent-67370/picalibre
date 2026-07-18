@@ -3,6 +3,33 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.19.3] — 2026-07-18
+
+### Corrigé — texte illisible dans la Lightbox (et Slideshow/Face Movie) en thème clair
+- Signalé par Laurent avec capture d'écran : les indications de la
+  Lightbox (nom de fichier, position, zoom) en gris peu contrasté sur
+  fond sombre.
+- **Cause, plus large qu'il n'y paraissait** : Lightbox, Slideshow et
+  Face Movie ont un fond **toujours sombre**, volontairement, quel que
+  soit le thème de l'app (clair ou sombre) — mais leur texte utilisait
+  des variables CSS de thème (`var(--muted)`, `var(--border)`) au lieu
+  de couleurs fixes. En thème clair, ces variables valent des couleurs
+  pensées pour un fond blanc — beaucoup moins lisibles sur le fond
+  toujours sombre de ces vues immersives. Plus grave : le **nom de
+  fichier** de la Lightbox n'avait carrément aucune couleur définie et
+  héritait de `var(--text)`, qui vaut un bleu marine très foncé en
+  thème clair — quasiment invisible sur fond sombre.
+- Même défaut retrouvé et corrigé dans Slideshow et Face Movie (barre
+  de progression, libellé « Durée »). InfoPanel vérifié à part : lui
+  suit correctement le thème (n'est jamais affiché en même temps que la
+  Lightbox), pas un bug.
+
+### Vérifié (Xvfb + Electron réel, thème clair — le scénario exact du bug)
+- Couleurs réellement calculées par le navigateur (pas une lecture de
+  code) : nom de fichier `rgb(226,232,240)` sur fond `rgb(15,23,42)`
+  (contraste très largement au-dessus des standards d'accessibilité),
+  compteur de position `rgb(148,163,184)`, tous deux confirmés lisibles.
+
 ## [2.19.2] — 2026-07-18
 
 ### Corrigé — la photo ouverte depuis la Carte restait cachée derrière elle

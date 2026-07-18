@@ -303,7 +303,7 @@ export default function FaceMovie({
           left: 0,
           right: 0,
           height: 3,
-          background: 'var(--border-soft)'
+          background: '#333333'
         }}
       >
         <div
@@ -391,7 +391,7 @@ export default function FaceMovie({
             <span
               style={{
                 fontSize: 11,
-                color: 'var(--muted)',
+                color: '#94a3b8',
                 userSelect: 'none'
               }}
             >
@@ -409,7 +409,7 @@ export default function FaceMovie({
             <span
               style={{
                 fontSize: 11,
-                color: 'var(--muted)',
+                color: '#94a3b8',
                 userSelect: 'none',
                 minWidth: 30
               }}
@@ -428,7 +428,7 @@ export default function FaceMovie({
         <div
           style={{
             fontSize: 11,
-            color: 'var(--muted)',
+            color: '#94a3b8',
             textShadow: '0 1px 4px #000',
             userSelect: 'none'
           }}
