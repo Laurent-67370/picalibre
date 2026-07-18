@@ -302,6 +302,7 @@ export default function App(): JSX.Element {
         items: Array<{ id: number; oldPath: string; oldFilename: string; newPath: string; newFilename: string }>
         label: string
       }
+    | { type: 'folderRemove'; folderId: number; photoIds: number[]; label: string }
   const [lastAction, setLastAction] = useState<LastAction | null>(null)
   const lastActionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const armUndo = (action: LastAction): void => {
@@ -328,6 +329,13 @@ export default function App(): JSX.Element {
       if (viewRef.current) loadView(viewRef.current)
     } else if (lastAction.type === 'batchRename') {
       await window.api.invoke('photos:undoBatchRename', lastAction.items)
+      if (viewRef.current) loadView(viewRef.current)
+    } else if (lastAction.type === 'folderRemove') {
+      await window.api.invoke('folders:undoRemove', {
+        folderId: lastAction.folderId,
+        photoIds: lastAction.photoIds
+      })
+      window.api.invoke('folders:tree', undefined).then(setFolders)
       if (viewRef.current) loadView(viewRef.current)
     }
     setLastAction(null)
@@ -1308,11 +1316,40 @@ export default function App(): JSX.Element {
           {folders.map((f) => (
             <div
               key={f.id}
-              onClick={() => loadView({ type: 'folder', id: f.id })}
-              title={f.path}
-              style={sidebarItem(view?.type === 'folder' && view.id === f.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 2 }}
             >
-              📁 {folderName(f.path)}
+              <div
+                onClick={() => loadView({ type: 'folder', id: f.id })}
+                title={f.path}
+                style={{ ...sidebarItem(view?.type === 'folder' && view.id === f.id), flex: 1, minWidth: 0 }}
+              >
+                📁 {folderName(f.path)}
+              </div>
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  if (
+                    !confirm(
+                      `Retirer « ${folderName(f.path)} » de la bibliothèque ?\n\nLes photos de ce dossier disparaîtront de PicaLibre (fichiers intacts sur le disque, annulable juste après). Il ne sera plus réajouté lors des prochains scans.`
+                    )
+                  )
+                    return
+                  const r = await window.api.invoke('folders:remove', { folderId: f.id })
+                  window.api.invoke('folders:tree', undefined).then(setFolders)
+                  if (view?.type === 'folder' && view.id === f.id) loadView({ type: 'timeline' })
+                  else if (viewRef.current) loadView(viewRef.current)
+                  armUndo({
+                    type: 'folderRemove',
+                    folderId: f.id,
+                    photoIds: r.photoIds,
+                    label: `Dossier « ${folderName(f.path)} » retiré (${r.photoIds.length} photo(s))`
+                  })
+                }}
+                title="Retirer ce dossier de la bibliothèque"
+                style={{ fontSize: 11, padding: '2px 5px', opacity: 0.6 }}
+              >
+                🗑
+              </button>
             </div>
           ))}
         </aside>

@@ -189,6 +189,8 @@ export interface IpcInvokeMap {
     req: { photoId: number; trimStartMs: number | null; trimEndMs: number | null }
     res: void
   }
+  'folders:remove': { req: { folderId: number }; res: { photoIds: number[] } }
+  'folders:undoRemove': { req: { folderId: number; photoIds: number[] }; res: void }
   'privacy:status': { req: void; res: { hasPassword: boolean; unlocked: boolean } }
   'privacy:setPassword': { req: { password: string }; res: { ok: boolean; error?: string } }
   'privacy:unlock': { req: { password: string }; res: { ok: boolean } }

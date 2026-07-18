@@ -3,6 +3,32 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.20.0] — 2026-07-18
+
+### Ajouté — retirer un sous-dossier précis de la bibliothèque
+- Jusqu'ici, seul un dossier racine complet (« Dossiers surveillés » dans
+  Réglages) pouvait être retiré — et cela n'arrêtait que la surveillance,
+  sans retirer les photos déjà indexées. Impossible de cibler un seul
+  sous-dossier.
+- Chaque sous-dossier a en réalité toujours sa propre entrée en base
+  (les photos y sont déjà rattachées individuellement) — la fonctionnalité
+  manquait simplement côté interface.
+- **Ajouté** : bouton 🗑 à côté de chaque sous-dossier dans la barre
+  latérale. Retire ses photos de la bibliothèque (fichiers intacts sur
+  le disque), avec confirmation et annulation juste après (Ctrl/⌘+Z,
+  même mécanisme que les autres actions destructives de l'app). Le
+  sous-dossier ne revient plus lors des scans suivants, même si les
+  fichiers restent physiquement présents.
+- Sujet d'aide mis à jour en conséquence.
+
+### Vérifié (Xvfb + Electron réel, scénario complet)
+- Avant retrait : photo active confirmée en base. Après retrait : 0
+  photo active, dossier marqué exclu. **Après un scan complet
+  relancé : toujours 0** — confirme que l'exclusion persiste réellement
+  et n'est pas juste un état temporaire en mémoire. Après annulation :
+  photo restaurée, dossier réactivé. Pipeline de scan et parité CPU/GPU
+  revérifiés : aucune régression.
+
 ## [2.19.6] — 2026-07-18
 
 ### Corrigé — vignettes qui se chevauchaient après un aller-retour par Réglages

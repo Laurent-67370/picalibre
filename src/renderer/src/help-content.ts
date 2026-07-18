@@ -25,8 +25,10 @@ export const HELP_TOPICS: HelpTopic[] = [
     id: 'remove-folder',
     category: 'Démarrer',
     title: 'Retirer ou modifier un dossier surveillé',
-    keywords: ['retirer', 'supprimer', 'enlever', 'modifier', 'éditer', 'dossier', 'exclure'],
-    body: `Réglages → « Dossiers surveillés » liste tous les dossiers ajoutés. Pour chacun : le menu déroulant change le mode (Surveillé = ajout automatique des nouveaux fichiers, Une fois = scanné une seule fois puis ignoré, Exclu = mis de côté sans être supprimé), et le bouton 🗑 le retire de la bibliothèque. Retirer un dossier ne supprime jamais les fichiers sur le disque — seules leurs entrées dans PicaLibre disparaissent. Pour changer le chemin surveillé (déplacement du dossier par exemple), retire l'ancien puis ajoute le nouveau.`,
+    keywords: ['retirer', 'supprimer', 'enlever', 'modifier', 'éditer', 'dossier', 'exclure', 'sous-dossier'],
+    body: `Réglages → « Dossiers surveillés » liste tous les dossiers ajoutés. Pour chacun : le menu déroulant change le mode (Surveillé = ajout automatique des nouveaux fichiers, Une fois = scanné une seule fois puis ignoré, Exclu = mis de côté sans être supprimé), et le bouton 🗑 le retire de la bibliothèque. Retirer un dossier ne supprime jamais les fichiers sur le disque — seules leurs entrées dans PicaLibre disparaissent. Pour changer le chemin surveillé (déplacement du dossier par exemple), retire l'ancien puis ajoute le nouveau.
+
+Pour retirer un SOUS-dossier précis (sans toucher au reste du dossier racine) : le bouton 🗑 à côté de chaque entrée sous « Dossiers » dans la barre latérale retire uniquement les photos de ce sous-dossier, avec confirmation et annulation juste après (Ctrl/⌘+Z). Il ne reviendra plus lors des scans suivants, même si les fichiers restent sur le disque.`,
     action: { label: 'Ouvrir les Réglages', view: 'settings' }
   },
   {

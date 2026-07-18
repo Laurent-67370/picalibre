@@ -137,7 +137,7 @@ export function upsertScannedBatch(files: ScannedFile[]): number[] {
   const folderStmt = db.prepare(
     `INSERT INTO folders (path) VALUES (?)
      ON CONFLICT(path) DO UPDATE SET last_scanned = unixepoch()
-     RETURNING id`
+     RETURNING id, is_hidden`
   )
   const photoStmt = db.prepare(
     `INSERT INTO photos (folder_id, filename, filepath, media_type, hash_xxh3, file_size, file_mtime)
@@ -151,8 +151,14 @@ export function upsertScannedBatch(files: ScannedFile[]): number[] {
   const touched = new Set<number>()
   const tx = db.transaction((batch: ScannedFile[]) => {
     for (const f of batch) {
-      const folderId = (folderStmt.get(f.folder) as { id: number }).id
+      const folderRow = folderStmt.get(f.folder) as { id: number; is_hidden: number }
+      const folderId = folderRow.id
       touched.add(folderId)
+      // Dossier retiré via folders:remove (Réglages) : on met bien à jour
+      // last_scanned (ci-dessus) pour éviter de le re-scanner en boucle,
+      // mais on n'y réinsère JAMAIS de photo — sinon un fichier retiré
+      // réapparaîtrait tout seul au prochain scan/redémarrage de l'app.
+      if (folderRow.is_hidden) continue
       photoStmt.run({
         folderId,
         filename: f.filename,

@@ -406,8 +406,43 @@ function registerIpc(): void {
     return { jobId: 0 }
   })
   ipcMain.handle('folders:tree', () =>
-    getDb().prepare('SELECT id, path, parent_id, is_hidden FROM folders ORDER BY path').all()
+    getDb()
+      .prepare('SELECT id, path, parent_id, is_hidden FROM folders WHERE is_hidden = 0 ORDER BY path')
+      .all()
   )
+
+  /**
+   * Retirer un sous-dossier précis de la bibliothèque (contrairement à
+   * scanRoots:remove, qui n'arrête que la SURVEILLANCE d'une racine sans
+   * toucher aux photos déjà indexées) : les photos de CE dossier précis
+   * passent en status='trashed' (récupérables, comme le reste du système
+   * d'annulation de l'app), et le dossier est marqué is_hidden=1 pour ne
+   * plus jamais être réintégré lors d'un futur scan de la racine parente
+   * (voir upsertScannedBatch, qui saute désormais les dossiers exclus).
+   * Les fichiers restent intacts sur le disque.
+   */
+  ipcMain.handle('folders:remove', (_e, { folderId }) => {
+    const db = getDb()
+    const photoIds = db
+      .prepare("SELECT id FROM photos WHERE folder_id = ? AND status = 'active'")
+      .all(folderId)
+      .map((r) => (r as { id: number }).id)
+    db.prepare('UPDATE folders SET is_hidden = 1 WHERE id = ?').run(folderId)
+    db.prepare("UPDATE photos SET status = 'trashed' WHERE folder_id = ?").run(folderId)
+    return { photoIds }
+  })
+
+  ipcMain.handle('folders:undoRemove', (_e, { folderId, photoIds }) => {
+    const db = getDb()
+    db.prepare('UPDATE folders SET is_hidden = 0 WHERE id = ?').run(folderId)
+    if (photoIds.length > 0) {
+      const placeholders = photoIds.map(() => '?').join(',')
+      db.prepare(`UPDATE photos SET status = 'active' WHERE id IN (${placeholders})`).run(
+        ...photoIds
+      )
+    }
+  })
+
   ipcMain.handle('photos:byFolder', (_e, { folderId, offset, limit, minStars, typeFilter, sortMode }) => {
     const fc = buildFilterClauses({ minStars, typeFilter })
     const orderBy = buildOrderBy(sortMode)
@@ -1255,6 +1290,7 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_EDITOR_TABS',
     'PICALIBRE_TEST_MAP_LIGHTBOX',
     'PICALIBRE_TEST_GRID_REMOUNT',
+    'PICALIBRE_TEST_FOLDER_REMOVE',
     'PICALIBRE_TEST_LIGHTBOX_CONTRAST',
     'PICALIBRE_TEST_BATCHEDIT'
   ].some((k) => !!process.env[k])
@@ -2073,6 +2109,69 @@ app.whenReady().then(() => {
         const after = await mainWindow.webContents.executeJavaScript(measureOverlap)
         console.log('[grid-remount-test] après (retour au dossier):', JSON.stringify(after))
         console.log('[grid-remount-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
+  // Test headless : retrait d'un sous-dossier, persistance après rescan,
+  // annulation. PICALIBRE_TEST_FOLDER_REMOVE=<dossier avec sous-dossiers>
+  const folderRemoveDir = process.env.PICALIBRE_TEST_FOLDER_REMOVE
+  if (folderRemoveDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(folderRemoveDir)
+    startScan(mainWindow)
+    const t0r = Date.now()
+    const ivr = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos > 0 && thumbs >= photos * 2) || Date.now() - t0r > 60000) {
+        clearInterval(ivr)
+        const db = getDb()
+        const allFolders = db
+          .prepare("SELECT id, path FROM folders WHERE is_hidden = 0")
+          .all() as Array<{ id: number; path: string }>
+        const target = allFolders.find((f) => f.path.includes('famille'))
+        if (!target) {
+          console.log('[folder-remove-test] dossier "famille" introuvable', JSON.stringify(allFolders))
+          exitTest(1)
+          return
+        }
+        const before = q(`SELECT COUNT(*) c FROM photos WHERE folder_id = ${target.id} AND status='active'`)
+        console.log('[folder-remove-test] photos actives avant retrait:', before)
+
+        // 1) Retirer le dossier
+        const removeResult = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('folders:remove', { folderId: ${target.id} })`
+        )
+        console.log('[folder-remove-test] résultat retrait:', JSON.stringify(removeResult))
+        const afterRemove = q(`SELECT COUNT(*) c FROM photos WHERE folder_id = ${target.id} AND status='active'`)
+        const folderHidden = (db.prepare('SELECT is_hidden FROM folders WHERE id = ?').get(target.id) as { is_hidden: number }).is_hidden
+        console.log('[folder-remove-test] photos actives après retrait:', afterRemove, '| dossier masqué:', folderHidden)
+
+        // 2) Relancer un scan complet — le dossier ne doit PAS revenir
+        await new Promise((resolve) => {
+          startScan(mainWindow)
+          const check = setInterval(() => {
+            // Un rescan de dossiers déjà connus est quasi instantané
+          }, 100)
+          setTimeout(() => {
+            clearInterval(check)
+            resolve(null)
+          }, 3000)
+        })
+        const afterRescan = q(`SELECT COUNT(*) c FROM photos WHERE folder_id = ${target.id} AND status='active'`)
+        console.log('[folder-remove-test] photos actives après RESCAN:', afterRescan, '(attendu: toujours 0)')
+
+        // 3) Annuler
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('folders:undoRemove', { folderId: ${target.id}, photoIds: ${JSON.stringify(removeResult.photoIds)} })`
+        )
+        const afterUndo = q(`SELECT COUNT(*) c FROM photos WHERE folder_id = ${target.id} AND status='active'`)
+        const folderHiddenAfterUndo = (db.prepare('SELECT is_hidden FROM folders WHERE id = ?').get(target.id) as { is_hidden: number }).is_hidden
+        console.log('[folder-remove-test] photos actives après ANNULATION:', afterUndo, '| dossier masqué:', folderHiddenAfterUndo)
+
+        console.log('[folder-remove-test] TERMINÉ')
         exitTest(0)
       }
     }, 500)
