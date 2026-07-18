@@ -1445,6 +1445,28 @@ app.whenReady().then(() => {
         )
         console.log('[map-lightbox-test]', JSON.stringify(probe))
 
+        // Vérification directe de la couleur CSS calculée (pas de l'analyse
+        // de pixels) sur la barre d'aide du bas de la Lightbox — AVANT
+        // d'ouvrir l'éditeur, qui remplace tout le DOM de la Lightbox
+        const footerProbe = await mainWindow.webContents.executeJavaScript(
+          `(() => {
+            const bars = [...document.querySelectorAll('div')].filter(d =>
+              d.children.length === 0 && d.textContent.includes('Échap') && d.textContent.includes('fermer')
+            )
+            if (bars.length === 0) return { found: false }
+            const bar = bars[bars.length - 1]
+            const style = getComputedStyle(bar)
+            return {
+              found: true,
+              text: bar.textContent,
+              color: style.color,
+              backgroundColor: style.backgroundColor,
+              fontSize: style.fontSize
+            }
+          })()`
+        )
+        console.log('[map-lightbox-test] footer CSS:', JSON.stringify(footerProbe))
+
         // Ouvrir l'éditeur depuis la Lightbox (scénario signalé : la carte
         // reprenait le premier plan à l'ouverture de l'éditeur)
         await mainWindow.webContents.executeJavaScript(
