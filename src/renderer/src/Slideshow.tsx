@@ -181,7 +181,7 @@ export default function Slideshow({
         position: 'fixed',
         inset: 0,
         background: '#000',
-        zIndex: 200,
+        zIndex: 1010,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

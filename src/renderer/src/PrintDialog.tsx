@@ -80,7 +80,7 @@ export default function PrintDialog({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 250,
+        zIndex: 1040,
         background: '#0f172acc',
         display: 'flex',
         alignItems: 'center',

@@ -585,7 +585,21 @@ export default function Editor({
   })
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#111418', display: 'flex', zIndex: 100, color: '#e2e8f0' }}>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: '#111418',
+        display: 'flex',
+        // 1060 : même cause que le bug de la Lightbox (z-index 90→1050) —
+        // l'éditeur (100) était lui aussi plus bas que les overlays de
+        // MapView (jusqu'à 1000), donc caché derrière la carte en éditant
+        // une photo ouverte depuis la vue Carte. Toujours au-dessus de la
+        // Lightbox (1050) au cas où les deux seraient montées ensemble.
+        zIndex: 1060,
+        color: '#e2e8f0'
+      }}
+    >
       {/* -------- Panneau outils -------- */}
       <aside
         style={{

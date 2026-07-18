@@ -3,6 +3,33 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.19.5] — 2026-07-18
+
+### Corrigé — l'éditeur (et d'autres vues) repassait derrière la Carte
+- Signalé par Laurent : depuis la Carte, sélectionner une photo puis
+  cliquer « Éditer » faisait revenir la carte au premier plan,
+  recouvrant l'éditeur — impossible d'éditer quoi que ce soit.
+- **Même cause que le bug de la Lightbox (2.19.2), mais plus large** :
+  en vérifiant tous les composants plein écran de l'app, la quasi
+  totalité avait un z-index inférieur aux overlays internes de MapView
+  (jusqu'à 1000) — l'Éditeur (100), le Diaporama (200), le Créateur de
+  film (200), le Collage (150), l'Impression (250), le Centre d'aide
+  (300), la Visite guidée (400), et plusieurs dialogues d'App.tsx
+  (renommage/export en lot, écran de veille, glisser-déposer, toast
+  d'annulation — 200 à 260). Un oubli systémique plutôt qu'un cas
+  isolé : les overlays de MapView avaient reçu des valeurs élevées sans
+  jamais être comparées au reste de l'app.
+- **Correctif** : tous ces composants passent à une échelle cohérente
+  au-dessus de 1000 (1005 à 1090 selon le composant), garantissant
+  qu'aucun ne puisse plus se retrouver caché derrière la Carte — ni les
+  uns derrière les autres dans un ordre imprévisible.
+
+### Vérifié (Xvfb + Electron réel, scénario exact signalé)
+- Carte → sélection d'une photo → Éditer : l'élément réellement au
+  premier plan à l'endroit du panneau de l'éditeur (vérifié par un vrai
+  test de positionnement du navigateur, `elementFromPoint`) est bien le
+  panneau de l'éditeur, pas la carte.
+
 ## [2.19.4] — 2026-07-18
 
 ### Amélioré — contraste complémentaire dans la Lightbox

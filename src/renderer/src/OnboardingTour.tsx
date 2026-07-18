@@ -84,7 +84,7 @@ export default function OnboardingTour({ onFinish }: { onFinish: () => void }): 
     : { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 400, pointerEvents: 'none' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1090, pointerEvents: 'none' }}>
       {/* Voile sombre avec découpe autour de l'élément ciblé */}
       <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0 }}>
         <defs>

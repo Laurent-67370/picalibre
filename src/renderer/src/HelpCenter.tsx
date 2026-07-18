@@ -40,7 +40,7 @@ export default function HelpCenter({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 300,
+        zIndex: 1080,
         background: 'var(--overlay)',
         display: 'flex',
         alignItems: 'center',

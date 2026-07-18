@@ -1444,6 +1444,31 @@ app.whenReady().then(() => {
           })()`
         )
         console.log('[map-lightbox-test]', JSON.stringify(probe))
+
+        // Ouvrir l'éditeur depuis la Lightbox (scénario signalé : la carte
+        // reprenait le premier plan à l'ouverture de l'éditeur)
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('Éditer')); if (b) b.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 1000))
+        const editorProbe = await mainWindow.webContents.executeJavaScript(
+          `(() => {
+            const canvas = document.querySelector('main canvas[style*="cursor"]') || document.querySelector('aside + main canvas')
+            const editorAside = [...document.querySelectorAll('aside')].find(a => a.textContent.includes('Bibliothèque'))
+            if (!editorAside) return { editorFound: false }
+            const rect = editorAside.getBoundingClientRect()
+            const cx = rect.left + rect.width / 2
+            const cy = rect.top + 20
+            const topElement = document.elementFromPoint(cx, cy)
+            const isMapOnTop = !!(topElement && topElement.closest('.leaflet-container'))
+            return {
+              editorFound: true,
+              topElementIsMap: isMapOnTop,
+              topElementInEditor: !!(topElement && topElement.closest('aside')?.textContent.includes('Bibliothèque'))
+            }
+          })()`
+        )
+        console.log('[map-lightbox-test] editor:', JSON.stringify(editorProbe))
         console.log('[map-lightbox-test] TERMINÉ')
         exitTest(0)
       }

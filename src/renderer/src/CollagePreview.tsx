@@ -195,7 +195,7 @@ export default function CollagePreview({
         position: 'fixed',
         inset: 0,
         background: '#0b1220f2',
-        zIndex: 150,
+        zIndex: 1030,
         display: 'flex',
         flexDirection: 'column'
       }}

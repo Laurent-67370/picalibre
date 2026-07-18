@@ -284,7 +284,7 @@ export default function FaceMovie({
         position: 'fixed',
         inset: 0,
         background: '#000',
-        zIndex: 200,
+        zIndex: 1020,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

@@ -1085,7 +1085,7 @@ export default function App(): JSX.Element {
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 200,
+            zIndex: 1005,
             background: '#0f172aee',
             display: 'flex',
             alignItems: 'center',
@@ -2120,7 +2120,7 @@ export default function App(): JSX.Element {
           onMouseMove={() => setScreensaverActive(false)}
           onClick={() => setScreensaverActive(false)}
           onKeyDown={() => setScreensaverActive(false)}
-          style={{ position: 'fixed', inset: 0, zIndex: 300, cursor: 'none' }}
+          style={{ position: 'fixed', inset: 0, zIndex: 1045, cursor: 'none' }}
         >
           <Slideshow
             photos={photosRef.current}
@@ -2189,7 +2189,7 @@ export default function App(): JSX.Element {
             bottom: 74,
             left: '50%',
             transform: 'translateX(-50%)',
-            zIndex: 260,
+            zIndex: 1072,
             display: 'flex',
             alignItems: 'center',
             gap: 12,
@@ -2372,7 +2372,7 @@ export default function App(): JSX.Element {
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 250,
+            zIndex: 1070,
             background: '#0f172acc',
             display: 'flex',
             alignItems: 'center',
@@ -2444,7 +2444,7 @@ export default function App(): JSX.Element {
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 250,
+            zIndex: 1071,
             background: '#0f172acc',
             display: 'flex',
             alignItems: 'center',
@@ -2535,7 +2535,7 @@ export default function App(): JSX.Element {
             bottom: 0,
             left: 0,
             right: 0,
-            zIndex: 240,
+            zIndex: 1073,
             background: 'var(--bg-elevated)',
             borderTop: '1px solid var(--border)',
             padding: '10px 16px',
