@@ -22,6 +22,14 @@ export const HELP_TOPICS: HelpTopic[] = [
     body: `Fichier → Ajouter un dossier à scanner (Ctrl/⌘+O), ou le bouton « + Ajouter un dossier » en haut de la barre latérale. Le dossier est ensuite surveillé en continu : tout nouveau fichier y apparaissant est automatiquement ajouté à la bibliothèque, sans avoir à relancer de scan manuellement.`
   },
   {
+    id: 'remove-folder',
+    category: 'Démarrer',
+    title: 'Retirer ou modifier un dossier surveillé',
+    keywords: ['retirer', 'supprimer', 'enlever', 'modifier', 'éditer', 'dossier', 'exclure'],
+    body: `Réglages → « Dossiers surveillés » liste tous les dossiers ajoutés. Pour chacun : le menu déroulant change le mode (Surveillé = ajout automatique des nouveaux fichiers, Une fois = scanné une seule fois puis ignoré, Exclu = mis de côté sans être supprimé), et le bouton 🗑 le retire de la bibliothèque. Retirer un dossier ne supprime jamais les fichiers sur le disque — seules leurs entrées dans PicaLibre disparaissent. Pour changer le chemin surveillé (déplacement du dossier par exemple), retire l'ancien puis ajoute le nouveau.`,
+    action: { label: 'Ouvrir les Réglages', view: 'settings' }
+  },
+  {
     id: 'import-sd',
     category: 'Démarrer',
     title: 'Importer depuis une carte SD ou un appareil photo',
