@@ -20,6 +20,7 @@ import { pathToFileURL } from 'node:url'
 import { join, dirname, basename, extname } from 'node:path'
 import { writeFile, access, rename as fsRename } from 'node:fs/promises'
 import sharp from 'sharp'
+import { resolveHeicInput } from '../shared/heic'
 import { initDb, getDb } from './db'
 import { getEditState, saveStack, undo, redo } from './services/edits'
 import { initAutoUpdate, installUpdate } from './services/updater'
@@ -124,7 +125,8 @@ async function generateThumbOnTheFly(
       return null
     }
 
-    await sharp(filepath, { failOn: 'none' })
+    const input = await resolveHeicInput(filepath)
+    await sharp(input, { failOn: 'none' })
       .rotate()
       .resize(size, size, { fit: 'inside', withoutEnlargement: true })
       .webp({ quality: 82 })
@@ -138,7 +140,7 @@ async function generateThumbOnTheFly(
 
     // Si on génère du 256, on en profite pour mettre à jour width/height
     if (size === 256) {
-      const meta = await sharp(filepath).metadata()
+      const meta = await sharp(input).metadata()
       getDb()
         .prepare(
           `UPDATE photos SET width = COALESCE(?, width), height = COALESCE(?, height) WHERE id = ?`

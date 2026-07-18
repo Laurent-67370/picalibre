@@ -16,6 +16,7 @@ import { mkdir, access, unlink } from 'node:fs/promises'
 import { join, dirname, extname } from 'node:path'
 import { cpus, tmpdir } from 'node:os'
 import { exiftool } from 'exiftool-vendored'
+import { resolveHeicInput } from '../shared/heic'
 
 const SIZES = [256, 1024] as const
 const QUALITY = 82
@@ -90,12 +91,14 @@ async function processItem(item: ThumbItem, cacheDir: string): Promise<ThumbResu
   const ext = extname(item.filepath).toLowerCase()
   const needsFallback = RAW_PSD_EXT.has(ext)
 
-  let sourcePath = item.filepath
+  // sharp() accepte un chemin (string) ou un Buffer indifféremment — pour
+  // HEIC on lui donne directement le JPEG décodé par heic-convert.
+  let sourceInput: string | Buffer = await resolveHeicInput(item.filepath)
   let tmpPreview: string | null = null
 
   try {
     // .rotate() sans argument applique l'orientation EXIF
-    let base = sharp(sourcePath, { failOn: 'none' }).rotate()
+    let base = sharp(sourceInput, { failOn: 'none' }).rotate()
     let meta: sharp.Metadata
     try {
       meta = await base.metadata()
@@ -112,10 +115,10 @@ async function processItem(item: ThumbItem, cacheDir: string): Promise<ThumbResu
     // vide silencieux selon la version de libvips), c'est qu'il ne supporte
     // pas ce format → fallback exiftool pour extraire la preview embarquée
     if ((!meta.width || !meta.height) && needsFallback) {
-      tmpPreview = await extractEmbeddedPreview(sourcePath, item.photoId)
+      tmpPreview = await extractEmbeddedPreview(item.filepath, item.photoId)
       if (tmpPreview) {
-        sourcePath = tmpPreview
-        base = sharp(sourcePath, { failOn: 'none' }).rotate()
+        sourceInput = tmpPreview
+        base = sharp(sourceInput, { failOn: 'none' }).rotate()
         meta = await base.metadata()
       }
     }

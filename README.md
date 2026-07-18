@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.14.2-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.15.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -9,6 +9,14 @@ Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 (Google, 2002–2016). Electron + React + TypeScript + SQLite — 100 % local, aucun cloud.
 
 📄 [Politique de signature de code](CODE_SIGNING.md) — comment les installeurs sont signés et comment vérifier leur intégrité.
+
+## 🆕 Quoi de neuf en 2.15.0
+
+- 📷 **Vrai support HEIC** (photos iPhone) : sharp/libvips ne décodait pas
+  ce format malgré l'extension reconnue — import silencieusement cassé
+  jusqu'ici. Décodage plein résolution via `heic-convert` (WASM, aucune
+  dépendance système). Vérifié avec un vrai fichier iPhone : miniatures,
+  édition et export tous confirmés fonctionnels.
 
 ## 🆕 Quoi de neuf en 2.14.2
 

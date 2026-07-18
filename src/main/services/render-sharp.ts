@@ -28,6 +28,7 @@ import {
   hexToSvgFill,
   TiltShiftParams
 } from '../../shared/edit-engine'
+import { resolveHeicInput } from '../../shared/heic'
 
 export interface ExportOptions {
   format?: 'jpeg' | 'webp' | 'png'
@@ -42,9 +43,10 @@ export async function renderEdited(
   opts: ExportOptions = {}
 ): Promise<Buffer> {
   const { format = 'jpeg', quality = 92, maxSize, watermark } = opts
+  const input = await resolveHeicInput(filepath)
 
   // Passe 1 : orientation EXIF + redressement
-  let pass1 = sharp(filepath, { failOn: 'none' }).rotate()
+  let pass1 = sharp(input, { failOn: 'none' }).rotate()
   const angle = straightenAngle(stack)
   if (angle !== 0) {
     pass1 = pass1.rotate(angle, { background: { r: 0, g: 0, b: 0 } })

@@ -3,6 +3,39 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.15.0] — 2026-07-18
+
+### Ajouté — vrai support HEIC (photos iPhone)
+- **Cause racine confirmée** : sharp/libvips (distribution npm standard)
+  ne décode PAS le HEIC — vérifié directement via `sharp.format.heif` :
+  `fileSuffix` ne liste que `.avif`, jamais `.heic`. libheif+HEVC est
+  absent des binaires précompilés (licence des brevets HEVC, contrairement
+  à AVIF/AV1 qui est libre de droits). L'extension `.heic` était pourtant
+  déjà reconnue par le scanner → import silencieusement cassé pour toute
+  photo iPhone au format par défaut depuis iOS 11.
+- **Correctif** : `heic-convert` (libheif-js, WASM pur, zéro dépendance
+  système, identique sur les 3 OS sans compilation native) décode le
+  fichier en entier — pleine résolution, pas juste une preview basse
+  qualité comme le fallback RAW/PSD existant. Nouvel utilitaire partagé
+  `src/shared/heic.ts`, branché aux 3 points d'entrée réels : génération
+  de miniatures en masse, génération à la volée, et `renderEdited()` —
+  cette dernière couvrant à elle seule tout l'aval (éditeur, export,
+  export groupé, email, fond d'écran, blog, collage, film).
+
+### Vérifié avec un vrai fichier iPhone (pas un test synthétique)
+- Fichier HEIC authentique (ISO Media, HEIF HEVC Main Profile, 2,99 Mo)
+  téléchargé depuis un dépôt public.
+- Décodage direct : 3992×2992px en 2,5 s.
+- Scan complet via l'app réelle (Xvfb + Electron) : pipeline OK, photo
+  correctement enregistrée en base (dimensions exactes), miniatures
+  256/1024 générées (23 974 couleurs distinctes — image réelle, pas
+  cassée/vide).
+- Export simple : résolution d'origine préservée à l'identique.
+- Export avec édition réelle (sépia + vignette + recadrage) :
+  redimensionnement et recadrage corrects, écart mesurable de 39,4/pixel
+  vs l'original confirmant que l'édition s'applique bien au contenu HEIC
+  décodé (pas un passage muet).
+
 ## [2.14.2] — 2026-07-17
 
 ### Corrigé — Contraste du texte dans l'éditeur
