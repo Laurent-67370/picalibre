@@ -3,6 +3,14 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.19.1] — 2026-07-18
+
+### Ajouté — sujet d'aide manquant
+- « Retirer ou modifier un dossier surveillé » (Réglages → mode
+  Surveillé/Une fois/Exclu + suppression) — la fonctionnalité existait
+  déjà, seul le sujet d'aide manquait. Cherchable via « retirer »,
+  « supprimer » ou « dossier » dans le centre d'aide (❓ / F1).
+
 ## [2.19.0] — 2026-07-18
 
 ### Refait — panneau de l'éditeur, trop long à faire défiler
