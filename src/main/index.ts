@@ -2221,14 +2221,21 @@ app.whenReady().then(() => {
         await mainWindow.webContents.executeJavaScript(
           `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }))`
         )
-        // Vérifier à 100ms (bien avant la fin du fondu à 600ms) que le
-        // calque qui s'estompe encore n'a PAS sauté vers d'autres paramètres
+        // Deux mesures à des instants différents PENDANT le fondu (600ms) :
+        // le calque sortant doit continuer à évoluer (pas figé, pas de
+        // saut), preuve que son animation n'est plus interrompue.
         await new Promise((r) => setTimeout(r, 100))
-        const duringFade = await mainWindow.webContents.executeJavaScript(`(() => {
+        const t1 = await mainWindow.webContents.executeJavaScript(`(() => {
           const imgs = [...document.querySelectorAll('img')].filter(d => d.style && d.style.transform)
           return imgs.map(d => ({ opacity: d.style.opacity, transform: d.style.transform }))
         })()`)
-        console.log('[slideshow-test] calques pendant le fondu (100ms):', JSON.stringify(duringFade))
+        await new Promise((r) => setTimeout(r, 300))
+        const t2 = await mainWindow.webContents.executeJavaScript(`(() => {
+          const imgs = [...document.querySelectorAll('img')].filter(d => d.style && d.style.transform)
+          return imgs.map(d => ({ opacity: d.style.opacity, transform: d.style.transform }))
+        })()`)
+        console.log('[slideshow-test] calques à 100ms:', JSON.stringify(t1))
+        console.log('[slideshow-test] calques à 400ms:', JSON.stringify(t2))
         console.log('[slideshow-test] TERMINÉ')
         exitTest(0)
       }

@@ -10,12 +10,25 @@ import type { PhotoRow } from '@shared/ipc'
  * - Lecture/pause, navigation manuelle (flèches gauche/droite, espace)
  * - Utilise les miniatures 1024px (thumb://library/1024/{photoId})
  * - Parcourt les photos actuellement filtrées (celles dans la grille)
+ *
+ * Chaque calque porte SA PROPRE animation (kenBurns + startTime) — ni
+ * l'un ni l'autre ne dépend d'un état partagé. Le fondu (crossfade)
+ * n'est qu'un changement d'opacité ; le mouvement (zoom/pan) de chaque
+ * calque continue sans interruption qu'il soit actif ou en train de
+ * s'estomper, exactement comme un vrai diaporama Ken Burns à deux
+ * calques (Picasa, iPhoto…). Avant cette refonte, un seul état
+ * kenBurns/progress était partagé entre les deux calques et le calque
+ * inactif retombait à `scale(1)` dès qu'il cessait d'être actif — un
+ * saut visible juste au moment où le fondu démarrait.
  */
 
-/** Un calque d'image pour le crossfade — deux calques alternent. */
+/** Un calque d'image pour le crossfade — deux calques alternent, chacun
+ * avec sa propre animation, indépendante de l'autre calque. */
 interface SlideLayer {
   photoIndex: number
   loaded: boolean
+  kenBurns: KenBurnsParams
+  startTime: number // performance.now() du démarrage de CE calque
 }
 
 /** Paramètre d'animation Ken Burns prégénéré par photo. */
@@ -36,8 +49,6 @@ function generateKenBurns(seed: number): KenBurnsParams {
   const rand2 = h / 233280
   h = (h * 9301 + 49297) % 233280
   const rand3 = h / 233280
-  h = (h * 9301 + 49297) % 233280
-  const rand4 = h / 233280
 
   // Zoom de 1.0→1.15 ou 1.15→1.0 (direction aléatoire)
   const zoomIn = rand1 > 0.5
@@ -52,7 +63,7 @@ function generateKenBurns(seed: number): KenBurnsParams {
 }
 
 const DEFAULT_DURATION = 5 // secondes par photo
-const CROSSFADE_MS = 600 // durée du fondu
+const CROSSFADE_MS = 600 // durée du fondu (opacité uniquement)
 const MIN_DURATION = 2
 const MAX_DURATION = 15
 
@@ -66,80 +77,85 @@ export default function Slideshow({
   const [index, setIndex] = useState(0)
   const [playing, setPlaying] = useState(true)
   const [duration, setDuration] = useState(DEFAULT_DURATION)
-  const [progress, setProgress] = useState(0) // 0..1 progression dans la photo courante
-  const [kenBurns, setKenBurns] = useState<KenBurnsParams>(() => generateKenBurns(photos[0]?.id ?? 0))
+  const [, forceRender] = useState(0) // force un re-render à chaque frame (rAF)
 
-  // Deux calques pour le crossfade
+  // Deux calques pour le crossfade, chacun avec sa propre animation
   const [layers, setLayers] = useState<SlideLayer[]>([
-    { photoIndex: 0, loaded: false },
-    { photoIndex: -1, loaded: false }
+    {
+      photoIndex: 0,
+      loaded: false,
+      kenBurns: generateKenBurns(photos[0]?.id ?? 0),
+      startTime: performance.now()
+    },
+    { photoIndex: -1, loaded: false, kenBurns: generateKenBurns(0), startTime: 0 }
   ])
   const [activeLayer, setActiveLayer] = useState(0) // 0 ou 1
 
   const rafRef = useRef<number>(0)
-  const startTimeRef = useRef<number>(0)
-  const transitioningRef = useRef<boolean>(false)
   const indexRef = useRef(0)
   const playingRef = useRef(true)
   const durationRef = useRef(DEFAULT_DURATION)
+  const activeLayerRef = useRef(0)
+  const layersRef = useRef(layers)
+  const advancingRef = useRef(false) // anti-rebond (rAF + flèche simultanées)
 
   indexRef.current = index
   playingRef.current = playing
   durationRef.current = duration
+  activeLayerRef.current = activeLayer
+  layersRef.current = layers
 
   const next = useCallback(
     (delta: number) => {
       const n = photos.length
       if (n === 0) return
       const newIndex = (indexRef.current + delta + n) % n
-      transitioningRef.current = true
+      const nextLayerIdx = activeLayerRef.current === 0 ? 1 : 0
+      const now = performance.now()
 
-      // Crossfade : charger la nouvelle image sur l'autre calque
-      const nextLayer = activeLayer === 0 ? 1 : 0
+      // Le nouveau calque démarre SA PROPRE animation immédiatement — il
+      // commence à zoomer/panoramiquer dès qu'il devient actif, sans
+      // attendre la fin du fondu. Le calque sortant garde le sien intact
+      // (kenBurns/startTime jamais touchés ici) : il continue son
+      // mouvement sans interruption pendant qu'il s'estompe.
       setLayers((prev) => {
         const updated = [...prev]
-        updated[nextLayer] = { photoIndex: newIndex, loaded: false }
+        updated[nextLayerIdx] = {
+          photoIndex: newIndex,
+          loaded: false,
+          kenBurns: generateKenBurns(photos[newIndex]?.id ?? 0),
+          startTime: now
+        }
         return updated
       })
-
-      // Après le crossfade, basculer le calque actif ET SEULEMENT
-      // MAINTENANT réinitialiser kenBurns/progress pour la nouvelle photo.
-      // Avant ce correctif, kenBurns était réécrit dès le DÉBUT du fondu :
-      // la photo encore visible à l'écran (calque actif, en train de
-      // s'estomper) utilise la MÊME variable kenBurns pour son transform —
-      // elle sautait donc instantanément vers les paramètres (échelle/
-      // position de départ) d'une animation qui n'est pas la sienne,
-      // provoquant un « retour en arrière » visible juste avant le fondu.
-      setTimeout(() => {
-        setActiveLayer(nextLayer)
-        setIndex(newIndex)
-        setKenBurns(generateKenBurns(photos[newIndex]?.id ?? 0))
-        setProgress(0)
-        startTimeRef.current = performance.now()
-        transitioningRef.current = false
-      }, CROSSFADE_MS)
+      setActiveLayer(nextLayerIdx)
+      setIndex(newIndex)
     },
-    [photos, activeLayer]
+    [photos]
   )
 
-  // Boucle d'animation : Ken Burns + progression + auto-advance
+  // Boucle d'animation : force un re-render chaque frame (chaque calque
+  // recalcule sa propre progression à partir de son propre startTime, voir
+  // layerProgress()) et déclenche l'avance automatique quand le calque
+  // actif a fini sa durée.
   useEffect(() => {
-    const tick = (now: number): void => {
-      if (playingRef.current && !transitioningRef.current) {
-        const elapsed = (now - startTimeRef.current) / 1000
-        const dur = durationRef.current
-        const p = Math.min(1, elapsed / dur)
-        setProgress(p)
-
-        if (p >= 1) {
-          // Auto-advance
-          startTimeRef.current = now
+    const tick = (): void => {
+      forceRender((t) => (t + 1) % 1_000_000)
+      if (playingRef.current && !advancingRef.current) {
+        const active = layersRef.current[activeLayerRef.current]
+        const elapsed = (performance.now() - active.startTime) / 1000
+        if (elapsed >= durationRef.current) {
+          advancingRef.current = true
           next(1)
+          // Laisse une frame se dérouler avant de réarmer, pour ne pas
+          // redéclencher next() plusieurs fois sur la même transition.
+          requestAnimationFrame(() => {
+            advancingRef.current = false
+          })
         }
       }
       rafRef.current = requestAnimationFrame(tick)
     }
-    startTimeRef.current = performance.now()
     rafRef.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(rafRef.current)
   }, [next])
@@ -159,12 +175,6 @@ export default function Slideshow({
     return () => window.removeEventListener('keydown', onKey)
   }, [next, onClose])
 
-  // Reset timer quand on change la durée
-  useEffect(() => {
-    startTimeRef.current = performance.now()
-    setProgress(0)
-  }, [duration])
-
   if (photos.length === 0) return <></>
 
   /** Calcule le style transform pour l'effet Ken Burns. */
@@ -175,7 +185,14 @@ export default function Slideshow({
     return `scale(${scale.toFixed(4)}) translate(${tx.toFixed(2)}%, ${ty.toFixed(2)}%)`
   }
 
+  /** Progression 0..1 propre à CE calque, indépendante de l'autre. */
+  const layerProgress = (layer: SlideLayer): number => {
+    const elapsed = (performance.now() - layer.startTime) / 1000
+    return Math.min(1, Math.max(0, elapsed / durationRef.current))
+  }
+
   const currentPhoto = photos[index]
+  const displayProgress = layerProgress(layers[activeLayer])
 
   return (
     <div
@@ -218,7 +235,7 @@ export default function Slideshow({
           objectFit: 'contain' as const,
           opacity: activeLayer === 0 && layers[0].loaded ? 1 : 0,
           transition: `opacity ${CROSSFADE_MS}ms ease-in-out`,
-          transform: activeLayer === 0 ? kenBurnsTransform(kenBurns, progress) : 'scale(1)',
+          transform: kenBurnsTransform(layers[0].kenBurns, layerProgress(layers[0])),
           transformOrigin: 'center center',
           willChange: 'transform, opacity'
         }}
@@ -245,7 +262,7 @@ export default function Slideshow({
           objectFit: 'contain' as const,
           opacity: activeLayer === 1 && layers[1].loaded ? 1 : 0,
           transition: `opacity ${CROSSFADE_MS}ms ease-in-out`,
-          transform: activeLayer === 1 ? kenBurnsTransform(kenBurns, progress) : 'scale(1)',
+          transform: kenBurnsTransform(layers[1].kenBurns, layerProgress(layers[1])),
           transformOrigin: 'center center',
           willChange: 'transform, opacity'
         }}
@@ -266,7 +283,7 @@ export default function Slideshow({
           style={{
             height: '100%',
             background: 'var(--accent)',
-            width: `${progress * 100}%`,
+            width: `${displayProgress * 100}%`,
             transition: playing ? 'none' : 'width 0.2s ease'
           }}
         />

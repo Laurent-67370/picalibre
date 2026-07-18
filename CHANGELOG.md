@@ -3,6 +3,32 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.20.3] — 2026-07-18
+
+### Amélioré — transition du diaporama plus fluide
+- Laurent, après le correctif du saut (2.20.2) : « ça pourrait être plus
+  fluide ». En creusant plus loin, un second problème (plus discret) :
+  seul le calque « actif » recevait l'animation Ken Burns — le calque
+  qui devenait inactif retombait instantanément à l'échelle 1 (figée)
+  exactement au moment où le fondu démarrait, et le calque entrant
+  attendait la fin du fondu avant de commencer son propre mouvement.
+- **Refonte** : chaque calque porte désormais sa propre animation
+  (paramètres + horodatage de départ), totalement indépendante de
+  l'autre. Le fondu redevient un pur changement d'opacité par-dessus
+  deux animations qui continuent chacune leur mouvement sans
+  interruption — le calque sortant garde son zoom/panoramique jusqu'au
+  bout, le calque entrant démarre le sien dès qu'il devient actif,
+  exactement comme un diaporama Ken Burns à deux calques classique
+  (Picasa, iPhoto…).
+
+### Vérifié (Xvfb + Electron réel, mesures à 2 instants pendant le fondu)
+- Calque sortant : `scale(1.1009)` à 100 ms puis `scale(1.0921)` à
+  400 ms — évolution continue et douce, confirmée (ni gel, ni saut).
+- Calque entrant : `scale(1.1468)` à 100 ms puis `scale(1.138)` à
+  400 ms — anime déjà sa propre trajectoire dès son apparition, pas
+  figé à l'échelle 1. Pipeline de scan et parité WebGL : aucune
+  régression.
+
 ## [2.20.2] — 2026-07-18
 
 ### Corrigé — le diaporama sautait en arrière juste avant chaque transition
