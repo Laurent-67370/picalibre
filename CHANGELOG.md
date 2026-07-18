@@ -3,6 +3,29 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.19.2] — 2026-07-18
+
+### Corrigé — la photo ouverte depuis la Carte restait cachée derrière elle
+- Signalé par Laurent avec capture d'écran : cliquer un marqueur sur la
+  Carte ouvrait bien la Lightbox, mais celle-ci restait visuellement
+  **derrière** la carte.
+- **Cause** : la Lightbox utilisait `z-index: 90` — plus bas que les
+  propres overlays de la vue Carte (jusqu'à `z-index: 1000` pour la
+  bannière « pas de connexion »), et même plus bas que l'éditeur photo
+  (100). Un simple oubli lors de l'ajout de ces overlays, jamais
+  remarqué avant faute d'avoir testé l'ouverture d'une photo précisément
+  depuis la Carte.
+- **Correctif** : `z-index: 1050`, confortablement au-dessus de tous les
+  éléments actuels de l'app (le plus haut jusqu'ici : 1000).
+
+### Vérifié (Xvfb + Electron réel)
+- Photo géolocalisée, Carte ouverte, marqueur cliqué : l'élément
+  réellement au premier plan à cet endroit (vérifié par un vrai test de
+  positionnement du navigateur — `elementFromPoint`, pas juste une
+  lecture de la propriété CSS) est bien l'image de la Lightbox, pas la
+  carte. Non-régression confirmée sur l'ouverture normale depuis la
+  grille.
+
 ## [2.19.1] — 2026-07-18
 
 ### Ajouté — sujet d'aide manquant

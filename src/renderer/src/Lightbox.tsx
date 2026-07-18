@@ -193,7 +193,12 @@ export default function Lightbox({
         position: 'fixed',
         inset: 0,
         background: '#0b1220f2',
-        zIndex: 90,
+        // 1050 : au-dessus de tout le reste de l'app, y compris les
+        // overlays de MapView (jusqu'à 1000, bannière « pas de connexion »)
+        // et les panneaux/contrôles internes de Leaflet — la Lightbox
+        // ouverte depuis la Carte se retrouvait sinon visuellement
+        // derrière la carte (z-index 90 auparavant, plus bas que tout).
+        zIndex: 1050,
         display: 'flex',
         flexDirection: 'column'
       }}

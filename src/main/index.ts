@@ -1253,6 +1253,7 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_VIDEO_PLAYBACK',
     'PICALIBRE_TEST_VIDEO_FEATURES',
     'PICALIBRE_TEST_EDITOR_TABS',
+    'PICALIBRE_TEST_MAP_LIGHTBOX',
     'PICALIBRE_TEST_BATCHEDIT'
   ].some((k) => !!process.env[k])
   if (!isTestMode) {
@@ -1385,7 +1386,70 @@ app.whenReady().then(() => {
     }, 6000)
   }
 
-  // Mode capture : scanne, sélectionne le 1er dossier, capture la fenêtre en PNG, quitte.
+  // Test headless : la Lightbox ouverte depuis la Carte doit passer AU-DESSUS
+  // de la carte (bug signalé : z-index trop bas, photo cachée derrière).
+  // PICALIBRE_TEST_MAP_LIGHTBOX=<dossier>
+  const mapLightboxDir = process.env.PICALIBRE_TEST_MAP_LIGHTBOX
+  if (mapLightboxDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(mapLightboxDir)
+    startScan(mainWindow)
+    const t0m = Date.now()
+    const ivm = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos > 0 && thumbs >= photos * 2) || Date.now() - t0m > 60000) {
+        clearInterval(ivm)
+        const db = getDb()
+        const first = db
+          .prepare("SELECT id FROM photos WHERE status='active' ORDER BY id LIMIT 1")
+          .get() as { id: number } | undefined
+        if (!first) {
+          exitTest(1)
+          return
+        }
+        // Géolocaliser manuellement (pas besoin d'EXIF GPS pour ce test)
+        db.prepare('UPDATE photos SET gps_lat = ?, gps_lon = ? WHERE id = ?').run(
+          48.8566,
+          2.3522,
+          first.id
+        )
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Carte')); if (el) el.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 3000))
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const m = document.querySelector('.leaflet-marker-icon'); if (m) m.dispatchEvent(new MouseEvent('click', { bubbles: true })); })()`
+        )
+        await new Promise((r) => setTimeout(r, 1500))
+        const probe = await mainWindow.webContents.executeJavaScript(
+          `(() => {
+            const lightbox = document.querySelector('img[src*="thumb://library/1024"], img[src*="thumb://library/orig"]')
+            if (!lightbox) return { lightboxFound: false }
+            const rect = lightbox.getBoundingClientRect()
+            const cx = rect.left + rect.width / 2
+            const cy = rect.top + rect.height / 2
+            const topElement = document.elementFromPoint(cx, cy)
+            // La Lightbox doit être l'élément (ou un ancêtre direct) réellement
+            // au sommet à cet endroit, pas un élément de la carte Leaflet
+            const isLeafletOnTop = !!(topElement && topElement.closest('.leaflet-container') && !topElement.closest('img'))
+            return {
+              lightboxFound: true,
+              lightboxZIndex: getComputedStyle(lightbox.closest('div[style*="position: fixed"]') || lightbox).zIndex,
+              topElementTag: topElement ? topElement.tagName : null,
+              topElementIsMapNotPhoto: isLeafletOnTop,
+              topElementIsLightboxImg: topElement === lightbox
+            }
+          })()`
+        )
+        console.log('[map-lightbox-test]', JSON.stringify(probe))
+        console.log('[map-lightbox-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
+
   // Capture de la grille pure (QA visuelle) : PICALIBRE_TEST_SCREENSHOT_GRID=<dossier>
   // Aucune navigation ni double-clic — juste la vue par défaut (Chronologie)
   // une fois le scan terminé, pour vérifier visuellement le rendu des
