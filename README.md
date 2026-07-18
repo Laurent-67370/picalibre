@@ -10,6 +10,113 @@ Gestionnaire de photos **et vidéos** desktop open-source inspiré de **Picasa**
 
 📄 [Politique de signature de code](CODE_SIGNING.md) — comment les installeurs sont signés et comment vérifier leur intégrité.
 
+## 📊 Comparatif avec Picasa 3 (dernière version, 3.9)
+
+Vérifié fonctionnalité par fonctionnalité en relisant le code, pas une
+estimation — y compris les 3 écarts encore ouverts, listés honnêtement
+plutôt que masqués. ✅ = équivalent · ➕ = PicaLibre va plus loin ·
+❌ = pas encore fait.
+
+### Organisation de la bibliothèque
+
+| Fonctionnalité | Picasa 3.9 | PicaLibre |
+|---|:---:|:---:|
+| Scan de dossiers + surveillance continue | ✅ | ✅ |
+| Albums virtuels | ✅ | ✅ |
+| Notation | ★ simple (on/off) | ➕ 0 à 5 étoiles |
+| Tags / mots-clés | ✅ | ✅ (cherchables) |
+| Reconnaissance des visages | ✅ | ✅ + fusion/scission manuelle |
+| Géolocalisation + carte | ✅ | ✅ (clustering) |
+| Recherche (nom, tag, légende) | ✅ | ✅ + FTS5 plein texte |
+| Détection de doublons | ✅ (expérimental) | ➕ fusion complète (albums/tags/visages transférés) + annulable |
+| Photos masquées | ✅ (exclusion simple) | ➕ + verrouillage par mot de passe |
+| Renommage en lot | ✅ | ✅ ({n}/{name}/{date}, aperçu live, annulable) |
+
+### Édition photo
+
+| Fonctionnalité | Picasa 3.9 | PicaLibre |
+|---|:---:|:---:|
+| Recadrage (ratios, règle des tiers) | ✅ | ✅ |
+| Redressement | ✅ | ✅ |
+| Contraste / couleur auto | ✅ | ✅ |
+| Pipette de blanc | ✅ | ✅ |
+| Yeux rouges | ✅ | ✅ |
+| Tampon / retouche locale | ✅ | ✅ |
+| Réglages manuels | 6 (dont Ombres, Vibrance) | ✅ 8 (+ Teinte) |
+| Définition / Clarté | ✅ | ❌ *(pas encore fait)* |
+| Filtres créatifs | ~12 de base + 24 en 3.9 | 9 (N&B, Sépia, Réchauffer, Refroidir, Négatif, Postériser, Duoton, Cross-process, Grain) |
+| Flou gaussien, Netteté | ✅ | ✅ |
+| Vignette, Doucette, Glow, Orton | ✅ | ✅ |
+| Tilt-shift (flou radial/linéaire) | ✅ | ✅ |
+| Pseudo-HDR | ✅ | ✅ |
+| Cadres / bordures | Polaroid, Vignette-Matte, Musée, décoratifs | Solid, Polaroid, Musée *(moins de variété décorative)* |
+| Texte sur photo | ✅ | ✅ |
+| Comparaison côte à côte | ✅ (3.9) | ✅ |
+| Undo | 1 niveau (dernière action) | ✅ 1 niveau (lot) + **illimité** dans l'éditeur |
+| Édition en lot (plusieurs photos) | ✅ (retouches auto) | ➕ + copier/coller de réglages complets entre photos |
+
+### Vidéo
+
+| Fonctionnalité | Picasa 3.9 | PicaLibre |
+|---|:---:|:---:|
+| Import et lecture | ✅ | ✅ (H.264 natif, HEVC/H.265 via proxy auto générés en arrière-plan) |
+| Miniatures vidéo | ✅ | ✅ |
+| Découpe (trim) d'un clip | ✅ | ❌ *(pas encore fait)* |
+| Extraire une image fixe d'une vidéo | ✅ | ❌ *(pas encore fait)* |
+| Inclure des clips dans un montage | ✅ | ➕ mélange natif photos+vidéos, transitions, playlist audio multi-pistes |
+
+### Créations et partage
+
+| Fonctionnalité | Picasa 3.9 | PicaLibre |
+|---|:---:|:---:|
+| Diaporama plein écran (Ken Burns) | ✅ | ✅ |
+| Écran de veille photo | ✅ | ✅ |
+| Collage | ✅ (plusieurs mises en page) | ✅ |
+| Créateur de film | ✅ | ➕ (voir Vidéo ci-dessus) |
+| Export simple / groupé | ✅ | ✅ + choix taille/format/qualité |
+| Impression | ✅ | ✅ |
+| Envoi par email | ✅ | ✅ |
+| Fond d'écran | ✅ | ✅ |
+| Export CSV des métadonnées | ❌ | ➕ |
+| Publication sur blog | Blogger uniquement | ➕ export générique vers n'importe quel blog |
+| Partage cloud (Web Albums) | ✅ (service arrêté en 2016) | *(délibérément absent — voir ci-dessous)* |
+
+### Formats de fichiers
+
+| Format | Picasa 3.9 | PicaLibre |
+|---|:---:|:---:|
+| JPEG / PNG / GIF / BMP / TIFF | ✅ | ✅ |
+| WebP / AVIF | ❌ | ✅ |
+| HEIC / HEIF (photos iPhone) | Limité | ✅ décodage plein résolution, vérifié avec un vrai fichier |
+| RAW (CR2, NEF, ARW, RAF, ORF, DNG) | ✅ | ✅ |
+| PSD (Photoshop) | ✅ (aperçu) | ✅ (aperçu) |
+
+### Ce que Picasa avait et que PicaLibre n'a délibérément pas
+
+| Fonctionnalité Picasa | Pourquoi PicaLibre ne l'a pas |
+|---|---|
+| Upload vers Web Albums / Google+ | Service arrêté par Google en 2016 ; à l'opposé du principe « 100 % local, aucun cloud » de PicaLibre |
+| Gravure CD/DVD | Technologie obsolète |
+| Commande de tirages photo en ligne | Service commercial tiers disparu |
+
+### Ce que PicaLibre a et que Picasa n'avait pas
+
+- 🔓 **Open source** (licence MIT) — Picasa était propriétaire et fermé
+- 🖥️ **Windows, macOS *et* Linux** — Picasa : Windows et Mac uniquement
+- 🔄 **Toujours maintenu** — Picasa est arrêté depuis 2016, plus aucune mise à jour
+- 📱 **Galerie mobile auto-hébergée** — accès depuis son téléphone via un serveur qu'on héberge soi-même (miniatures + métadonnées seulement, jamais les originaux)
+- 🎨 **Thème clair (inspiré de Picasa) et sombre**, au choix
+- ❓ **Aide interactive** : visite guidée au premier lancement + centre d'aide cherchable
+- 🧩 **DSL d'édition non destructive en JSON**, entièrement inspectable et versionnable
+
+### Bilan honnête
+
+PicaLibre couvre l'essentiel de Picasa 3.9 et va plus loin sur plusieurs
+axes réels (formats modernes, doublons, undo illimité en édition, galerie
+mobile, open source). **Trois écarts précis restent ouverts** : Définition/
+Clarté, découpe vidéo, et extraction d'image fixe depuis une vidéo — sur
+la liste des prochains chantiers.
+
 ## 🆕 Quoi de neuf en 2.17.0
 
 - ❓ **Aide interactive** : visite guidée au premier lancement (repère les
