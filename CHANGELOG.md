@@ -3,6 +3,23 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.19.4] — 2026-07-18
+
+### Amélioré — contraste complémentaire dans la Lightbox
+- En complément du correctif 2.19.3 (variables de thème sur fond
+  toujours sombre) : le gris `#94a3b8` restant (compteur de position,
+  indication de zoom, barre d'aide du bas, barre de découpe vidéo)
+  éclairci en `#cbd5e1`, plus nettement lisible. Couleur de texte par
+  défaut également forcée sur le conteneur racine de la Lightbox (même
+  logique défensive que la cause racine du bug de l'éditeur).
+
+### Vérifié sur un vrai rendu capturé (pas un calcul théorique)
+- Xvfb + Electron réel, Lightbox ouverte, capture de la barre d'aide du
+  bas analysée pixel par pixel : couleur de texte confirmée
+  `rgb(203,213,225)` (= `#cbd5e1`) sur fond `rgb(15,23,42)` (= `#0f172a`)
+  — ratio de contraste mesuré **12,02:1**, largement au-dessus du seuil
+  WCAG AAA (7:1).
+
 ## [2.19.3] — 2026-07-18
 
 ### Corrigé — texte illisible dans la Lightbox (et Slideshow/Face Movie) en thème clair

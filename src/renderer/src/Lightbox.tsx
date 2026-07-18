@@ -200,7 +200,13 @@ export default function Lightbox({
         // derrière la carte (z-index 90 auparavant, plus bas que tout).
         zIndex: 1050,
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        // Couleur de texte forcée par défaut, quel que soit le thème
+        // (clair/sombre) : même cause que le bug de contraste de l'éditeur
+        // (2.14.2) — sans ceci, tout texte qui oublie de fixer sa propre
+        // couleur hérite de --text, gris FONCÉ en thème clair, sur ce fond
+        // sombre = illisible.
+        color: '#e2e8f0'
       }}
     >
       {/* Barre du haut */}
@@ -219,7 +225,7 @@ export default function Lightbox({
           ← Bibliothèque
         </button>
         <span style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>{photo.filename}</span>
-        <span style={{ fontSize: 12, color: '#94a3b8' }}>
+        <span style={{ fontSize: 12, color: '#cbd5e1' }}>
           {index + 1} / {photos.length}
         </span>
         <span style={{ fontSize: 14, letterSpacing: 2, cursor: 'pointer', userSelect: 'none' }}>
@@ -235,7 +241,7 @@ export default function Lightbox({
         </span>
         <span style={{ flex: 1 }} />
         {!isVideo && zoom > 1.01 && (
-          <span style={{ fontSize: 12, color: '#94a3b8' }}>{Math.round(zoom * 100)} % — glisser pour naviguer</span>
+          <span style={{ fontSize: 12, color: '#cbd5e1' }}>{Math.round(zoom * 100)} % — glisser pour naviguer</span>
         )}
         {!isVideo && (
           <button className="primary" onClick={() => onEdit(photo)} title="Ouvrir dans l'éditeur (E)">
@@ -320,7 +326,7 @@ export default function Lightbox({
             padding: '8px 0',
             background: '#0f172a',
             fontSize: 12,
-            color: '#94a3b8'
+            color: '#cbd5e1'
           }}
         >
           <span>✂ Découpe :</span>
@@ -404,7 +410,7 @@ export default function Lightbox({
         </div>
       )}
 
-      <div style={{ textAlign: 'center', fontSize: 11, color: '#94a3b8', padding: '6px 0', background: '#0f172a' }}>
+      <div style={{ textAlign: 'center', fontSize: 12, color: '#cbd5e1', padding: '7px 0', background: '#0f172a' }}>
         {isVideo
           ? '← → : naviguer · Échap : fermer'
           : 'Molette : zoom · Double-clic : 100 % · ← → : naviguer · E : éditer · Échap : fermer'}
