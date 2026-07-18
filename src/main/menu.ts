@@ -185,6 +185,16 @@ export function buildAppMenu(win: BrowserWindow): void {
       label: 'Aide',
       submenu: [
         {
+          label: '❓ Centre d\'aide',
+          accelerator: 'F1',
+          click: act('openHelp')
+        },
+        {
+          label: 'Revoir la visite guidée',
+          click: act('replayTour')
+        },
+        { type: 'separator' },
+        {
           label: 'Documentation (GitHub)',
           click: () => void shell.openExternal(REPO + '#readme')
         },

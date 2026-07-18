@@ -12,6 +12,8 @@ import ThumbCanvas from './ThumbCanvas'
 import CollagePreview, { type CollageLayout, type CollageFormat } from './CollagePreview'
 import PrintDialog, { type PrintLayout, type PaperSize } from './PrintDialog'
 import { prefetchBidirectionalThumbs, cleanupPrefetch } from './thumb-prefetch'
+import HelpCenter from './HelpCenter'
+import OnboardingTour, { onboardingDone } from './OnboardingTour'
 
 declare global {
   interface Window {
@@ -170,6 +172,8 @@ export default function App(): JSX.Element {
   const [renamePattern, setRenamePattern] = useState('{name}')
   const [renameStart, setRenameStart] = useState(1)
   const [renameBusy, setRenameBusy] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [showTour, setShowTour] = useState(!onboardingDone())
   const [batchSize, setBatchSize] = useState<number | 0>(0)
   const [batchFormat, setBatchFormat] = useState<'jpeg' | 'webp' | 'png'>('jpeg')
   const [batchQuality, setBatchQuality] = useState(90)
@@ -789,8 +793,16 @@ export default function App(): JSX.Element {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const inField = (e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'SELECT'
+      if (e.key === 'F1') {
+        e.preventDefault()
+        setHelpOpen(true)
+        return
+      }
       if (editing || lightboxIndex !== null || inField) return
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+      if (e.key === '?') {
+        e.preventDefault()
+        setHelpOpen(true)
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
         e.preventDefault()
         setTray(new Map(shown.map((p) => [p.id, p])))
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -904,7 +916,9 @@ export default function App(): JSX.Element {
     csvExport: () => { if (!needsSelection()) void trayCsv() },
     autoFix: () => { if (!needsSelection()) void trayAutoFix() },
     pasteSettings: () => { if (!needsSelection()) void trayPasteSettings() },
-    batchRename: () => { if (!needsSelection()) setRenameOpen(true) }
+    batchRename: () => { if (!needsSelection()) setRenameOpen(true) },
+    openHelp: () => setHelpOpen(true),
+    replayTour: () => setShowTour(true)
   }
 
   // ---- Grille virtualisée ----
@@ -1093,6 +1107,7 @@ export default function App(): JSX.Element {
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         {/* ---- Sidebar ---- */}
         <aside
+          data-tour="sidebar-nav"
           style={{
             width: 260,
             borderRight: '1px solid var(--border-soft)',
@@ -1101,7 +1116,7 @@ export default function App(): JSX.Element {
             flexShrink: 0
           }}
         >
-          <button onClick={addFolder} style={{ width: '100%', padding: 8, marginBottom: 10 }}>
+          <button data-tour="add-folder" onClick={addFolder} style={{ width: '100%', padding: 8, marginBottom: 10 }}>
             + Ajouter un dossier
           </button>
           <input
@@ -1835,9 +1850,17 @@ export default function App(): JSX.Element {
             <span style={{ color: 'var(--muted)', marginLeft: 'auto' }}>
               {shown.length}{shown.length !== photos.length ? ` / ${photos.length}` : ''} élément(s)
             </span>
+            <button
+              data-tour="help-button"
+              onClick={() => setHelpOpen(true)}
+              title="Centre d'aide (F1)"
+              style={{ padding: '5px 10px' }}
+            >
+              ❓
+            </button>
           </div>
           <div style={{ flex: 1, position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          <div ref={gridRef} style={{ flex: 1, overflow: 'auto', padding: '8px 16px' }}>
+          <div data-tour="grid" ref={gridRef} style={{ flex: 1, overflow: 'auto', padding: '8px 16px' }}>
             {view === null ? (
               <p style={{ opacity: 0.7 }}>
                 Sélectionne un dossier ou un album, ou ajoute un dossier à indexer.
@@ -2186,7 +2209,7 @@ export default function App(): JSX.Element {
       )}
 
       {/* ---- Tray (bac Picasa) ---- */}
-      <footer className="ft">
+      <footer className="ft" data-tour="tray">
         {tray.size === 0 ? (
           <div className="ftempty">
             <span className="hint">🖱 Clic : sélectionner · Ctrl+clic : ajouter · Shift+clic : plage · Double-clic : afficher · Clic droit : actions</span>
@@ -2497,6 +2520,12 @@ export default function App(): JSX.Element {
           </div>
         </div>
       )}
+
+      {helpOpen && (
+        <HelpCenter onClose={() => setHelpOpen(false)} onNavigate={(view) => loadView({ type: view })} />
+      )}
+
+      {showTour && <OnboardingTour onFinish={() => setShowTour(false)} />}
 
       {/* ---- Barre de progression de l'export groupé ---- */}
       {batchProgress && (

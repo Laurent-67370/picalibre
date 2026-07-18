@@ -3,6 +3,34 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.17.0] — 2026-07-18
+
+### Ajouté — vraie aide interactive (façon Picasa 3)
+- **Visite guidée au premier lancement** : 5 étapes qui repèrent les vrais
+  éléments de l'interface (bouton Ajouter un dossier, barre latérale,
+  grille, bac, bouton d'aide) avec un voile sombre et une découpe en
+  surbrillance autour de chacun. Passable à tout moment, persistée
+  (ne réapparaît plus une fois vue), rejouable depuis Aide → Revoir la
+  visite guidée.
+- **Centre d'aide cherchable** (bouton ❓ dans la barre d'outils, touche
+  F1, ou Aide → Centre d'aide) : 24 sujets répartis en 7 catégories
+  (Démarrer, Bibliothèque, Éditeur, Vidéo, Créations, Partage,
+  Personnalisation), recherche en direct sur titre/catégorie/
+  contenu/mots-clés. Certains sujets (Doublons, Carte, Photos masquées,
+  Réglages) ont un bouton d'action qui ferme l'aide et navigue
+  directement vers la fonctionnalité concernée.
+
+### Vérifié de bout en bout (Xvfb + Electron réel, pas de simulation)
+- Visite guidée : contenu exact de la 1ʳᵉ étape confirmé par ciblage DOM
+  précis (couleur de fond + texte), bouton Passer fonctionnel,
+  persistance `localStorage` confirmée, **ne réapparaît pas** à un
+  nouveau lancement du process (même profil).
+- Centre d'aide : ouverture via le bouton dédié confirmée, recherche
+  « recadrer » → 1 résultat exact, affichage du détail confirmé,
+  recherche « doublon » → clic sur le sujet → clic sur le bouton
+  d'action → centre d'aide fermé **et** navigation réelle vers la vue
+  Doublons confirmée (contenu de la vue vérifié).
+
 ## [2.16.0] — 2026-07-18
 
 ### Corrigé — bug majeur : la lecture vidéo était cassée pour TOUTES les vidéos
