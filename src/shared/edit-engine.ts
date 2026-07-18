@@ -33,6 +33,7 @@ export type BlurEffectType =
   | 'orton'
   | 'tiltshift'
   | 'hdr'
+  | 'definition'
 
 export type FilterName =
   | 'bw'
@@ -111,6 +112,7 @@ export type EditOp =
   | { type: 'orton'; params: { intensity: number } } // ortone : blend(overexposed, blur(large), 0.5), 0..1
   | { type: 'tiltshift'; params: TiltShiftParams } // flou radial/linéaire : zone nette au centre
   | { type: 'hdr'; params: { intensity: number } } // pseudo-HDR : local tone mapping, 0..1
+  | { type: 'definition'; params: { amount: number } } // clarté : contraste local grand rayon, 0..1
   | { type: ColorOpType; params: { value: number } } // -1..1 (fill_light : 0..1)
 
 export interface EditStack {
@@ -150,7 +152,8 @@ export function upsertOp(stack: EditStack, op: EditOp): EditStack {
     (op.type === 'glow' && op.params.intensity <= 0) ||
     (op.type === 'orton' && op.params.intensity <= 0) ||
     (op.type === 'tiltshift' && op.params.blurRadius <= 0) ||
-    (op.type === 'hdr' && op.params.intensity <= 0)
+    (op.type === 'hdr' && op.params.intensity <= 0) ||
+    (op.type === 'definition' && op.params.amount <= 0)
   if (!isNeutral) ops.push(op)
   return { version: 1, ops }
 }
@@ -195,6 +198,7 @@ export function applyColorOps(
       o.type !== 'orton' &&
       o.type !== 'tiltshift' &&
       o.type !== 'hdr' &&
+      o.type !== 'definition' &&
       o.type !== 'vignette'
   )
   if (colorOps.length === 0) return
@@ -458,6 +462,11 @@ export function getTiltShiftParams(stack: EditStack): TiltShiftParams | undefine
 /** Récupère l'intensité pseudo-HDR du stack (0 si absent). */
 export function getHdrIntensity(stack: EditStack): number {
   return getOp(stack, 'hdr')?.params.intensity ?? 0
+}
+
+/** Récupère le montant de définition/clarté du stack (0 si absent). */
+export function getDefinitionAmount(stack: EditStack): number {
+  return getOp(stack, 'definition')?.params.amount ?? 0
 }
 
 /**

@@ -3,6 +3,46 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.18.0] — 2026-07-18
+
+### Ajouté — les 3 derniers écarts vs Picasa 3.9, fermés
+- **Définition/Clarté** : nouveau curseur dans l'éditeur (section Effets
+  avancés) — contraste local sur une zone large (rayon 30px), accentue
+  la texture/structure générale sans les halos fins de la Netteté. Même
+  technique que le Pseudo-HDR mais sans compression de dynamique
+  (Reinhard), plus proche du curseur « Clarté » de Lightroom.
+- **📷 Extraire une image fixe d'une vidéo** : bouton dans la visionneuse
+  vidéo, capture l'instant de lecture actuel via ffmpeg et l'ajoute
+  comme nouvelle photo dans la bibliothèque (même dossier que la vidéo
+  source, déjà surveillé — pas de duplication de la logique d'insertion,
+  le pipeline habituel prend le relais).
+- **✂ Découpe vidéo non destructive** : boutons « Marquer début » /
+  « Marquer fin » dans la visionueuse, capturent l'instant de lecture
+  actuel. Le fichier original n'est jamais modifié — seuls deux points
+  de repère sont stockés (migration 009, `trim_start_ms`/`trim_end_ms`).
+  La lecture dans l'app boucle sur la zone découpée ; l'inclusion dans
+  un film (créateur de film) n'utilise que l'extrait découpé.
+- Les 3 nouveaux sujets intégrés au centre d'aide interactif (Définition/
+  Clarté, Découper une vidéo, Extraire une image fixe).
+
+### Vérifié avec de vraies données (pas de simulation)
+- Définition : export réel, variance mesurée avant/après (14378→16216,
+  contraste local confirmé).
+- Extraction de frame : fichier JPEG réel généré (640×480, 9219 couleurs
+  distinctes), automatiquement indexé comme nouvelle photo en base.
+- Découpe vidéo : points de repère persistés en base ; créateur de film
+  testé avec et sans découpe sur le même clip — segment de film réduit
+  à la durée découpée exacte (2s sur un clip de 5s, découpe 1s→3s)
+  contre la durée intégrale sans découpe (5s).
+- UI réelle vérifiée dans la vraie fenêtre de l'app (pas un script
+  autonome) : lecteur vidéo, bouton d'extraction et barre de découpe
+  tous confirmés présents et fonctionnels.
+- Parité CPU/GPU (18 filtres/réglages) et pipeline de scan complet :
+  aucune régression.
+
+Avec ce correctif, le [comparatif Picasa 3.9 vs PicaLibre](README.md)
+ne montre plus aucun écart ouvert.
+
 ## [2.17.0] — 2026-07-18
 
 ### Ajouté — vraie aide interactive (façon Picasa 3)

@@ -124,8 +124,8 @@ export const HELP_TOPICS: HelpTopic[] = [
     id: 'editor-blur-effects',
     category: 'Éditeur',
     title: 'Flou, netteté et effets avancés',
-    keywords: ['flou', 'netteté', 'vignette', 'doucette', 'glow', 'orton', 'tilt-shift', 'hdr', 'flou radial'],
-    body: `Section « Effets avancés » : Flou gaussien, Netteté (accentuation), Vignette (assombrit les bords), Doucette (soft focus), Glow (halo lumineux), Orton (effet rêveur classique), Tilt-shift radial/linéaire (zone nette entourée de flou, effet miniature), Pseudo-HDR (accentuation des détails locaux).`
+    keywords: ['flou', 'netteté', 'vignette', 'doucette', 'glow', 'orton', 'tilt-shift', 'hdr', 'flou radial', 'définition', 'clarté'],
+    body: `Section « Effets avancés » : Flou gaussien, Netteté (accentuation), Vignette (assombrit les bords), Doucette (soft focus), Glow (halo lumineux), Orton (effet rêveur classique), Tilt-shift radial/linéaire (zone nette entourée de flou, effet miniature), Pseudo-HDR (accentuation des détails locaux), Définition/Clarté (contraste local sur une zone large, accentue la texture sans les halos fins de la Netteté).`
   },
   {
     id: 'editor-compare',
@@ -170,6 +170,20 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: 'Photos HEIC (iPhone)',
     keywords: ['heic', 'heif', 'iphone', 'photo'],
     body: `Les photos au format HEIC (par défaut sur iPhone depuis iOS 11) sont automatiquement décodées en pleine résolution — miniatures, édition et export fonctionnent normalement, comme pour un JPEG.`
+  },
+  {
+    id: 'video-trim',
+    category: 'Vidéo',
+    title: 'Découper une vidéo',
+    keywords: ['découpe', 'trim', 'couper', 'début', 'fin', 'extrait'],
+    body: `En lisant une vidéo dans la visionneuse, une barre sous le lecteur propose « ⏱ Marquer début » et « ⏱ Marquer fin » : ils capturent l'instant de lecture actuel. Non destructif — seuls ces deux repères sont enregistrés, le fichier original n'est jamais modifié. La lecture dans l'app boucle ensuite automatiquement sur la zone découpée, et l'inclusion dans un film (créateur de film) n'utilise que cet extrait. « ↺ Réinitialiser » retire la découpe.`
+  },
+  {
+    id: 'video-extract-frame',
+    category: 'Vidéo',
+    title: "Extraire une image fixe d'une vidéo",
+    keywords: ['extraire', 'capture', 'image fixe', 'photo depuis vidéo'],
+    body: `En lisant une vidéo, mets-la en pause sur l'image voulue puis clique « 📷 Extraire cette image ». Une nouvelle photo est créée à partir de cette image précise et apparaît automatiquement dans la bibliothèque, dans le même dossier que la vidéo source.`
   },
 
   // ---- Créations ----

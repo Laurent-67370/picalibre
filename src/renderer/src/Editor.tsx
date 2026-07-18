@@ -945,6 +945,27 @@ export default function Editor({
               />
             </label>
 
+            {/* ---- Définition / Clarté ---- */}
+            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>DÉFINITION</div>
+            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
+              Intensité : {Math.round((getOp(stack, 'definition')?.params.amount ?? 0) * 100)}
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={getOp(stack, 'definition')?.params.amount ?? 0}
+                onChange={(e) =>
+                  applyOp(
+                    { type: 'definition', params: { amount: parseFloat(e.target.value) } },
+                    'definition'
+                  )
+                }
+                style={{ width: '100%' }}
+                title="Définition/Clarté : accentue la texture et la structure locale sur une zone large, sans les halos fins de la Netteté"
+              />
+            </label>
+
             {/* ---- Texte sur photo ---- */}
             <div id="editor-section-texte" style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '12px 0 4px', paddingTop: 8, borderTop: '1px solid #2a2f38' }}>TEXTE</div>
             {(() => {

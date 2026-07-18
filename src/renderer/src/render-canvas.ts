@@ -23,6 +23,7 @@ import {
   getOrtonIntensity,
   getTiltShiftParams,
   getHdrIntensity,
+  getDefinitionAmount,
   getTextOp,
   getBorderOp
 } from '@shared/edit-engine'
@@ -270,6 +271,35 @@ export function renderPreview(
     ctx.putImageData(orig, 0, 0)
   }
 
+  // Définition/Clarté : même technique que HDR mais grand rayon (30px vs
+  // 5px) et sans compression de dynamique — accentuation directe de la
+  // structure locale, façon curseur « Clarté » de Lightroom.
+  const definitionAmount = getDefinitionAmount(stack)
+  if (definitionAmount > 0) {
+    const blurred2 = document.createElement('canvas')
+    blurred2.width = rect.width
+    blurred2.height = rect.height
+    const bctx2 = blurred2.getContext('2d', { willReadFrequently: true })!
+    bctx2.filter = 'blur(30px)'
+    bctx2.drawImage(target, 0, 0)
+    bctx2.filter = 'none'
+
+    const orig2 = ctx.getImageData(0, 0, rect.width, rect.height)
+    const blur2 = bctx2.getImageData(0, 0, rect.width, rect.height)
+    const od2 = orig2.data
+    const bd2 = blur2.data
+    const t2 = definitionAmount
+
+    for (let i = 0; i < od2.length; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        const px = od2[i + c]
+        const highFreq = px - bd2[i + c]
+        od2[i + c] = Math.max(0, Math.min(255, Math.round(px + t2 * highFreq * 1.5)))
+      }
+    }
+    ctx.putImageData(orig2, 0, 0)
+  }
+
   // --- Pixels : spatial (CPU, zones locales) puis couleur (GPU si possible) ---
   const hasSpatial = stack.ops.some(
     (o) => o.type === 'redeye' || o.type === 'retouch' || o.type === 'vignette'
@@ -284,7 +314,8 @@ export function renderPreview(
   const hasOrton = ortonIntensity > 0
   const hasTiltShift = !!(tiltShiftParams && tiltShiftParams.blurRadius > 0)
   const hasHdr = hdrIntensity > 0
-  if (!hasSpatial && !hasColor && !hasText && !hasBorder && !hasBlur && !hasSharpen && !hasSoftFocus && !hasGlow && !hasOrton && !hasTiltShift && !hasHdr) return
+  const hasDefinition = definitionAmount > 0
+  if (!hasSpatial && !hasColor && !hasText && !hasBorder && !hasBlur && !hasSharpen && !hasSoftFocus && !hasGlow && !hasOrton && !hasTiltShift && !hasHdr && !hasDefinition) return
 
   // Si pas d'op pixel mais texte/bordure seul → dessiner directement
   if (!hasSpatial && !hasColor && (hasText || hasBorder)) {

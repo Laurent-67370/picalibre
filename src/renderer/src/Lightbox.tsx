@@ -41,8 +41,53 @@ export default function Lightbox({
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [fullLoaded, setFullLoaded] = useState(false)
   const imgRef = useRef<HTMLImageElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const boxRef = useRef<HTMLDivElement>(null)
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
+  const [extracting, setExtracting] = useState(false)
+  const [extractFlash, setExtractFlash] = useState(false)
+  const [trimStartMs, setTrimStartMs] = useState<number | null>(photo?.trim_start_ms ?? null)
+  const [trimEndMs, setTrimEndMs] = useState<number | null>(photo?.trim_end_ms ?? null)
+
+  // Réinitialise l'état de découpe affiché quand on change de photo
+  useEffect(() => {
+    setTrimStartMs(photo?.trim_start_ms ?? null)
+    setTrimEndMs(photo?.trim_end_ms ?? null)
+  }, [photo?.id])
+
+  const saveTrim = (startMs: number | null, endMs: number | null): void => {
+    setTrimStartMs(startMs)
+    setTrimEndMs(endMs)
+    void window.api.invoke('photos:setTrim', {
+      photoId: photo.id,
+      trimStartMs: startMs,
+      trimEndMs: endMs
+    })
+  }
+
+  // Applique la découpe pendant la lecture : démarre au point de début,
+  // revient au début quand le point de fin est atteint (boucle dans la
+  // zone découpée) — donne un retour immédiat que la découpe fonctionne,
+  // sans jamais toucher au fichier original.
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v || !isVideo) return
+    const onLoaded = (): void => {
+      if (trimStartMs !== null) v.currentTime = trimStartMs / 1000
+    }
+    const onTimeUpdate = (): void => {
+      if (trimEndMs !== null && v.currentTime >= trimEndMs / 1000) {
+        v.currentTime = (trimStartMs ?? 0) / 1000
+      }
+    }
+    v.addEventListener('loadedmetadata', onLoaded)
+    v.addEventListener('timeupdate', onTimeUpdate)
+    return () => {
+      v.removeEventListener('loadedmetadata', onLoaded)
+      v.removeEventListener('timeupdate', onTimeUpdate)
+    }
+  }, [photo?.id, isVideo, trimStartMs, trimEndMs])
+
 
   const reset = useCallback(() => {
     setZoom(1)
@@ -195,6 +240,7 @@ export default function Lightbox({
 
       {/* Média : vidéo (lecteur natif) ou image (zoom/pan) */}
       {isVideo ? (
+        <>
         <div
           style={{
             flex: 1,
@@ -208,11 +254,36 @@ export default function Lightbox({
         >
           <video
             key={photo.id}
+            ref={videoRef}
             src={`thumb://library/orig/${photo.id}`}
             controls
             autoPlay
             style={{ maxWidth: '96%', maxHeight: '96%', boxShadow: '0 8px 40px #000a' }}
           />
+          <button
+            onClick={async () => {
+              const v = videoRef.current
+              if (!v || extracting) return
+              setExtracting(true)
+              try {
+                await window.api.invoke('video:extractFrame', {
+                  photoId: photo.id,
+                  atSeconds: v.currentTime
+                })
+                setExtractFlash(true)
+                setTimeout(() => setExtractFlash(false), 2000)
+              } catch (err) {
+                alert(`Échec de l'extraction : ${(err as Error).message}`)
+              } finally {
+                setExtracting(false)
+              }
+            }}
+            disabled={extracting}
+            style={{ position: 'absolute', top: 14, right: 14, fontSize: 13 }}
+            title="Extraire l'image affichée comme nouvelle photo dans la bibliothèque"
+          >
+            {extracting ? '⏳ Extraction…' : extractFlash ? '✔ Image extraite' : '📷 Extraire cette image'}
+          </button>
           {/* Flèches */}
           {index > 0 && (
             <button
@@ -233,6 +304,44 @@ export default function Lightbox({
             </button>
           )}
         </div>
+        {/* ---- Découpe (trim) non destructive ---- */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            padding: '8px 0',
+            background: '#0f172a',
+            fontSize: 12,
+            color: '#94a3b8'
+          }}
+        >
+          <span>✂ Découpe :</span>
+          <span>
+            {trimStartMs !== null ? (trimStartMs / 1000).toFixed(1) + 's' : 'début'}
+            {' → '}
+            {trimEndMs !== null ? (trimEndMs / 1000).toFixed(1) + 's' : 'fin'}
+          </span>
+          <button
+            onClick={() => saveTrim(Math.round((videoRef.current?.currentTime ?? 0) * 1000), trimEndMs)}
+            title="Marque l'instant actuel comme début de la découpe"
+          >
+            ⏱ Marquer début
+          </button>
+          <button
+            onClick={() => saveTrim(trimStartMs, Math.round((videoRef.current?.currentTime ?? 0) * 1000))}
+            title="Marque l'instant actuel comme fin de la découpe"
+          >
+            ⏱ Marquer fin
+          </button>
+          {(trimStartMs !== null || trimEndMs !== null) && (
+            <button onClick={() => saveTrim(null, null)} title="Retire la découpe (vidéo intégrale)">
+              ↺ Réinitialiser
+            </button>
+          )}
+        </div>
+        </>
       ) : (
         <div
           ref={boxRef}

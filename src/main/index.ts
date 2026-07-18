@@ -18,6 +18,7 @@ Object.assign(console, log.functions)
 
 import { pathToFileURL } from 'node:url'
 import { join, dirname, basename, extname } from 'node:path'
+import { spawn } from 'node:child_process'
 import { writeFile, access, rename as fsRename } from 'node:fs/promises'
 import sharp from 'sharp'
 import { resolveHeicInput } from '../shared/heic'
@@ -303,17 +304,23 @@ function createWindow(): void {
 /** Photos + stacks d'édition, dans l'ordre demandé. */
 function photosWithStacks(photoIds: number[]): Array<CollageItem & MovieItem> {
   const db = getDb()
-  const getPhoto = db.prepare('SELECT filepath, media_type FROM photos WHERE id = ?')
+  const getPhoto = db.prepare(
+    'SELECT filepath, media_type, trim_start_ms, trim_end_ms FROM photos WHERE id = ?'
+  )
   const getStack = db.prepare('SELECT current_stack FROM edits WHERE photo_id = ?')
   const items: Array<CollageItem & MovieItem> = []
   for (const id of photoIds) {
-    const p = getPhoto.get(id) as { filepath: string; media_type: string } | undefined
+    const p = getPhoto.get(id) as
+      | { filepath: string; media_type: string; trim_start_ms: number | null; trim_end_ms: number | null }
+      | undefined
     if (!p) continue
     const e = getStack.get(id) as { current_stack: string } | undefined
     items.push({
       filepath: p.filepath,
       stack: parseStack(e?.current_stack ?? '{}'),
-      isVideo: p.media_type === 'video'
+      isVideo: p.media_type === 'video',
+      trimStartMs: p.trim_start_ms,
+      trimEndMs: p.trim_end_ms
     })
   }
   return items
@@ -323,7 +330,8 @@ function photosWithStacks(photoIds: number[]): Array<CollageItem & MovieItem> {
  *  Les métadonnées complètes passent par photos:details (panneau d'infos). */
 const GRID_COLS =
   'id, folder_id, filename, filepath, media_type, hash_xxh3, file_size, file_mtime, ' +
-  'width, height, duration_ms, taken_at, gps_lat, gps_lon, rating, is_favorite, caption, status'
+  'width, height, duration_ms, taken_at, gps_lat, gps_lon, rating, is_favorite, caption, status, ' +
+  'trim_start_ms, trim_end_ms'
 
 const GRID_COLS_P = GRID_COLS.split(', ').map((c) => 'p.' + c).join(', ')
 
@@ -713,6 +721,63 @@ function registerIpc(): void {
       }
     }
     startWatchers(mainWindow)
+  })
+
+  /**
+   * Extraire une image fixe d'une vidéo à un instant précis (façon Picasa).
+   * La frame est écrite dans le MÊME dossier que la vidéo source — déjà
+   * surveillé — donc pas besoin de dupliquer la logique d'insertion en
+   * base : un rescan (immédiat, pour une apparition rapide) suffit, le
+   * pipeline habituel (hash, miniatures, EXIF) fait le reste.
+   */
+  ipcMain.handle('video:extractFrame', async (_e, { photoId, atSeconds }) => {
+    const db = getDb()
+    const ph = db.prepare('SELECT filepath FROM photos WHERE id = ?').get(photoId) as
+      | { filepath: string }
+      | undefined
+    if (!ph) throw new Error('Vidéo introuvable')
+    const ff = await getFfmpegPath()
+    const dir = dirname(ph.filepath)
+    const base = basename(ph.filepath, extname(ph.filepath))
+    const tsLabel = Math.max(0, atSeconds).toFixed(2).replace('.', '-')
+    let outPath = join(dir, `${base}_frame_${tsLabel}s.jpg`)
+    let n = 1
+    while (await access(outPath).then(() => true).catch(() => false)) {
+      outPath = join(dir, `${base}_frame_${tsLabel}s_${n}.jpg`)
+      n++
+    }
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn(ff, [
+        '-y', '-ss', String(Math.max(0, atSeconds)), '-i', ph.filepath,
+        '-frames:v', '1', '-q:v', '2', outPath
+      ])
+      const killTimer = setTimeout(() => {
+        proc.kill('SIGKILL')
+        reject(new Error('ffmpeg timeout (20s) — process tué'))
+      }, 20_000)
+      proc.on('error', (err) => {
+        clearTimeout(killTimer)
+        reject(err)
+      })
+      proc.on('close', (code) => {
+        clearTimeout(killTimer)
+        code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}`))
+      })
+    })
+    startScan(mainWindow) // rescan immédiat plutôt que d'attendre le debounce du watcher
+    return { outPath }
+  })
+
+  /**
+   * Découpe vidéo non destructive (façon Picasa) : ne stocke que les
+   * points de repère, jamais de réencodage du fichier original. Appliqués
+   * à la lecture (Lightbox, coupe JS au timeupdate) et à l'inclusion dans
+   * un film (movie.ts, -ss/-to ffmpeg). trimEnd=null efface la découpe.
+   */
+  ipcMain.handle('photos:setTrim', (_e, { photoId, trimStartMs, trimEndMs }) => {
+    getDb()
+      .prepare('UPDATE photos SET trim_start_ms = ?, trim_end_ms = ? WHERE id = ?')
+      .run(trimStartMs, trimEndMs, photoId)
   })
 
   ipcMain.handle('privacy:status', () => privacyStatus())
@@ -1169,6 +1234,7 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_SCREENSHOT_COMPARE',
     'PICALIBRE_TEST_RENAME',
     'PICALIBRE_TEST_VIDEO_PLAYBACK',
+    'PICALIBRE_TEST_VIDEO_FEATURES',
     'PICALIBRE_TEST_BATCHEDIT'
   ].some((k) => !!process.env[k])
   if (!isTestMode) {
@@ -1601,6 +1667,85 @@ app.whenReady().then(() => {
             exitTest(0)
           }, 1000)
         }, 1500)
+      }
+    }, 500)
+  }
+
+  // Test headless extraction de frame + découpe vidéo :
+  // PICALIBRE_TEST_VIDEO_FEATURES=<dossier>
+  const videoFeaturesDir = process.env.PICALIBRE_TEST_VIDEO_FEATURES
+  if (videoFeaturesDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(videoFeaturesDir)
+    startScan(mainWindow)
+    const t0f = Date.now()
+    const ivf = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos > 0 && thumbs >= photos * 2) || Date.now() - t0f > 60000) {
+        clearInterval(ivf)
+        const db = getDb()
+        const video = db
+          .prepare("SELECT id FROM photos WHERE media_type='video' AND status='active' LIMIT 1")
+          .get() as { id: number } | undefined
+        if (!video) {
+          console.log('[video-features-test] aucune vidéo trouvée')
+          exitTest(1)
+          return
+        }
+
+        // 1) Extraction d'image fixe à 2 secondes
+        const before = q('SELECT COUNT(*) c FROM photos')
+        const extractResult = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('video:extractFrame', { photoId: ${video.id}, atSeconds: 2 })`
+        )
+        console.log('[video-features-test] extraction:', JSON.stringify(extractResult))
+        // Attendre que le rescan déclenché par extractFrame ajoute la photo
+        const t0e = Date.now()
+        let after = before
+        while (Date.now() - t0e < 15000) {
+          await new Promise((r) => setTimeout(r, 500))
+          after = q('SELECT COUNT(*) c FROM photos')
+          if (after > before) break
+        }
+        console.log('[video-features-test] photos avant=', before, 'après=', after)
+
+        // 2) Découpe vidéo : définir trim puis vérifier en base
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:setTrim', { photoId: ${video.id}, trimStartMs: 1000, trimEndMs: 3000 })`
+        )
+        const trimRow = db
+          .prepare('SELECT trim_start_ms, trim_end_ms FROM photos WHERE id = ?')
+          .get(video.id)
+        console.log('[video-features-test] trim en base:', JSON.stringify(trimRow))
+
+        // 3) Vérification UI réelle : ouvrir la Lightbox sur la vidéo et
+        // contrôler la présence des boutons (dans la VRAIE fenêtre, avec
+        // toute l'initialisation de l'app — pas un script autonome).
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Chronologie')); if (el) el.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 800))
+        await mainWindow.webContents.executeJavaScript(
+          `(() => {
+            const figs = [...document.querySelectorAll('main figure')]
+            const videoFig = figs.find(f => f.textContent.includes('🎬'))
+            const c = videoFig ? videoFig.querySelector('canvas') : null
+            if (c) c.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+          })()`
+        )
+        await new Promise((r) => setTimeout(r, 1500))
+        const uiState = await mainWindow.webContents.executeJavaScript(
+          `(() => ({
+            hasVideoTag: !!document.querySelector('video'),
+            extractBtn: !!([...document.querySelectorAll('button')].find(b => b.textContent.includes('Extraire cette image'))),
+            trimBar: !!([...document.querySelectorAll('span')].find(s => s.textContent.includes('Découpe')))
+          }))()`
+        )
+        console.log('[video-features-test] UI:', JSON.stringify(uiState))
+
+        console.log('[video-features-test] TERMINÉ')
+        exitTest(0)
       }
     }, 500)
   }

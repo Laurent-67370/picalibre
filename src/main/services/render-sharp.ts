@@ -22,6 +22,7 @@ import {
   getOrtonIntensity,
   getTiltShiftParams,
   getHdrIntensity,
+  getDefinitionAmount,
   getTextOp,
   getBorderOp,
   escapeSvgText,
@@ -233,6 +234,36 @@ export async function renderEdited(
     }
     pass2 = sharp(od, {
       raw: { width: W, height: H, channels: ch }
+    })
+  }
+
+  // Définition/Clarté : contraste local sur une zone BEAUCOUP plus large
+  // que la netteté (rayon 30px vs ~1px) — accentue la texture/structure
+  // générale de l'image sans les halos fins du sharpen. Contrairement au
+  // pseudo-HDR, pas de compression de dynamique (Reinhard) : accentuation
+  // directe, plus proche du curseur « Clarté » de Lightroom.
+  const definitionAmount = getDefinitionAmount(stack)
+  if (definitionAmount > 0) {
+    const origBuf2 = await pass2.clone().raw().toBuffer({ resolveWithObject: true })
+    const W2 = origBuf2.info.width
+    const H2 = origBuf2.info.height
+    const ch2 = origBuf2.info.channels
+    const blurBuf2 = await pass2
+      .blur(30)
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const od2 = origBuf2.data
+    const bd2 = blurBuf2.data
+    const t2 = definitionAmount
+    for (let i = 0; i < od2.length; i += ch2) {
+      for (let c = 0; c < 3; c++) {
+        const px = od2[i + c]
+        const highFreq = px - bd2[i + c] // structure locale (basse fréquence retirée)
+        od2[i + c] = Math.max(0, Math.min(255, Math.round(px + t2 * highFreq * 1.5)))
+      }
+    }
+    pass2 = sharp(od2, {
+      raw: { width: W2, height: H2, channels: ch2 }
     })
   }
 

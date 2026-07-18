@@ -28,6 +28,9 @@ export interface MovieItem {
   filepath: string
   stack: EditStack
   isVideo?: boolean
+  /** Découpe non destructive (ms) — voir photos:setTrim. Ignoré si isVideo=false. */
+  trimStartMs?: number | null
+  trimEndMs?: number | null
 }
 
 export type MovieTransition = 'none' | 'fade'
@@ -173,10 +176,16 @@ export async function makeMovie(items: MovieItem[], opts: MovieOptions): Promise
       const item = items[i]
       const seg = join(work, `seg_${String(i).padStart(4, '0')}.mp4`)
       if (item.isVideo) {
-        const dur = await probeDuration(ffmpegPath, item.filepath)
+        const fullDur = await probeDuration(ffmpegPath, item.filepath)
+        const trimStart = Math.max(0, (item.trimStartMs ?? 0) / 1000)
+        const trimEnd = item.trimEndMs != null ? item.trimEndMs / 1000 : fullDur
+        const dur = Math.max(0.1, trimEnd - trimStart)
         const f = fadeFilters(dur, transition)
         await runFfmpeg(ffmpegPath, [
-          '-y', '-i', item.filepath,
+          '-y',
+          ...(trimStart > 0 ? ['-ss', String(trimStart)] : []),
+          '-i', item.filepath,
+          '-t', String(dur),
           '-vf', scalePad + f.v,
           '-af', (f.a ? f.a + ',' : '') + 'aresample=48000',
           ...segArgsCommon,

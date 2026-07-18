@@ -58,6 +58,8 @@ export interface PhotoRow {
   is_favorite: 0 | 1
   caption: string | null
   status: 'active' | 'missing' | 'trashed'
+  trim_start_ms?: number | null
+  trim_end_ms?: number | null
 }
 
 export interface FolderRow {
@@ -182,6 +184,11 @@ export interface IpcInvokeMap {
     res: void
   }
   'photos:hidden': { req: void; res: PhotoRow[] }
+  'video:extractFrame': { req: { photoId: number; atSeconds: number }; res: { outPath: string } }
+  'photos:setTrim': {
+    req: { photoId: number; trimStartMs: number | null; trimEndMs: number | null }
+    res: void
+  }
   'privacy:status': { req: void; res: { hasPassword: boolean; unlocked: boolean } }
   'privacy:setPassword': { req: { password: string }; res: { ok: boolean; error?: string } }
   'privacy:unlock': { req: { password: string }; res: { ok: boolean } }

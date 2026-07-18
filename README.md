@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.17.0-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.18.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -43,7 +43,7 @@ plutôt que masqués. ✅ = équivalent · ➕ = PicaLibre va plus loin ·
 | Yeux rouges | ✅ | ✅ |
 | Tampon / retouche locale | ✅ | ✅ |
 | Réglages manuels | 6 (dont Ombres, Vibrance) | ✅ 8 (+ Teinte) |
-| Définition / Clarté | ✅ | ❌ *(pas encore fait)* |
+| Définition / Clarté | ✅ | ✅ |
 | Filtres créatifs | ~12 de base + 24 en 3.9 | 9 (N&B, Sépia, Réchauffer, Refroidir, Négatif, Postériser, Duoton, Cross-process, Grain) |
 | Flou gaussien, Netteté | ✅ | ✅ |
 | Vignette, Doucette, Glow, Orton | ✅ | ✅ |
@@ -61,8 +61,8 @@ plutôt que masqués. ✅ = équivalent · ➕ = PicaLibre va plus loin ·
 |---|:---:|:---:|
 | Import et lecture | ✅ | ✅ (H.264 natif, HEVC/H.265 via proxy auto générés en arrière-plan) |
 | Miniatures vidéo | ✅ | ✅ |
-| Découpe (trim) d'un clip | ✅ | ❌ *(pas encore fait)* |
-| Extraire une image fixe d'une vidéo | ✅ | ❌ *(pas encore fait)* |
+| Découpe (trim) d'un clip | ✅ | ✅ non destructive (points de repère, fichier original jamais modifié) |
+| Extraire une image fixe d'une vidéo | ✅ | ✅ |
 | Inclure des clips dans un montage | ✅ | ➕ mélange natif photos+vidéos, transitions, playlist audio multi-pistes |
 
 ### Créations et partage
@@ -111,11 +111,19 @@ plutôt que masqués. ✅ = équivalent · ➕ = PicaLibre va plus loin ·
 
 ### Bilan honnête
 
-PicaLibre couvre l'essentiel de Picasa 3.9 et va plus loin sur plusieurs
-axes réels (formats modernes, doublons, undo illimité en édition, galerie
-mobile, open source). **Trois écarts précis restent ouverts** : Définition/
-Clarté, découpe vidéo, et extraction d'image fixe depuis une vidéo — sur
-la liste des prochains chantiers.
+PicaLibre couvre désormais l'intégralité des fonctionnalités de Picasa 3.9
+identifiées lors de cette comparaison, et va plus loin sur plusieurs axes
+réels (formats modernes, doublons, undo illimité en édition, galerie
+mobile, open source, découpe non destructive). Les 3 écarts qui restaient
+ouverts (Définition/Clarté, découpe vidéo, extraction d'image fixe) ont
+été comblés et vérifiés avec de vraies vidéos, pas des simulations.
+
+## 🆕 Quoi de neuf en 2.18.0
+
+- 🎚️ **Définition/Clarté**, ✂ **Découpe vidéo non destructive**, 📷
+  **Extraction d'image fixe depuis une vidéo** — les 3 derniers écarts
+  du [comparatif avec Picasa 3.9](#-comparatif-avec-picasa-3-dernière-version-39)
+  sont fermés.
 
 ## 🆕 Quoi de neuf en 2.17.0
 
