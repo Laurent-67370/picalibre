@@ -173,6 +173,10 @@ export default function App(): JSX.Element {
   const [renamePattern, setRenamePattern] = useState('{name}')
   const [renameStart, setRenameStart] = useState(1)
   const [renameBusy, setRenameBusy] = useState(false)
+  const [tripOpen, setTripOpen] = useState(false)
+  const [tripBusy, setTripBusy] = useState(false)
+  const [tripGapHours, setTripGapHours] = useState(12)
+  const [tripPreview, setTripPreview] = useState<Array<{ name: string; count: number; start: string; end: string }>>([])
   const [helpOpen, setHelpOpen] = useState(false)
   const [showTour, setShowTour] = useState(!onboardingDone())
   const [batchSize, setBatchSize] = useState<number | 0>(0)
@@ -715,6 +719,124 @@ export default function App(): JSX.Element {
       setRenameOpen(false)
     } finally {
       setRenameBusy(false)
+    }
+  }
+
+  /**
+   * Détecte des groupes de photos (voyages/événements) dans la sélection
+   * en fonction de l'espacement temporel entre photos consécutives.
+   * Trie les photos par taken_at, regroupe celles séparées de moins de
+   * tripGapHours heures. Produit un aperçu (tripPreview) sans créer d'albums.
+   */
+  const runTripDetection = async () => {
+    if (trayIds.length === 0) return
+    setTripBusy(true)
+    try {
+      // Récupérer les métadonnées taken_at des photos sélectionnées
+      const photosWithDates = [...tray.values()]
+        .filter((p) => p.taken_at !== null && p.taken_at !== undefined)
+        .sort((a, b) => (a.taken_at ?? 0) - (b.taken_at ?? 0))
+
+      if (photosWithDates.length === 0) {
+        alert('Aucune photo avec date de prise de vue dans la sélection.')
+        return
+      }
+
+      const gapSeconds = tripGapHours * 3600
+      const groups: Array<{ photos: typeof photosWithDates; start: number; end: number }> = []
+      let current: typeof photosWithDates = []
+      let groupStart = photosWithDates[0].taken_at ?? 0
+
+      for (const p of photosWithDates) {
+        const t = p.taken_at ?? 0
+        if (current.length === 0) {
+          current = [p]
+          groupStart = t
+        } else if (t - (current[current.length - 1].taken_at ?? 0) <= gapSeconds) {
+          current.push(p)
+        } else {
+          groups.push({ photos: current, start: groupStart, end: current[current.length - 1].taken_at ?? 0 })
+          current = [p]
+          groupStart = t
+        }
+      }
+      if (current.length > 0) {
+        groups.push({ photos: current, start: groupStart, end: current[current.length - 1].taken_at ?? 0 })
+      }
+
+      // Générer l'aperçu
+      const fmt = (ts: number): string => {
+        const d = new Date(ts * 1000)
+        return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+      }
+      const preview = groups.map((g, i) => {
+        const startDate = fmt(g.start)
+        const endDate = fmt(g.end)
+        const name = startDate === endDate
+          ? `Voyage — ${startDate}`
+          : `Voyage — ${startDate} → ${endDate}`
+        return { name, count: g.photos.length, start: startDate, end: endDate }
+      })
+      setTripPreview(preview)
+    } finally {
+      setTripBusy(false)
+    }
+  }
+
+  /**
+   * Crée un album pour chaque groupe de voyages détecté.
+   * Utilise l'IPC albums:create + albums:addPhotos.
+   */
+  const createTripAlbums = async () => {
+    if (tripPreview.length === 0 || tripBusy) return
+    setTripBusy(true)
+    try {
+      // Re-détecter les groupes pour avoir les photoIds
+      const photosWithDates = [...tray.values()]
+        .filter((p) => p.taken_at !== null && p.taken_at !== undefined)
+        .sort((a, b) => (a.taken_at ?? 0) - (b.taken_at ?? 0))
+
+      const gapSeconds = tripGapHours * 3600
+      const groups: Array<{ photos: typeof photosWithDates }> = []
+      let current: typeof photosWithDates = []
+
+      for (const p of photosWithDates) {
+        const t = p.taken_at ?? 0
+        if (current.length === 0) {
+          current = [p]
+        } else if (t - (current[current.length - 1].taken_at ?? 0) <= gapSeconds) {
+          current.push(p)
+        } else {
+          groups.push({ photos: current })
+          current = [p]
+        }
+      }
+      if (current.length > 0) groups.push({ photos: current })
+
+      const fmt = (ts: number): string => {
+        const d = new Date(ts * 1000)
+        return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+      }
+
+      let created = 0
+      for (const g of groups) {
+        const start = fmt(g.photos[0].taken_at ?? 0)
+        const end = fmt(g.photos[g.photos.length - 1].taken_at ?? 0)
+        const name = start === end ? `Voyage — ${start}` : `Voyage — ${start} → ${end}`
+        const r = await window.api.invoke('albums:create', { name })
+        await window.api.invoke('albums:addPhotos', {
+          albumId: r.id,
+          photoIds: g.photos.map((p) => p.id)
+        })
+        created++
+      }
+
+      setTripOpen(false)
+      setTripPreview([])
+      refreshSidebar()
+      alert(`${created} album(s) de voyage créé(s) depuis ${photosWithDates.length} photo(s).`)
+    } finally {
+      setTripBusy(false)
     }
   }
 
@@ -2485,6 +2607,12 @@ export default function App(): JSX.Element {
               <button onClick={() => setRenameOpen(true)} title="Renommer tous les fichiers sélectionnés selon un modèle">
                 ✏️ Renommer
               </button>
+              <button
+                onClick={() => { setTripOpen(true); setTripPreview([]) }}
+                title="Détecter des voyages/événements dans la sélection et créer des albums"
+              >
+                🧳 Voyages
+              </button>
               <button onClick={trayHide} title="Masquer / démasquer">
                 {view?.type === 'hidden' ? '👁 Démasquer' : '🙈 Masquer'}
               </button>
@@ -2687,6 +2815,110 @@ export default function App(): JSX.Element {
 
       {helpOpen && (
         <HelpCenter onClose={() => setHelpOpen(false)} onNavigate={(view) => loadView({ type: view })} />
+      )}
+
+      {/* ---- Détection de voyages / événements ---- */}
+      {tripOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1071,
+            background: '#0f172acc',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={() => !tripBusy && setTripOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--card)',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              minWidth: 420,
+              maxWidth: 560,
+              maxHeight: '80vh',
+              overflowY: 'auto'
+            }}
+          >
+            <h3 style={{ margin: 0 }}>🧳 Regroupement voyages / événements ({trayIds.length} photo(s))</h3>
+            <label style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              Écart maximum entre photos (heures)
+              <input
+                type="range"
+                min={1}
+                max={72}
+                step={1}
+                value={tripGapHours}
+                onChange={(e) => setTripGapHours(Number(e.target.value))}
+                style={{ width: '100%' }}
+              />
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                {tripGapHours}h — les photos séparées de moins de cet écart sont regroupées dans le même voyage
+              </span>
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={runTripDetection}
+                disabled={tripBusy || trayIds.length === 0}
+                title="Analyser la sélection et prévisualiser les groupes"
+              >
+                🔍 Détecter les voyages
+              </button>
+            </div>
+            {tripPreview.length > 0 && (
+              <>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                  {tripPreview.length} voyage(s) détecté(s) :
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {tripPreview.map((t, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: 8,
+                        background: 'var(--bg-elevated)',
+                        border: '1px solid var(--border)',
+                        fontSize: 13,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <span>{t.name}</span>
+                      <strong style={{ color: 'var(--accent)' }}>{t.count} photo(s)</strong>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button onClick={() => setTripOpen(false)} disabled={tripBusy}>
+                    Annuler
+                  </button>
+                  <button
+                    className="primary"
+                    onClick={createTripAlbums}
+                    disabled={tripBusy}
+                    title="Créer un album pour chaque voyage détecté"
+                  >
+                    📁 Créer {tripPreview.length} album(s)
+                  </button>
+                </div>
+              </>
+            )}
+            {tripPreview.length === 0 && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button onClick={() => setTripOpen(false)}>Fermer</button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {showTour && <OnboardingTour onFinish={() => setShowTour(false)} />}
