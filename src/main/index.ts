@@ -165,15 +165,30 @@ function registerThumbProtocol(): void {
     // Taille spéciale 'orig' : sert le fichier original (zoom 100 % de la visionneuse)
     if (parts[0] === 'orig') {
       const pid = parseInt(parts[1], 10)
-      const ph = getDb().prepare('SELECT filepath FROM photos WHERE id = ?').get(pid) as
-        | { filepath: string }
-        | undefined
+      const ph = getDb()
+        .prepare('SELECT filepath, media_type, hash_xxh3 FROM photos WHERE id = ?')
+        .get(pid) as { filepath: string; media_type: string; hash_xxh3: string } | undefined
       if (!ph) return new Response('not found', { status: 404, headers: { 'Cache-Control': 'no-store' } })
+      // Vidéo dans un codec non lisible nativement par Chromium (HEVC) :
+      // un proxy H.264 a pu être généré en arrière-plan (pipeline.ts) —
+      // le servir à la place de l'original s'il existe. L'original n'est
+      // jamais modifié sur disque.
+      let servePath = ph.filepath
+      if (ph.media_type === 'video') {
+        const proxyPath = join(
+          thumbsCacheDir(),
+          ph.hash_xxh3.slice(0, 2),
+          `${ph.hash_xxh3}_proxy.mp4`
+        )
+        if (await access(proxyPath).then(() => true).catch(() => false)) {
+          servePath = proxyPath
+        }
+      }
       // Transmet Range (et autres en-têtes pertinents) : sans ça, chaque
       // requête (y compris un seek vidéo) re-fetch le fichier entier depuis
       // le début — la barre de progression d'un <video> resterait cassée
       // (currentTime revient toujours à 0).
-      return net.fetch(pathToFileURL(ph.filepath).toString(), { headers: request.headers })
+      return net.fetch(pathToFileURL(servePath).toString(), { headers: request.headers })
     }
     const size = parseInt(parts[0], 10)
     const photoId = parseInt(parts[1], 10)
@@ -1153,6 +1168,7 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_SCREENSHOT_GRID',
     'PICALIBRE_TEST_SCREENSHOT_COMPARE',
     'PICALIBRE_TEST_RENAME',
+    'PICALIBRE_TEST_VIDEO_PLAYBACK',
     'PICALIBRE_TEST_BATCHEDIT'
   ].some((k) => !!process.env[k])
   if (!isTestMode) {
@@ -1512,6 +1528,79 @@ app.whenReady().then(() => {
         console.log('[batchedit-test] stacks après coller réglages:', JSON.stringify(afterPaste))
         console.log('[batchedit-test] TERMINÉ')
         exitTest(0)
+      }
+    }, 500)
+  }
+
+  // Test headless de LECTURE vidéo réelle (pas juste la génération de
+  // vignette) : PICALIBRE_TEST_VIDEO_PLAYBACK=<dossier>
+  // Ouvre la Lightbox sur la vidéo et inspecte l'état réel de <video>
+  // après une tentative de lecture (error, readyState, dimensions).
+  const videoPlaybackDir = process.env.PICALIBRE_TEST_VIDEO_PLAYBACK
+  if (videoPlaybackDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(videoPlaybackDir)
+    startScan(mainWindow)
+    const t0v = Date.now()
+    const ivv = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      // Attendre aussi que la phase proxy ait fini de traiter chaque vidéo
+      // (fichier _proxy.mp4 OU marqueur _proxy.mp4.skip présent) — sinon le
+      // test de lecture peut tomber pile pendant le transcodage.
+      const videos = getDb()
+        .prepare("SELECT hash_xxh3 FROM photos WHERE media_type='video' AND status='active'")
+        .all() as { hash_xxh3: string }[]
+      const fsp = await import('node:fs/promises')
+      let proxyReady = true
+      for (const v of videos) {
+        const base = join(thumbsCacheDir(), v.hash_xxh3.slice(0, 2), `${v.hash_xxh3}_proxy.mp4`)
+        const has = await fsp
+          .access(base)
+          .then(() => true)
+          .catch(() => false)
+        const skipped = await fsp
+          .access(base + '.skip')
+          .then(() => true)
+          .catch(() => false)
+        if (!has && !skipped) proxyReady = false
+      }
+      if ((photos > 0 && thumbs >= photos * 2 && (videos.length === 0 || proxyReady)) || Date.now() - t0v > 60000) {
+        clearInterval(ivv)
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Chronologie')); if (el) el.click(); })()`
+        )
+        setTimeout(async () => {
+          await mainWindow.webContents.executeJavaScript(
+            `(() => { const im = document.querySelector('main figure canvas'); if (im) im.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })()`
+          )
+          setTimeout(async () => {
+            // Tenter la lecture explicitement, attendre un peu, puis inspecter
+            const result = await mainWindow.webContents.executeJavaScript(
+              `(async () => {
+                const v = document.querySelector('video')
+                if (!v) return { found: false }
+                let playError = null
+                try { await v.play() } catch (e) { playError = e.message }
+                await new Promise(r => setTimeout(r, 2000))
+                return {
+                  found: true,
+                  readyState: v.readyState,
+                  networkState: v.networkState,
+                  videoWidth: v.videoWidth,
+                  videoHeight: v.videoHeight,
+                  currentTime: v.currentTime,
+                  paused: v.paused,
+                  error: v.error ? { code: v.error.code, message: v.error.message } : null,
+                  playError,
+                  duration: v.duration
+                }
+              })()`
+            )
+            console.log('[video-playback-test] RÉSULTAT:', JSON.stringify(result, null, 2))
+            exitTest(0)
+          }, 1000)
+        }, 1500)
       }
     }, 500)
   }

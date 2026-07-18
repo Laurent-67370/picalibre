@@ -93,6 +93,44 @@ export async function probeDuration(ffmpegPath: string, file: string): Promise<n
   )
 }
 
+/**
+ * Durée + codec vidéo en un seul appel `ffmpeg -i` (au lieu de deux
+ * spawns séparés) — le codec sert à détecter les vidéos HEVC/H.265,
+ * que Chromium (build Electron standard) ne décode pas nativement
+ * (licence des brevets, contrairement à H.264/VP9/AV1).
+ */
+export async function probeVideoInfo(
+  ffmpegPath: string,
+  file: string
+): Promise<{ duration: number; codec: string | null }> {
+  const stderr = await new Promise<string>((resolve) => {
+    const proc = spawn(ffmpegPath, ['-i', file], { stdio: ['ignore', 'ignore', 'pipe'] })
+    let out = ''
+    const killTimer = setTimeout(() => {
+      proc.kill('SIGKILL')
+      resolve(out)
+    }, 15_000)
+    proc.stderr.on('data', (d) => (out += d.toString()))
+    proc.on('close', () => {
+      clearTimeout(killTimer)
+      resolve(out)
+    })
+    proc.on('error', () => {
+      clearTimeout(killTimer)
+      resolve(out)
+    })
+  })
+  const dm = stderr.match(/Duration:\s*(\d+):(\d+):(\d+)\.(\d+)/)
+  const duration = dm
+    ? parseInt(dm[1], 10) * 3600 +
+      parseInt(dm[2], 10) * 60 +
+      parseInt(dm[3], 10) +
+      parseInt(dm[4], 10) / Math.pow(10, dm[4].length)
+    : 0
+  const cm = stderr.match(/Video:\s*([a-zA-Z0-9_]+)/)
+  return { duration, codec: cm ? cm[1].toLowerCase() : null }
+}
+
 /** Filtres de fondu vidéo+audio cuits dans le segment. */
 function fadeFilters(duration: number, transition: MovieTransition): { v: string; a: string } {
   if (transition !== 'fade' || duration <= FADE_D * 2) return { v: '', a: '' }

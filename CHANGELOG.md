@@ -3,6 +3,47 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.16.0] — 2026-07-18
+
+### Corrigé — bug majeur : la lecture vidéo était cassée pour TOUTES les vidéos
+- **Cause racine** : la CSP (Content-Security-Policy) de l'app n'avait
+  aucune directive `media-src`. Sans elle, `<video>` retombe sur
+  `default-src 'self'`, qui exclut le protocole `thumb://` utilisé pour
+  servir les vidéos — chaque tentative de lecture échouait avec
+  `MEDIA_ELEMENT_ERROR: Media load rejected by URL safety check`,
+  **avant même** de tester la compatibilité du codec. Confirmé sur une
+  vraie vidéo H.264 : lecture cassée avant correctif, parfaite après
+  (`readyState=4`, `currentTime` progresse, aucune erreur).
+- Ajout de `media-src 'self' thumb:` à la CSP.
+
+### Ajouté — vrai support HEVC/H.265 (vidéos iPhone)
+- Une fois la CSP corrigée, une vraie vidéo HEVC générée localement
+  (tag `hvc1`, comme sur iPhone) échouait encore avec
+  `DEMUXER_ERROR_NO_SUPPORTED_STREAMS` — cette fois un vrai problème de
+  codec : Chromium (build Electron standard, sans codecs propriétaires)
+  ne décode pas HEVC.
+- **Correctif** : détection du codec via `ffmpeg -i` (réutilise le même
+  appel que le sondage de durée, `probeVideoInfo` remplace
+  `probeDuration`) ; si HEVC, génération en arrière-plan d'un **proxy
+  H.264** (`ffmpeg -c:v libx264`), mis en cache par hash comme les
+  miniatures. Le fichier original n'est jamais modifié. Le protocole
+  `thumb://library/orig/{id}` sert automatiquement le proxy s'il existe.
+  Nouvelle phase dédiée `videoProxyPhase` (marqueurs `.skip` pour ne
+  sonder qu'une fois les vidéos déjà en H.264 — la grande majorité —
+  et rattraper aussi les bibliothèques scannées avant ce correctif).
+
+### Vérifié avec de vraies vidéos (pas de simulation)
+- Vidéo H.264 : lecture confirmée avant/après (non-régression).
+- Vidéo HEVC réelle (générée via `libx265`, tag `hvc1`) : miniature OK
+  nativement (ffmpeg décode HEVC), lecture cassée sans proxy
+  (`DEMUXER_ERROR_NO_SUPPORTED_STREAMS`), **lecture parfaite avec proxy**
+  (`videoWidth=1280`, `currentTime` progresse, `duration=5`, 0 erreur).
+- Marqueur `.skip` confirmé pour la vidéo H.264 (aucun proxy inutile
+  généré).
+- Créateur de film (Movie Maker) avec clip HEVC en entrée : fonctionne
+  sans changement (ffmpeg décode nativement, n'a jamais eu besoin du
+  proxy — celui-ci ne sert qu'à la lecture via `<video>` dans l'app).
+
 ## [2.15.0] — 2026-07-18
 
 ### Ajouté — vrai support HEIC (photos iPhone)

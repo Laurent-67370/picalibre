@@ -5,12 +5,12 @@
 import { utilityProcess, BrowserWindow, app } from 'electron'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
-import { mkdir, unlink } from 'node:fs/promises'
+import { mkdir, unlink, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { getFfmpegPath } from '../utils/ffmpeg'
 import sharp from 'sharp'
 import { getDb } from '../db'
-import { probeDuration } from './movie'
+import { probeVideoInfo } from './movie'
 import { extractExifBatch } from './exif'
 import { startFaceScan } from './faces'
 import type { ThumbResult } from '../../workers/thumb-worker'
@@ -38,6 +38,7 @@ export async function runPostScanPipeline(win: BrowserWindow): Promise<void> {
       await exifPhase(win)
       await thumbsPhase(win)
       await videoThumbsPhase(win)
+      await videoProxyPhase()
     } while (pending) // relance si un scan est arrivé entre-temps
     win.webContents.send('scan:progress', { phase: 'done', filesFound: 0, filesProcessed: 0 })
     win.webContents.send('library:changed', { folderIds: [] })
@@ -68,6 +69,103 @@ export async function runPostScanPipeline(win: BrowserWindow): Promise<void> {
  * Miniatures des VIDÉOS : frame à 10 % de la durée (ffmpeg) → sharp 256/1024
  * dans le même cache adressé par hash que les images.
  */
+// Codecs vidéo que Chromium (build Electron standard, sans codecs
+// propriétaires) ne décode PAS nativement — vérifié empiriquement :
+// erreur DEMUXER_ERROR_NO_SUPPORTED_STREAMS sur une vraie vidéo HEVC.
+// H.264/AVC, VP8/VP9 et AV1 sont lus nativement, pas besoin de proxy.
+const NEEDS_PROXY_CODECS = new Set(['hevc', 'h265'])
+
+function proxyPathFor(hash: string): string {
+  return join(thumbsCacheDir(), hash.slice(0, 2), `${hash}_proxy.mp4`)
+}
+
+async function fileExists(p: string): Promise<boolean> {
+  try {
+    await access(p)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Proxy H.264 pour la lecture in-app des vidéos dans un codec non
+ * supporté par Chromium (HEVC notamment) — le fichier original reste
+ * intact sur disque, seul un proxy mis en cache (par hash, comme les
+ * miniatures) est généré pour la balise <video>.
+ */
+async function transcodeToH264(ffmpegPath: string, src: string, dest: string): Promise<void> {
+  const tmp = dest + '.part'
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(ffmpegPath, [
+      '-y', '-i', src,
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+      '-c:a', 'aac', '-b:a', '128k',
+      '-movflags', '+faststart',
+      '-f', 'mp4',
+      tmp
+    ])
+    // Une vidéo peut être longue : timeout généreux (10 min) plutôt que
+    // les 20s du frame grab, mais toujours borné pour ne jamais bloquer
+    // indéfiniment le pipeline en arrière-plan.
+    const killTimer = setTimeout(() => {
+      proc.kill('SIGKILL')
+      reject(new Error('transcodage : timeout (10 min)'))
+    }, 600_000)
+    proc.on('error', (err) => {
+      clearTimeout(killTimer)
+      reject(err)
+    })
+    proc.on('close', (code) => {
+      clearTimeout(killTimer)
+      code === 0 ? resolve() : reject(new Error(`ffmpeg transcodage ${code}`))
+    })
+  })
+  const { rename } = await import('node:fs/promises')
+  await rename(tmp, dest)
+}
+
+/**
+ * Phase dédiée, séparée de videoThumbsPhase : passe sur TOUTES les vidéos
+ * actives (pas seulement celles sans miniature) pour rattraper les
+ * bibliothèques scannées avant ce correctif — leurs miniatures existent
+ * déjà, elles ne repasseraient jamais par videoThumbsPhase sinon.
+ * Marqueur `{hash}_proxy.skip` (fichier vide) pour ne sonder le codec
+ * qu'une seule fois par vidéo (évite de re-spawner ffmpeg -i à chaque
+ * rescan pour les vidéos déjà en H.264, la grande majorité).
+ */
+async function videoProxyPhase(): Promise<void> {
+  const db = getDb()
+  const items = db
+    .prepare(
+      `SELECT id AS photoId, filepath, hash_xxh3 AS hash
+       FROM photos WHERE status = 'active' AND media_type = 'video' AND hash_xxh3 != ''`
+    )
+    .all() as { photoId: number; filepath: string; hash: string }[]
+  if (items.length === 0) return
+
+  const ff = await getFfmpegPath()
+  for (const item of items) {
+    const proxyPath = proxyPathFor(item.hash)
+    const skipMarker = proxyPath + '.skip'
+    if (await fileExists(proxyPath)) continue
+    if (await fileExists(skipMarker)) continue
+    try {
+      const { codec } = await probeVideoInfo(ff, item.filepath)
+      await mkdir(join(thumbsCacheDir(), item.hash.slice(0, 2)), { recursive: true })
+      if (codec && NEEDS_PROXY_CODECS.has(codec)) {
+        console.log('[video-proxy] transcodage', codec, '→ H.264 :', item.filepath)
+        await transcodeToH264(ff, item.filepath, proxyPath)
+      } else {
+        const { writeFile } = await import('node:fs/promises')
+        await writeFile(skipMarker, '')
+      }
+    } catch (err) {
+      console.error('[video-proxy]', item.filepath, (err as Error).message)
+    }
+  }
+}
+
 async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
   const db = getDb()
   const items = db
@@ -95,7 +193,10 @@ async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
   let done = 0
   for (const item of items) {
     try {
-      const dur = await probeDuration(ff, item.filepath).catch(() => 0)
+      const { duration: dur } = await probeVideoInfo(ff, item.filepath).catch(() => ({
+        duration: 0,
+        codec: null as string | null
+      }))
       const seek = dur > 1 ? (dur * 0.1).toFixed(2) : '0'
       const tmpFrame = join(tmpdir(), `picalibre-vf-${item.photoId}.jpg`)
       await new Promise<void>((resolve, reject) => {
