@@ -3,6 +3,34 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.18.2] — 2026-07-18
+
+### Corrigé — piste supplémentaire pour « spawn ENOTDIR » (macOS)
+- Laurent a renvoyé une seconde capture après mise à jour : le message
+  d'erreur est resté **strictement identique** au ENOTDIR brut de la
+  2.18.0, sans le contexte ajouté en 2.18.1 (chemin ffmpeg, sortie
+  ffmpeg) — signe probable que la mise à jour ne s'est pas encore
+  totalement appliquée (l'app doit être quittée complètement, pas juste
+  la fenêtre fermée, pour qu'electron-updater termine l'installation).
+- **En parallèle**, un vrai piège Electron identifié et corrigé par
+  précaution : `fs.access()`/`fs.stat()` sont redirigés automatiquement
+  par Electron vers `.asar.unpacked` quand un fichier a été extrait de
+  l'archive, mais **`child_process.spawn()`/`execFile()` n'en bénéficient
+  pas** — le chemin littéral peut alors pointer à l'intérieur de
+  l'archive `.asar` (un simple fichier pour l'OS, pas un vrai dossier),
+  provoquant exactement ENOTDIR au moment du spawn, après que toutes les
+  vérifications `access()` en amont aient réussi. Nouvelle fonction
+  `spawnSafe()` dans le résolveur ffmpeg : substitue `app.asar` par
+  `app.asar.unpacked` dans tout chemin destiné à `spawn()`.
+
+### Si le problème persiste après cette mise à jour
+Vérifier dans Aide → À propos que la version affichée est bien 2.18.2
+(sur macOS, **quitter complètement l'app — ⌘Q — avant de relancer**,
+sinon la mise à jour reste téléchargée sans être appliquée). Si l'erreur
+revient malgré une version confirmée à jour, le message affichera
+désormais le chemin ffmpeg exact utilisé — une capture de ce message
+détaillé permettra un diagnostic définitif.
+
 ## [2.18.1] — 2026-07-18
 
 ### Corrigé — « spawn ENOTDIR » lors de l'extraction d'image fixe

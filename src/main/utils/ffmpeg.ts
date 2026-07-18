@@ -15,7 +15,7 @@
 import { execFileSync, execFile } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
 import { access, chmod, mkdir, rename } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { app, net } from 'electron'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -105,6 +105,21 @@ async function downloadFfmpeg(dest: string): Promise<void> {
   throw new Error(`téléchargement ffmpeg échoué après 3 tentatives : ${(lastErr as Error)?.message}`)
 }
 
+/**
+ * Un chemin peut « exister » selon fs.access()/fs.stat() tout en étant
+ * IMPOSSIBLE À SPAWNER : Electron redirige transparentement les appels
+ * fs.* vers .asar.unpacked quand le fichier a été extrait de l'archive,
+ * mais child_process.spawn()/execFile() ne bénéficie PAS de cette
+ * redirection — le chemin littéral pointe alors À L'INTÉRIEUR de
+ * l'archive .asar (un simple fichier pour l'OS, pas un vrai dossier),
+ * ce qui échoue avec ENOTDIR au moment précis du spawn, après que
+ * toutes les vérifications fs.access() en amont aient réussi. D'où le
+ * piège : le bug est invisible tant qu'on ne teste que access()/exists().
+ */
+function spawnSafe(p: string): string {
+  return p.includes(`${sep}app.asar${sep}`) ? p.replace(`${sep}app.asar${sep}`, `${sep}app.asar.unpacked${sep}`) : p
+}
+
 let _resolved: string | null = null
 let _resolving: Promise<string> | null = null
 
@@ -127,12 +142,12 @@ export function getFfmpegPath(): Promise<string> {
   _resolving = (async () => {
     // 1. Système
     const system = findSystemFfmpeg()
-    if (system && (await works(system))) return (_resolved = system)
+    if (system && (await works(system))) return (_resolved = spawnSafe(system))
 
     // 2. Embarqué (Win/mac/dev)
     const bundled = loadFfmpegStatic()
     if (bundled && (await exists(bundled)) && (await works(bundled))) {
-      return (_resolved = bundled)
+      return (_resolved = spawnSafe(bundled))
     }
 
     // 3. Déjà téléchargé
@@ -141,11 +156,11 @@ export function getFfmpegPath(): Promise<string> {
       'bin',
       process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
     )
-    if ((await exists(local)) && (await works(local))) return (_resolved = local)
+    if ((await exists(local)) && (await works(local))) return (_resolved = spawnSafe(local))
 
     // 4. Téléchargement unique
     await downloadFfmpeg(local)
-    if (await works(local)) return (_resolved = local)
+    if (await works(local)) return (_resolved = spawnSafe(local))
     throw new Error('ffmpeg téléchargé mais non fonctionnel')
   })()
 
