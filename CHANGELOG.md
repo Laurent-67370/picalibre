@@ -3,6 +3,32 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.20.2] — 2026-07-18
+
+### Corrigé — le diaporama sautait en arrière juste avant chaque transition
+- Signalé par Laurent : « une sorte de fondu... revient systématiquement
+  sur la photo d'origine avant de passer à la photo suivante ».
+- **Cause** : les paramètres d'animation Ken Burns (zoom/panoramique) de
+  la PROCHAINE photo étaient appliqués dès le DÉBUT du fondu — alors que
+  la photo ACTUELLE, encore visible à l'écran en train de s'estomper,
+  utilise cette même variable pour son propre transform. Elle sautait
+  donc instantanément vers les paramètres de départ d'une animation qui
+  n'était pas la sienne, juste avant de disparaître dans le fondu — un
+  bug présent depuis l'introduction du diaporama, jamais remarqué faute
+  d'avoir vérifié le transform exact pendant la transition plutôt
+  qu'avant/après.
+- **Correctif** : les nouveaux paramètres Ken Burns ne sont désormais
+  appliqués qu'à la toute fin du fondu, au moment où le calque bascule
+  réellement — la photo qui s'estompe garde son animation intacte
+  jusqu'au bout.
+
+### Vérifié (Xvfb + Electron réel, transform exact mesuré pendant le fondu)
+- Transform du calque actif juste avant la transition :
+  `scale(1.1052) translate(-0.43%, -1.3%)`. À 100 ms dans le fondu
+  (sur 600 ms, donc bien avant la fin) : **valeur strictement
+  identique** — confirmé qu'il n'y a plus aucun saut. Le calque entrant
+  reste à `scale(1)` tant qu'il n'est pas encore actif, comme prévu.
+
 ## [2.20.1] — 2026-07-18
 
 ### Ajouté — script d'auto-correction macOS (Gatekeeper)

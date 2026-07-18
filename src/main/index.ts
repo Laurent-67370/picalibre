@@ -1290,6 +1290,7 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_EDITOR_TABS',
     'PICALIBRE_TEST_MAP_LIGHTBOX',
     'PICALIBRE_TEST_GRID_REMOUNT',
+    'PICALIBRE_TEST_SLIDESHOW',
     'PICALIBRE_TEST_FOLDER_REMOVE',
     'PICALIBRE_TEST_LIGHTBOX_CONTRAST',
     'PICALIBRE_TEST_BATCHEDIT'
@@ -2172,6 +2173,63 @@ app.whenReady().then(() => {
         console.log('[folder-remove-test] photos actives après ANNULATION:', afterUndo, '| dossier masqué:', folderHiddenAfterUndo)
 
         console.log('[folder-remove-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
+  // Test headless du diaporama : le transform Ken Burns de la photo qui
+  // s'estompe encore ne doit plus sauter au moment où le fondu démarre.
+  // PICALIBRE_TEST_SLIDESHOW=<dossier>
+  const slideshowDir = process.env.PICALIBRE_TEST_SLIDESHOW
+  if (slideshowDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(slideshowDir)
+    startScan(mainWindow)
+    const t0s = Date.now()
+    const ivs = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos > 0 && thumbs >= photos * 2) || Date.now() - t0s > 60000) {
+        clearInterval(ivs)
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Chronologie')); if (el) el.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 800))
+        const btnState = await mainWindow.webContents.executeJavaScript(
+          `(() => {
+            const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('Diaporama'))
+            return { found: !!b, disabled: b ? b.disabled : null, text: b ? b.textContent : null }
+          })()`
+        )
+        console.log('[slideshow-test] bouton diaporama:', JSON.stringify(btnState))
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('Diaporama')); if (b) b.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 1500))
+
+        const getActiveTransform = `(() => {
+          const imgs = [...document.querySelectorAll('img')].filter(d => d.style && d.style.transform && d.style.opacity === '1')
+          if (imgs.length === 0) return null
+          return imgs[0].style.transform
+        })()`
+
+        const before = await mainWindow.webContents.executeJavaScript(getActiveTransform)
+        console.log('[slideshow-test] transform avant next():', before)
+
+        // Déclencher la transition (flèche droite)
+        await mainWindow.webContents.executeJavaScript(
+          `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }))`
+        )
+        // Vérifier à 100ms (bien avant la fin du fondu à 600ms) que le
+        // calque qui s'estompe encore n'a PAS sauté vers d'autres paramètres
+        await new Promise((r) => setTimeout(r, 100))
+        const duringFade = await mainWindow.webContents.executeJavaScript(`(() => {
+          const imgs = [...document.querySelectorAll('img')].filter(d => d.style && d.style.transform)
+          return imgs.map(d => ({ opacity: d.style.opacity, transform: d.style.transform }))
+        })()`)
+        console.log('[slideshow-test] calques pendant le fondu (100ms):', JSON.stringify(duringFade))
+        console.log('[slideshow-test] TERMINÉ')
         exitTest(0)
       }
     }, 500)

@@ -92,9 +92,6 @@ export default function Slideshow({
       const n = photos.length
       if (n === 0) return
       const newIndex = (indexRef.current + delta + n) % n
-      setKenBurns(generateKenBurns(photos[newIndex]?.id ?? 0))
-      setProgress(0)
-      startTimeRef.current = performance.now()
       transitioningRef.current = true
 
       // Crossfade : charger la nouvelle image sur l'autre calque
@@ -105,10 +102,20 @@ export default function Slideshow({
         return updated
       })
 
-      // Après le crossfade, basculer le calque actif
+      // Après le crossfade, basculer le calque actif ET SEULEMENT
+      // MAINTENANT réinitialiser kenBurns/progress pour la nouvelle photo.
+      // Avant ce correctif, kenBurns était réécrit dès le DÉBUT du fondu :
+      // la photo encore visible à l'écran (calque actif, en train de
+      // s'estomper) utilise la MÊME variable kenBurns pour son transform —
+      // elle sautait donc instantanément vers les paramètres (échelle/
+      // position de départ) d'une animation qui n'est pas la sienne,
+      // provoquant un « retour en arrière » visible juste avant le fondu.
       setTimeout(() => {
         setActiveLayer(nextLayer)
         setIndex(newIndex)
+        setKenBurns(generateKenBurns(photos[newIndex]?.id ?? 0))
+        setProgress(0)
+        startTimeRef.current = performance.now()
         transitioningRef.current = false
       }, CROSSFADE_MS)
     },
