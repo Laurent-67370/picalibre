@@ -3,6 +3,34 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.19.0] — 2026-07-18
+
+### Refait — panneau de l'éditeur, trop long à faire défiler
+- Signalé par Laurent avec capture d'écran : les boutons Réglages/
+  Filtres/Effets/Texte/Cadre en haut du panneau **n'étaient pas de vrais
+  onglets** — juste des liens de défilement vers des ancres, tout le
+  contenu (curseurs de réglages, filtres, 8 effets avancés, texte,
+  cadre) s'affichait toujours en même temps, dans un ordre qui plus est
+  incohérent dans le code (les curseurs de Réglages se trouvaient après
+  Texte et Cadre).
+- **Vrais onglets** maintenant : un seul groupe de contrôles visible à
+  la fois.
+- **Section Effets avancés repensée** : les 8 effets (Flou, Netteté,
+  Vignette, Doucette, Glow, Orton, Tilt-shift, Pseudo-HDR, Définition)
+  étaient auparavant 8 curseurs pleine largeur toujours affichés — ils
+  sont désormais une grille compacte de boutons à bascule ; le curseur
+  d'un effet n'apparaît qu'une fois cliqué/activé, avec une valeur de
+  départ raisonnable. Plusieurs effets restent combinables.
+
+### Vérifié (Xvfb + Electron réel)
+- Onglet Réglages actif : « EFFETS AVANCÉS » absent de l'écran.
+- Onglet Effets actif : grille affichée, **0 curseur d'effet visible**
+  tant qu'aucun n'est activé, contenu des Filtres (bouton « Sépia »)
+  absent.
+- Clic sur « 🌫 Flou » : son curseur apparaît, lui seul.
+- Retour sur l'onglet Filtres : « EFFETS AVANCÉS » disparaît, « Sépia »
+  réapparaît — exclusion mutuelle confirmée dans les deux sens.
+
 ## [2.18.2] — 2026-07-18
 
 ### Corrigé — piste supplémentaire pour « spawn ENOTDIR » (macOS)

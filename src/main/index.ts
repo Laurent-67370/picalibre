@@ -1252,6 +1252,7 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_RENAME',
     'PICALIBRE_TEST_VIDEO_PLAYBACK',
     'PICALIBRE_TEST_VIDEO_FEATURES',
+    'PICALIBRE_TEST_EDITOR_TABS',
     'PICALIBRE_TEST_BATCHEDIT'
   ].some((k) => !!process.env[k])
   if (!isTestMode) {
@@ -1762,6 +1763,94 @@ app.whenReady().then(() => {
         console.log('[video-features-test] UI:', JSON.stringify(uiState))
 
         console.log('[video-features-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
+  // Test headless des onglets de l'éditeur : PICALIBRE_TEST_EDITOR_TABS=<dossier>
+  const editorTabsDir = process.env.PICALIBRE_TEST_EDITOR_TABS
+  if (editorTabsDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(editorTabsDir)
+    startScan(mainWindow)
+    const t0t = Date.now()
+    const ivt = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos > 0 && thumbs >= photos * 2) || Date.now() - t0t > 60000) {
+        clearInterval(ivt)
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Chronologie')); if (el) el.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 800))
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const im = document.querySelector('main figure canvas'); if (im) im.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })()`
+        )
+        await new Promise((r) => setTimeout(r, 1200))
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('Éditer')); if (b) b.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 1000))
+
+        const countVisibleSliders = `[...document.querySelectorAll('input[type=range]')].length`
+
+        // 1) Onglet par défaut (Réglages) : combien de curseurs visibles ?
+        const tuningCount = await mainWindow.webContents.executeJavaScript(countVisibleSliders)
+        const hasEffectsGridInTuning = await mainWindow.webContents.executeJavaScript(
+          `document.body.textContent.includes('EFFETS AVANCÉS')`
+        )
+
+        // 2) Cliquer l'onglet Effets
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === 'Effets'); if (b) b.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 300))
+        const effectsTabSliderCount = await mainWindow.webContents.executeJavaScript(countVisibleSliders)
+        const hasEffectsGrid = await mainWindow.webContents.executeJavaScript(
+          `document.body.textContent.includes('EFFETS AVANCÉS')`
+        )
+        const hasFiltresContent = await mainWindow.webContents.executeJavaScript(
+          `!!([...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Sépia'))`
+        )
+
+        // 3) Activer l'effet Flou et vérifier qu'un curseur apparaît
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('🌫 Flou')); if (b) b.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 300))
+        const afterActivateBlur = await mainWindow.webContents.executeJavaScript(countVisibleSliders)
+        const hasBlurSlider = await mainWindow.webContents.executeJavaScript(
+          `document.body.textContent.includes('Flou — Rayon')`
+        )
+
+        // 4) Cliquer l'onglet Filtres : vérifier que Effets avancés a disparu
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === 'Filtres'); if (b) b.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 300))
+        const hasEffectsInFiltresTab = await mainWindow.webContents.executeJavaScript(
+          `document.body.textContent.includes('EFFETS AVANCÉS')`
+        )
+        const hasSepiaInFiltresTab = await mainWindow.webContents.executeJavaScript(
+          `!!([...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Sépia'))`
+        )
+
+        console.log(
+          '[editor-tabs-test]',
+          JSON.stringify({
+            tuningCount,
+            hasEffectsGridInTuning,
+            effectsTabSliderCount,
+            hasEffectsGrid,
+            hasFiltresContent,
+            afterActivateBlur,
+            hasBlurSlider,
+            hasEffectsInFiltresTab,
+            hasSepiaInFiltresTab
+          })
+        )
+        console.log('[editor-tabs-test] TERMINÉ')
         exitTest(0)
       }
     }, 500)

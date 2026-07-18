@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PhotoRow, RendererApi } from '@shared/ipc'
 import {
   ColorOpType,
+  EditOp,
   EditStack,
   FilterName,
   RedeyeZone,
@@ -45,6 +46,87 @@ const RATIOS: Array<{ label: string; value: number | null }> = [
   { label: '3:2', value: 3 / 2 },
   { label: '16:9', value: 16 / 9 }
 ]
+
+/**
+ * Effets avancés (section « EFFETS AVANCÉS ») : grille de boutons à
+ * bascule plutôt que 8 curseurs toujours affichés — chaque effet ne
+ * montre son curseur qu'une fois activé (valeur par défaut raisonnable
+ * à l'activation, remis à 0 = retiré du stack à la désactivation).
+ */
+type EffectId =
+  | 'blur'
+  | 'sharpen'
+  | 'vignette'
+  | 'softfocus'
+  | 'glow'
+  | 'orton'
+  | 'tiltshift'
+  | 'hdr'
+  | 'definition'
+
+function isEffectActive(stack: EditStack, id: EffectId): boolean {
+  switch (id) {
+    case 'blur':
+      return (getOp(stack, 'blur')?.params.radius ?? 0) > 0
+    case 'sharpen':
+      return (getOp(stack, 'sharpen')?.params.amount ?? 0) > 0
+    case 'vignette':
+      return (getOp(stack, 'vignette')?.params.intensity ?? 0) > 0
+    case 'softfocus':
+      return (getOp(stack, 'softfocus')?.params.intensity ?? 0) > 0
+    case 'glow':
+      return (getOp(stack, 'glow')?.params.intensity ?? 0) > 0
+    case 'orton':
+      return (getOp(stack, 'orton')?.params.intensity ?? 0) > 0
+    case 'tiltshift':
+      return (getOp(stack, 'tiltshift')?.params.blurRadius ?? 0) > 0
+    case 'hdr':
+      return (getOp(stack, 'hdr')?.params.intensity ?? 0) > 0
+    case 'definition':
+      return (getOp(stack, 'definition')?.params.amount ?? 0) > 0
+  }
+}
+
+function toggleEffect(
+  stack: EditStack,
+  id: EffectId,
+  applyOp: (op: EditOp, action: string) => void
+): void {
+  const active = isEffectActive(stack, id)
+  switch (id) {
+    case 'blur':
+      applyOp({ type: 'blur', params: { radius: active ? 0 : 5 } }, 'blur')
+      break
+    case 'sharpen':
+      applyOp({ type: 'sharpen', params: { amount: active ? 0 : 0.3 } }, 'sharpen')
+      break
+    case 'vignette':
+      applyOp({ type: 'vignette', params: { intensity: active ? 0 : 0.4 } }, 'vignette')
+      break
+    case 'softfocus':
+      applyOp({ type: 'softfocus', params: { intensity: active ? 0 : 0.4 } }, 'softfocus')
+      break
+    case 'glow':
+      applyOp({ type: 'glow', params: { intensity: active ? 0 : 0.4 } }, 'glow')
+      break
+    case 'orton':
+      applyOp({ type: 'orton', params: { intensity: active ? 0 : 0.4 } }, 'orton')
+      break
+    case 'tiltshift': {
+      const cur =
+        getOp(stack, 'tiltshift')?.params ??
+        ({ mode: 'radial', focusX: 0.5, focusY: 0.5, focusRadius: 0.2, blurRadius: 0 } as TiltShiftParams)
+      applyOp({ type: 'tiltshift', params: { ...cur, blurRadius: active ? 0 : 8 } }, 'tiltshift')
+      break
+    }
+    case 'hdr':
+      applyOp({ type: 'hdr', params: { intensity: active ? 0 : 0.4 } }, 'hdr')
+      break
+    case 'definition':
+      applyOp({ type: 'definition', params: { amount: active ? 0 : 0.4 } }, 'definition')
+      break
+  }
+}
 
 interface CropRect {
   x: number
@@ -120,6 +202,7 @@ export default function Editor({
   const compareModeRef = useRef(compareMode)
   compareModeRef.current = compareMode
   const [copiedFlash, setCopiedFlash] = useState(false)
+  const [tab, setTab] = useState<'tuning' | 'filtres' | 'effects' | 'texte' | 'cadre'>('tuning')
 
   // ---------- Rendu ----------
   const drawHistogram = useCallback(() => {
@@ -576,22 +659,22 @@ export default function Editor({
           {copiedFlash ? '✔ Réglages copiés' : '📋 Copier les réglages'}
         </button>
 
-        {/* Navigation rapide vers les sections */}
+        {/* Onglets */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12, padding: '6px 0', borderTop: '1px solid #2a2f38', borderBottom: '1px solid #2a2f38' }}>
-          {[
-            ['tuning', 'Réglages'],
-            ['filtres', 'Filtres'],
-            ['effects', 'Effets'],
-            ['texte', 'Texte'],
-            ['cadre', 'Cadre']
-          ].map(([id, label]) => (
+          {(
+            [
+              ['tuning', 'Réglages'],
+              ['filtres', 'Filtres'],
+              ['effects', 'Effets'],
+              ['texte', 'Texte'],
+              ['cadre', 'Cadre']
+            ] as Array<[typeof tab, string]>
+          ).map(([id, label]) => (
             <button
               key={id}
-              onClick={() => {
-                const el = document.getElementById(`editor-section-${id}`)
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-              }}
-              style={{ fontSize: 12, padding: '3px 8px', background: '#1e2530', border: '1px solid #3a4150', borderRadius: 4, color: '#e2e8f0' }}
+              onClick={() => setTab(id)}
+              className={tab === id ? 'primary' : undefined}
+              style={{ fontSize: 12, padding: '3px 8px' }}
             >
               {label}
             </button>
@@ -614,6 +697,8 @@ export default function Editor({
               </button>
             </div>
 
+            {tab === 'tuning' && (
+            <>
             <div id="editor-section-tuning" style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', marginBottom: 4 }}>OUTILS</div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
               {(
@@ -665,7 +750,11 @@ export default function Editor({
                 </label>
               </>
             )}
+            </>
+            )}
 
+            {tab === 'filtres' && (
+            <>
             <div id="editor-section-filtres" style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '8px 0 4px' }}>EFFETS</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
               {FILTERS.map((f) => {
@@ -715,257 +804,293 @@ export default function Editor({
                 />
               </label>
             )}
+            </>
+            )}
 
+            {tab === 'effects' && (
+            <>
             {/* ---- Flou ---- */}
             <div id="editor-section-effects" style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '12px 0 4px', paddingTop: 8, borderTop: '1px solid #2a2f38' }}>EFFETS AVANCÉS</div>
-
-            <div style={{ fontSize: 12, opacity: 1, margin: '4px 0 2px', fontWeight: 500, color: '#94a3b8' }}>Flou</div>
-            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
-              Rayon : {(getOp(stack, 'blur')?.params.radius ?? 0).toFixed(1)}px
-              <input
-                type="range"
-                min={0}
-                max={20}
-                step={0.5}
-                value={getOp(stack, 'blur')?.params.radius ?? 0}
-                onChange={(e) =>
-                  applyOp(
-                    { type: 'blur', params: { radius: parseFloat(e.target.value) } },
-                    'blur'
-                  )
-                }
-                style={{ width: '100%' }}
-              />
-            </label>
-
-            {/* ---- Netteté ---- */}
-            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>NETTETÉ</div>
-            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
-              Amount : {Math.round((getOp(stack, 'sharpen')?.params.amount ?? 0) * 100)}
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={getOp(stack, 'sharpen')?.params.amount ?? 0}
-                onChange={(e) =>
-                  applyOp(
-                    { type: 'sharpen', params: { amount: parseFloat(e.target.value) } },
-                    'sharpen'
-                  )
-                }
-                style={{ width: '100%' }}
-              />
-            </label>
-
-            {/* ---- Vignette ---- */}
-            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>VIGNETTE</div>
-            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
-              🔘 Vignette : {Math.round((getOp(stack, 'vignette')?.params.intensity ?? 0) * 100)}
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={getOp(stack, 'vignette')?.params.intensity ?? 0}
-                onChange={(e) =>
-                  applyOp(
-                    { type: 'vignette', params: { intensity: parseFloat(e.target.value) } },
-                    'vignette'
-                  )
-                }
-                style={{ width: '100%' }}
-                title="Assombrit les bords de la photo (style Picasa)"
-              />
-            </label>
-
-            {/* ---- Doucette / Soft Focus ---- */}
-            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>DOUCETTE</div>
-            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
-              Intensité : {Math.round((getOp(stack, 'softfocus')?.params.intensity ?? 0) * 100)}
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={getOp(stack, 'softfocus')?.params.intensity ?? 0}
-                onChange={(e) =>
-                  applyOp(
-                    { type: 'softfocus', params: { intensity: parseFloat(e.target.value) } },
-                    'softfocus'
-                  )
-                }
-                style={{ width: '100%' }}
-                title="Fusionne l'image avec une version floutée (adoucissement de portrait)"
-              />
-            </label>
-
-            {/* ---- Glow ---- */}
-            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>GLOW</div>
-            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
-              Intensité : {Math.round((getOp(stack, 'glow')?.params.intensity ?? 0) * 100)}
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={getOp(stack, 'glow')?.params.intensity ?? 0}
-                onChange={(e) =>
-                  applyOp(
-                    { type: 'glow', params: { intensity: parseFloat(e.target.value) } },
-                    'glow'
-                  )
-                }
-                style={{ width: '100%' }}
-                title="Halo lumineux sur les parties claires (mode screen)"
-              />
-            </label>
-
-            {/* ---- Orton ---- */}
-            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>ORTON</div>
-            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
-              Intensité : {Math.round((getOp(stack, 'orton')?.params.intensity ?? 0) * 100)}
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={getOp(stack, 'orton')?.params.intensity ?? 0}
-                onChange={(e) =>
-                  applyOp(
-                    { type: 'orton', params: { intensity: parseFloat(e.target.value) } },
-                    'orton'
-                  )
-                }
-                style={{ width: '100%' }}
-                title="Effet Orton : sur-exposition + flou large + blend (rêveur)"
-              />
-            </label>
-
-            {/* ---- Tilt-shift ---- */}
-            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>TILT-SHIFT</div>
-            {(() => {
-              const tsOp = getOp(stack, 'tiltshift')
-              const tsParams: TiltShiftParams = tsOp?.params ?? {
-                mode: 'radial',
-                focusX: 0.5,
-                focusY: 0.5,
-                focusRadius: 0.2,
-                blurRadius: 0
-              }
-              const updateTiltShift = (partial: Partial<TiltShiftParams>): void => {
-                applyOp(
-                  { type: 'tiltshift', params: { ...tsParams, ...partial } },
-                  'tiltshift'
+            <p style={{ fontSize: 11, color: '#94a3b8', margin: '0 0 6px' }}>
+              Clique un effet pour l'activer — son curseur apparaît juste en dessous. Combinables.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+              {(
+                [
+                  ['blur', '🌫 Flou'],
+                  ['sharpen', '✨ Netteté'],
+                  ['vignette', '🔘 Vignette'],
+                  ['softfocus', '🪶 Doucette'],
+                  ['glow', '💫 Glow'],
+                  ['orton', '🎞 Orton'],
+                  ['tiltshift', '🔭 Tilt-shift'],
+                  ['hdr', '🌈 Pseudo-HDR'],
+                  ['definition', '🔎 Définition']
+                ] as Array<[EffectId, string]>
+              ).map(([id, label]) => {
+                const on = isEffectActive(stack, id)
+                return (
+                  <button
+                    key={id}
+                    onClick={() => toggleEffect(stack, id, applyOp)}
+                    className={on ? 'primary' : undefined}
+                    style={{ fontSize: 12 }}
+                  >
+                    {label}
+                  </button>
                 )
-              }
-              return (
-                <>
-                  <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
-                    Mode
-                    <select
-                      value={tsParams.mode}
-                      onChange={(e) => updateTiltShift({ mode: e.target.value as 'radial' | 'linear' })}
-                      style={{ width: '100%', marginTop: 4 }}
-                    >
-                      <option value="radial">Radial (cercle net)</option>
-                      <option value="linear">Linéaire (bande nette)</option>
-                    </select>
-                  </label>
-                  <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
-                    Focus X : {(tsParams.focusX * 100).toFixed(0)}%
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={tsParams.focusX}
-                      onChange={(e) => updateTiltShift({ focusX: parseFloat(e.target.value) })}
-                      style={{ width: '100%' }}
-                    />
-                  </label>
-                  <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
-                    Focus Y : {(tsParams.focusY * 100).toFixed(0)}%
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={tsParams.focusY}
-                      onChange={(e) => updateTiltShift({ focusY: parseFloat(e.target.value) })}
-                      style={{ width: '100%' }}
-                    />
-                  </label>
-                  <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
-                    Rayon zone nette : {(tsParams.focusRadius * 100).toFixed(0)}%
-                    <input
-                      type="range"
-                      min={0.02}
-                      max={0.5}
-                      step={0.01}
-                      value={tsParams.focusRadius}
-                      onChange={(e) => updateTiltShift({ focusRadius: parseFloat(e.target.value) })}
-                      style={{ width: '100%' }}
-                    />
-                  </label>
-                  <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
-                    Flou : {tsParams.blurRadius.toFixed(1)}px
-                    <input
-                      type="range"
-                      min={0}
-                      max={20}
-                      step={0.5}
-                      value={tsParams.blurRadius}
-                      onChange={(e) => updateTiltShift({ blurRadius: parseFloat(e.target.value) })}
-                      style={{ width: '100%' }}
-                    />
-                  </label>
-                </>
-              )
-            })()}
+              })}
+            </div>
 
-            {/* ---- Pseudo-HDR ---- */}
-            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>PSEUDO-HDR</div>
-            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
-              Intensité : {Math.round((getOp(stack, 'hdr')?.params.intensity ?? 0) * 100)}
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={getOp(stack, 'hdr')?.params.intensity ?? 0}
-                onChange={(e) =>
-                  applyOp(
-                    { type: 'hdr', params: { intensity: parseFloat(e.target.value) } },
-                    'hdr'
-                  )
+            {isEffectActive(stack, 'blur') && (
+              <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
+                🌫 Flou — Rayon : {(getOp(stack, 'blur')?.params.radius ?? 0).toFixed(1)}px
+                <input
+                  type="range"
+                  min={0}
+                  max={20}
+                  step={0.5}
+                  value={getOp(stack, 'blur')?.params.radius ?? 0}
+                  onChange={(e) =>
+                    applyOp(
+                      { type: 'blur', params: { radius: parseFloat(e.target.value) } },
+                      'blur'
+                    )
+                  }
+                  style={{ width: '100%' }}
+                />
+              </label>
+            )}
+
+            {isEffectActive(stack, 'sharpen') && (
+              <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
+                ✨ Netteté : {Math.round((getOp(stack, 'sharpen')?.params.amount ?? 0) * 100)}
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={getOp(stack, 'sharpen')?.params.amount ?? 0}
+                  onChange={(e) =>
+                    applyOp(
+                      { type: 'sharpen', params: { amount: parseFloat(e.target.value) } },
+                      'sharpen'
+                    )
+                  }
+                  style={{ width: '100%' }}
+                />
+              </label>
+            )}
+
+            {isEffectActive(stack, 'vignette') && (
+              <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
+                🔘 Vignette : {Math.round((getOp(stack, 'vignette')?.params.intensity ?? 0) * 100)}
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={getOp(stack, 'vignette')?.params.intensity ?? 0}
+                  onChange={(e) =>
+                    applyOp(
+                      { type: 'vignette', params: { intensity: parseFloat(e.target.value) } },
+                      'vignette'
+                    )
+                  }
+                  style={{ width: '100%' }}
+                  title="Assombrit les bords de la photo (style Picasa)"
+                />
+              </label>
+            )}
+
+            {isEffectActive(stack, 'softfocus') && (
+              <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
+                🪶 Doucette : {Math.round((getOp(stack, 'softfocus')?.params.intensity ?? 0) * 100)}
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={getOp(stack, 'softfocus')?.params.intensity ?? 0}
+                  onChange={(e) =>
+                    applyOp(
+                      { type: 'softfocus', params: { intensity: parseFloat(e.target.value) } },
+                      'softfocus'
+                    )
+                  }
+                  style={{ width: '100%' }}
+                  title="Fusionne l'image avec une version floutée (adoucissement de portrait)"
+                />
+              </label>
+            )}
+
+            {isEffectActive(stack, 'glow') && (
+              <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
+                💫 Glow : {Math.round((getOp(stack, 'glow')?.params.intensity ?? 0) * 100)}
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={getOp(stack, 'glow')?.params.intensity ?? 0}
+                  onChange={(e) =>
+                    applyOp(
+                      { type: 'glow', params: { intensity: parseFloat(e.target.value) } },
+                      'glow'
+                    )
+                  }
+                  style={{ width: '100%' }}
+                  title="Halo lumineux sur les parties claires (mode screen)"
+                />
+              </label>
+            )}
+
+            {isEffectActive(stack, 'orton') && (
+              <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
+                🎞 Orton : {Math.round((getOp(stack, 'orton')?.params.intensity ?? 0) * 100)}
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={getOp(stack, 'orton')?.params.intensity ?? 0}
+                  onChange={(e) =>
+                    applyOp(
+                      { type: 'orton', params: { intensity: parseFloat(e.target.value) } },
+                      'orton'
+                    )
+                  }
+                  style={{ width: '100%' }}
+                  title="Effet Orton : sur-exposition + flou large + blend (rêveur)"
+                />
+              </label>
+            )}
+
+            {isEffectActive(stack, 'tiltshift') &&
+              (() => {
+                const tsOp = getOp(stack, 'tiltshift')
+                const tsParams: TiltShiftParams = tsOp?.params ?? {
+                  mode: 'radial',
+                  focusX: 0.5,
+                  focusY: 0.5,
+                  focusRadius: 0.2,
+                  blurRadius: 0
                 }
-                style={{ width: '100%' }}
-                title="Pseudo-HDR : local tone mapping (boost des détails + compression de dynamique)"
-              />
-            </label>
-
-            {/* ---- Définition / Clarté ---- */}
-            <div style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '4px 0 4px' }}>DÉFINITION</div>
-            <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
-              Intensité : {Math.round((getOp(stack, 'definition')?.params.amount ?? 0) * 100)}
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={getOp(stack, 'definition')?.params.amount ?? 0}
-                onChange={(e) =>
-                  applyOp(
-                    { type: 'definition', params: { amount: parseFloat(e.target.value) } },
-                    'definition'
-                  )
+                const updateTiltShift = (partial: Partial<TiltShiftParams>): void => {
+                  applyOp({ type: 'tiltshift', params: { ...tsParams, ...partial } }, 'tiltshift')
                 }
-                style={{ width: '100%' }}
-                title="Définition/Clarté : accentue la texture et la structure locale sur une zone large, sans les halos fins de la Netteté"
-              />
-            </label>
+                return (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>🔭 Tilt-shift</div>
+                    <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
+                      Mode
+                      <select
+                        value={tsParams.mode}
+                        onChange={(e) => updateTiltShift({ mode: e.target.value as 'radial' | 'linear' })}
+                        style={{ width: '100%', marginTop: 4 }}
+                      >
+                        <option value="radial">Radial (cercle net)</option>
+                        <option value="linear">Linéaire (bande nette)</option>
+                      </select>
+                    </label>
+                    <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
+                      Focus X : {(tsParams.focusX * 100).toFixed(0)}%
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={tsParams.focusX}
+                        onChange={(e) => updateTiltShift({ focusX: parseFloat(e.target.value) })}
+                        style={{ width: '100%' }}
+                      />
+                    </label>
+                    <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
+                      Focus Y : {(tsParams.focusY * 100).toFixed(0)}%
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={tsParams.focusY}
+                        onChange={(e) => updateTiltShift({ focusY: parseFloat(e.target.value) })}
+                        style={{ width: '100%' }}
+                      />
+                    </label>
+                    <label style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
+                      Rayon zone nette : {(tsParams.focusRadius * 100).toFixed(0)}%
+                      <input
+                        type="range"
+                        min={0.02}
+                        max={0.5}
+                        step={0.01}
+                        value={tsParams.focusRadius}
+                        onChange={(e) => updateTiltShift({ focusRadius: parseFloat(e.target.value) })}
+                        style={{ width: '100%' }}
+                      />
+                    </label>
+                    <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
+                      Flou : {tsParams.blurRadius.toFixed(1)}px
+                      <input
+                        type="range"
+                        min={0}
+                        max={20}
+                        step={0.5}
+                        value={tsParams.blurRadius}
+                        onChange={(e) => updateTiltShift({ blurRadius: parseFloat(e.target.value) })}
+                        style={{ width: '100%' }}
+                      />
+                    </label>
+                  </div>
+                )
+              })()}
 
+            {isEffectActive(stack, 'hdr') && (
+              <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
+                🌈 Pseudo-HDR : {Math.round((getOp(stack, 'hdr')?.params.intensity ?? 0) * 100)}
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={getOp(stack, 'hdr')?.params.intensity ?? 0}
+                  onChange={(e) =>
+                    applyOp(
+                      { type: 'hdr', params: { intensity: parseFloat(e.target.value) } },
+                      'hdr'
+                    )
+                  }
+                  style={{ width: '100%' }}
+                  title="Pseudo-HDR : local tone mapping (boost des détails + compression de dynamique)"
+                />
+              </label>
+            )}
+
+            {isEffectActive(stack, 'definition') && (
+              <label style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
+                🔎 Définition : {Math.round((getOp(stack, 'definition')?.params.amount ?? 0) * 100)}
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={getOp(stack, 'definition')?.params.amount ?? 0}
+                  onChange={(e) =>
+                    applyOp(
+                      { type: 'definition', params: { amount: parseFloat(e.target.value) } },
+                      'definition'
+                    )
+                  }
+                  style={{ width: '100%' }}
+                  title="Définition/Clarté : accentue la texture et la structure locale sur une zone large, sans les halos fins de la Netteté"
+                />
+              </label>
+            )}
+            </>
+            )}
+
+            {tab === 'texte' && (
+            <>
             {/* ---- Texte sur photo ---- */}
             <div id="editor-section-texte" style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '12px 0 4px', paddingTop: 8, borderTop: '1px solid #2a2f38' }}>TEXTE</div>
             {(() => {
@@ -1126,7 +1251,11 @@ export default function Editor({
                 </>
               )
             })()}
+            </>
+            )}
 
+            {tab === 'cadre' && (
+            <>
             {/* ---- Bordure / cadre ---- */}
             <div id="editor-section-cadre" style={{ fontSize: 13, opacity: 1, fontWeight: 600, letterSpacing: '0.3px', color: '#cbd5e1', margin: '12px 0 4px', paddingTop: 8, borderTop: '1px solid #2a2f38' }}>CADRE</div>
             {(() => {
@@ -1204,7 +1333,11 @@ export default function Editor({
                 </>
               )
             })()}
+            </>
+            )}
 
+            {tab === 'tuning' && (
+            <>
             <label style={{ fontSize: 13, display: 'block', marginBottom: 14 }}>
               Redressement : {angle.toFixed(1)}°
               <input
@@ -1246,6 +1379,8 @@ export default function Editor({
                 </label>
               )
             })}
+            </>
+            )}
 
             <button
               onMouseDown={() => setShowOriginal(true)}
