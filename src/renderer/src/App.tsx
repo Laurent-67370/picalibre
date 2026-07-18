@@ -924,13 +924,26 @@ export default function App(): JSX.Element {
   // ---- Grille virtualisée ----
   const gridRef = useRef<HTMLDivElement>(null)
   const [gridWidth, setGridWidth] = useState(800)
+  // La grille (et son ref gridRef) est complètement démontée quand on va
+  // dans Réglages ou en gestion des visages d'une personne, puis remontée
+  // en revenant — un nouvel élément DOM à chaque fois. Sans dépendre de
+  // showingGrid, ce useEffect (déps vides à l'origine) ne s'exécutait
+  // qu'au tout premier montage : le ResizeObserver restait attaché à
+  // l'ANCIEN élément démonté, gridWidth ne se mettait plus jamais à jour
+  // pour le nouveau conteneur.
+  const showingGrid = !(view?.type === 'person' && manageFaces) && view?.type !== 'settings'
   useEffect(() => {
+    if (!showingGrid) return
     const el = gridRef.current
     if (!el) return
+    // Lecture immédiate (pas seulement à la prochaine notification du
+    // ResizeObserver) : le nouveau conteneur peut déjà avoir sa taille
+    // définitive dès le montage, inutile d'attendre un futur redimensionnement.
+    setGridWidth(el.clientWidth)
     const ro = new ResizeObserver(() => setGridWidth(el.clientWidth))
     ro.observe(el)
     return () => ro.disconnect()
-  }, [])
+  }, [showingGrid])
 
   const CELL = cellSize + 12
   const ROW_H = cellSize + 54
@@ -979,6 +992,19 @@ export default function App(): JSX.Element {
     virtualizer.measure()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cellSize, columns, gridRows.length])
+
+  // La grille (avec son ref gridRef) est complètement démontée quand on va
+  // dans Réglages ou en gestion des visages d'une personne (ternaire plus
+  // bas), puis remontée en revenant — un nouvel élément DOM, jamais observé
+  // par le virtualiseur. Sans ce re-mesurage explicite, le virtualiseur
+  // continue d'utiliser ses positions calculées pour l'ANCIEN élément
+  // (démonté), désynchronisées du nouveau conteneur qui repart d'un scroll à
+  // zéro — d'où les vignettes qui se chevauchent à des positions
+  // incohérentes jusqu'à un rechargement manuel.
+  useEffect(() => {
+    if (showingGrid) virtualizer.measure()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showingGrid])
 
   // ---- Infinite scroll : charger la page suivante quand on approche du bas ----
   useEffect(() => {

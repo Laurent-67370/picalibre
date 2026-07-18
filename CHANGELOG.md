@@ -3,6 +3,38 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.19.6] — 2026-07-18
+
+### Corrigé — vignettes qui se chevauchaient après un aller-retour par Réglages
+- Signalé par Laurent avec capture d'écran : dans un dossier, les
+  vignettes s'affichaient correctement ; après être allé dans Réglages
+  puis revenu dans le dossier, les vignettes se chevauchaient à des
+  positions incohérentes, nécessitant un rechargement manuel.
+- **Cause** : la grille (virtualisée avec `@tanstack/react-virtual`, pour
+  n'afficher que les lignes visibles même avec des milliers de photos)
+  est complètement démontée en allant dans Réglages ou en gestion des
+  visages, puis remontée — un tout nouvel élément DOM à chaque fois. Le
+  `ResizeObserver` qui mesure la largeur du conteneur (`gridWidth`, d'où
+  dépend le nombre de colonnes) n'avait des dépendances vides : il ne
+  s'exécutait qu'au tout premier montage de l'app, restant attaché pour
+  toujours à l'ANCIEN élément démonté. Le nombre de colonnes ne se
+  remettait plus jamais à jour pour le nouveau conteneur, désynchronisant
+  le regroupement des lignes et les positions calculées par le
+  virtualiseur.
+- **Correctif** : le `ResizeObserver` se réattache maintenant proprement
+  à chaque remontage de la grille (avec une lecture immédiate de la
+  largeur, pas seulement à la prochaine notification), et le virtualiseur
+  est explicitement re-mesuré au même moment.
+
+### Vérifié (Xvfb + Electron réel, scénario exact signalé, 60 photos)
+- Dossier → Réglages → retour au dossier : nombre de vignettes affichées
+  et chevauchements réels mesurés (bounding rects qui se recouvrent) via
+  `getBoundingClientRect()` sur chaque vignette, avant et après le
+  changement de vue. Avant correctif : 35→7 vignettes, 18 chevauchements
+  détectés. Après correctif : 35→35 vignettes, 0 chevauchement — répété
+  3 fois pour écarter tout hasard. Pipeline de scan et parité CPU/GPU
+  revérifiés : aucune régression.
+
 ## [2.19.5] — 2026-07-18
 
 ### Corrigé — l'éditeur (et d'autres vues) repassait derrière la Carte

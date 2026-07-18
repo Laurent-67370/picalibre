@@ -1254,6 +1254,7 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_VIDEO_FEATURES',
     'PICALIBRE_TEST_EDITOR_TABS',
     'PICALIBRE_TEST_MAP_LIGHTBOX',
+    'PICALIBRE_TEST_GRID_REMOUNT',
     'PICALIBRE_TEST_LIGHTBOX_CONTRAST',
     'PICALIBRE_TEST_BATCHEDIT'
   ].some((k) => !!process.env[k])
@@ -2014,6 +2015,64 @@ app.whenReady().then(() => {
         )
         console.log('[lightbox-contrast-test] thème:', theme, '—', JSON.stringify(colors))
         console.log('[lightbox-contrast-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
+  // Test headless du bug de grille signalé : dossier → Réglages → retour
+  // au dossier → les vignettes se chevauchaient (virtualiseur désynchronisé
+  // après démontage/remontage de son conteneur). PICALIBRE_TEST_GRID_REMOUNT=<dossier>
+  const gridRemountDir = process.env.PICALIBRE_TEST_GRID_REMOUNT
+  if (gridRemountDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(gridRemountDir)
+    startScan(mainWindow)
+    const t0g = Date.now()
+    const ivg = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos > 0 && thumbs >= photos * 2) || Date.now() - t0g > 60000) {
+        clearInterval(ivg)
+        // 1) Aller dans le dossier
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Chronologie')); if (el) el.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 800))
+
+        const measureOverlap = `(() => {
+          const figs = [...document.querySelectorAll('main figure')]
+          const rects = figs.map(f => f.getBoundingClientRect())
+          let overlaps = 0
+          for (let i = 0; i < rects.length; i++) {
+            for (let j = i + 1; j < rects.length; j++) {
+              const a = rects[i], b = rects[j]
+              const ox = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left))
+              const oy = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top))
+              if (ox > 5 && oy > 5) overlaps++
+            }
+          }
+          return { count: figs.length, overlaps }
+        })()`
+
+        const before = await mainWindow.webContents.executeJavaScript(measureOverlap)
+        console.log('[grid-remount-test] avant (dossier initial):', JSON.stringify(before))
+
+        // 2) Aller dans Réglages (démonte la grille)
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Réglages')); if (el) el.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 500))
+
+        // 3) Revenir dans le dossier (remonte la grille)
+        await mainWindow.webContents.executeJavaScript(
+          `(() => { const el = [...document.querySelectorAll('aside div')].find(d => d.textContent.includes('Chronologie')); if (el) el.click(); })()`
+        )
+        await new Promise((r) => setTimeout(r, 800))
+
+        const after = await mainWindow.webContents.executeJavaScript(measureOverlap)
+        console.log('[grid-remount-test] après (retour au dossier):', JSON.stringify(after))
+        console.log('[grid-remount-test] TERMINÉ')
         exitTest(0)
       }
     }, 500)
