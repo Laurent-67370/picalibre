@@ -26,13 +26,27 @@ function getConfig(): WebSyncConfig | null {
   return url && token ? { url: url.replace(/\/$/, ''), token } : null
 }
 
-export function setConfig(cfg: WebSyncConfig): void {
+export function setConfig(cfg: WebSyncConfig): { ok: boolean; error?: string } {
+  // Durcissement (audit) : le token part dans l'en-tête de chaque requête —
+  // en http clair il serait lisible par n'importe quel équipement du
+  // réseau. https obligatoire, à l'exception de localhost (auto-hébergement
+  // sur la même machine, le trafic ne quitte pas l'hôte).
+  try {
+    const u = new URL(cfg.url)
+    const isLocalhost = u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '::1'
+    if (u.protocol !== 'https:' && !(u.protocol === 'http:' && isLocalhost)) {
+      return { ok: false, error: 'URL en https obligatoire (http accepté uniquement pour localhost).' }
+    }
+  } catch {
+    return { ok: false, error: 'URL invalide.' }
+  }
   const db = getDb()
   const set = db.prepare(
     `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`
   )
   set.run('websync_url', cfg.url.replace(/\/$/, ''))
   set.run('websync_token', cfg.token)
+  return { ok: true }
 }
 
 export function getConfigForUi(): WebSyncConfig | null {

@@ -198,10 +198,10 @@ export interface IpcInvokeMap {
     req: Array<{ id: number; oldPath: string; oldFilename: string; newPath: string; newFilename: string }>
     res: void
   }
-  'photos:hidden': { req: void; res: PhotoRow[] }
+  'photos:hidden': { req: { offset: number; limit: number } | void; res: PhotoRow[] }
   'photos:trash': { req: { photoIds: number[] }; res: { ok: boolean; error?: string } }
   'photos:undoTrash': { req: { photoIds: number[] }; res: void }
-  'photos:trashed': { req: void; res: PhotoRow[] }
+  'photos:trashed': { req: { offset: number; limit: number } | void; res: PhotoRow[] }
   'photos:deleteForever': {
     req: { photoIds: number[] }
     res: { deleted: number; errors: Array<{ id: number; filename: string; error: string }> }
@@ -259,7 +259,7 @@ export interface IpcInvokeMap {
   'update:install': { req: void; res: void }
   'context:photoMenu': { req: { photoId: number; selectedCount: number }; res: void }
   'websync:getConfig': { req: void; res: { url: string; token: string } | null }
-  'websync:setConfig': { req: { url: string; token: string }; res: void }
+  'websync:setConfig': { req: { url: string; token: string }; res: { ok: boolean; error?: string } }
   'websync:test': { req: { url: string; token: string }; res: { ok: boolean; message: string } }
   'websync:run': { req: void; res: void }
   'dialog:pickFiles': { req: { name: string; extensions: string[] }; res: string[] }

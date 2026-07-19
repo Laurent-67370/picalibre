@@ -438,13 +438,20 @@ export default function App(): JSX.Element {
     if (v.type === 'hidden') {
       window.api.invoke('privacy:status', undefined).then((st) => {
         setPrivacy(st)
-        if (st.unlocked) window.api.invoke('photos:hidden', undefined).then(setPhotos)
+        if (st.unlocked)
+          window.api.invoke('photos:hidden', { offset: 0, limit: PAGE_SIZE }).then((r) => {
+            setPhotos(r)
+            setHasMore(r.length >= PAGE_SIZE)
+          })
         else setPhotos([])
       })
       return
     }
     if (v.type === 'trash') {
-      window.api.invoke('photos:trashed', undefined).then(setPhotos)
+      window.api.invoke('photos:trashed', { offset: 0, limit: PAGE_SIZE }).then((r) => {
+        setPhotos(r)
+        setHasMore(r.length >= PAGE_SIZE)
+      })
       return
     }
     // Filtres passés au main pour filtrage SQL (minStars, typeFilter) et tri (sortMode)
@@ -490,6 +497,10 @@ export default function App(): JSX.Element {
       req = window.api.invoke('photos:byPerson', { personId: v.id, offset, limit: PAGE_SIZE, ...filters })
     } else if (v.type === 'search') {
       req = window.api.invoke('photos:search', { query: v.query, offset, limit: PAGE_SIZE, ...filters })
+    } else if (v.type === 'hidden') {
+      req = window.api.invoke('photos:hidden', { offset, limit: PAGE_SIZE })
+    } else if (v.type === 'trash') {
+      req = window.api.invoke('photos:trashed', { offset, limit: PAGE_SIZE })
     } else {
       return
     }
@@ -1878,7 +1889,11 @@ export default function App(): JSX.Element {
                   <button
                     className="primary"
                     onClick={async () => {
-                      await window.api.invoke('websync:setConfig', { url: websyncUrl, token: websyncToken })
+                      const cfgR = await window.api.invoke('websync:setConfig', { url: websyncUrl, token: websyncToken })
+                      if (!cfgR.ok) {
+                        setWebsyncMsg(cfgR.error ?? 'Configuration refusée.')
+                        return
+                      }
                       await window.api.invoke('websync:run', undefined)
                     }}
                     disabled={!websyncUrl || !websyncToken || websyncProgress?.phase === 'thumbnails' || websyncProgress?.phase === 'metadata'}

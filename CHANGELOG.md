@@ -3,6 +3,38 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.23.4] — 2026-07-19
+
+Derniers correctifs mineurs de l'audit — clôt tout le corrigeable à court
+terme (reste uniquement la montée d'Electron, chantier dédié).
+
+### Sécurité
+- **Sandbox Chromium activé** sur la fenêtre principale (`sandbox: true`) :
+  le renderer tourne désormais dans le bac à sable OS complet. Le preload
+  n'utilise que des API disponibles en mode sandboxé (vérifié sur le
+  bundle compilé) ; les fenêtres secondaires (visages, impression)
+  étaient déjà sandboxées par défaut depuis Electron 20.
+- **https obligatoire pour la synchronisation web** : le jeton partant
+  dans chaque requête, une URL http en clair l'exposerait à tout
+  équipement du réseau. http reste toléré uniquement pour localhost
+  (auto-hébergement local, CI) ; une URL refusée affiche le motif dans
+  les Réglages et n'écrase pas la configuration.
+
+### Amélioré
+- **Vues Corbeille et Masquées paginées** : chargement par pages
+  (LIMIT/OFFSET) avec défilement infini, aligné sur toutes les autres
+  vues — plus de payload massif d'un coup sur les très grosses
+  bibliothèques. Rétrocompatible (sans paramètre, tout est renvoyé).
+
+### Vérifié (Xvfb + Electron réel)
+- Pagination corbeille : page 0 limit 1 → 1 résultat, page 1 → 0,
+  sans payload → tout.
+- websync : http distant refusé, https accepté, http://localhost accepté
+  (la CI websync utilise localhost et reste verte).
+- Toute la batterie sécurité/Corbeille/confidentialité (2.23.1 → 2.23.3)
+  repasse à l'identique avec le sandbox actif — le preload sandboxé est
+  en outre exercé sans --no-sandbox par la CI macOS/Windows.
+
 ## [2.23.3] — 2026-07-19
 
 Durcissements issus de l'audit de suivi.

@@ -300,7 +300,12 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      // Durcissement (audit) : sandbox Chromium actif. Le preload n'utilise
+      // que contextBridge/ipcRenderer/webUtils, tous disponibles en preload
+      // sandboxé — vérifié sur le bundle compilé (seul require: 'electron').
+      // Les fenêtres secondaires (faces, impression) étaient déjà
+      // sandboxées par défaut depuis Electron 20.
+      sandbox: true
     }
   })
 
@@ -705,10 +710,14 @@ function registerIpc(): void {
     tx(photoIds)
     return { ok: true }
   })
-  ipcMain.handle('photos:hidden', () => {
+  ipcMain.handle('photos:hidden', (_e, page?: { offset: number; limit: number }) => {
     if (!isUnlocked()) return []
+    // Paginé (audit) : même flux LIMIT/OFFSET que les autres vues — sans
+    // payload (appels historiques/tests), tout est renvoyé comme avant.
     return getDb()
-      .prepare(`SELECT ${GRID_COLS} FROM photos WHERE is_hidden = 1 AND status = 'active' ORDER BY taken_at DESC`)
+      .prepare(
+        `SELECT ${GRID_COLS} FROM photos WHERE is_hidden = 1 AND status = 'active' ORDER BY taken_at DESC${page ? ` LIMIT ${Math.max(0, Math.floor(page.limit))} OFFSET ${Math.max(0, Math.floor(page.offset))}` : ''}`
+      )
       .all()
   })
 
@@ -739,14 +748,14 @@ function registerIpc(): void {
     })
     tx(photoIds)
   })
-  ipcMain.handle('photos:trashed', () =>
+  ipcMain.handle('photos:trashed', (_e, page?: { offset: number; limit: number }) =>
     getDb()
       .prepare(
         // Verrou de confidentialité : tant que les photos masquées sont
         // verrouillées, celles mises à la corbeille depuis la vue Masquées
         // ne doivent PAS apparaître ici — sinon la Corbeille devient un
-        // contournement du mot de passe.
-        `SELECT ${GRID_COLS} FROM photos WHERE status = 'trashed'${isUnlocked() ? '' : ' AND is_hidden = 0'} ORDER BY taken_at DESC`
+        // contournement du mot de passe. Paginé comme les autres vues.
+        `SELECT ${GRID_COLS} FROM photos WHERE status = 'trashed'${isUnlocked() ? '' : ' AND is_hidden = 0'} ORDER BY taken_at DESC${page ? ` LIMIT ${Math.max(0, Math.floor(page.limit))} OFFSET ${Math.max(0, Math.floor(page.offset))}` : ''}`
       )
       .all()
   )
@@ -1990,6 +1999,45 @@ app.whenReady().then(() => {
         console.log(
           '[trash-test] navigation externe bloquée ? (doit être true):',
           urlBefore === urlAfter
+        )
+
+        // 8) Pagination (correctif audit) : la Corbeille contient encore la
+        //    photo masquée (déverrouillée à l'étape 6→7 re-verrouillée puis
+        //    ici on déverrouille pour la voir) — vérifier LIMIT/OFFSET réels
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('privacy:unlock', { password: 'test-audit' })`
+        )
+        // Remettre les 2 autres photos… déjà supprimées — recréer du contenu
+        // de corbeille : remettre la photo masquée + rien d'autre, donc on
+        // teste limit=1/offset=0 puis offset=1 (vide)
+        const page0 = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:trashed', { offset: 0, limit: 1 }).then(r => r.length)`
+        )
+        const page1 = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:trashed', { offset: 1, limit: 1 }).then(r => r.length)`
+        )
+        const noPage = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:trashed', undefined).then(r => r.length)`
+        )
+        console.log(
+          '[trash-test] pagination corbeille [page0, page1, sans-payload] (doit être [1,0,1]):',
+          JSON.stringify([page0, page1, noPage])
+        )
+
+        // 9) websync (correctif audit) : http distant refusé, https accepté,
+        //    http localhost toléré (auto-hébergement + CI)
+        const wsHttp = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('websync:setConfig', { url: 'http://exemple.fr/api', token: 't' })`
+        )
+        const wsHttps = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('websync:setConfig', { url: 'https://exemple.fr/api', token: 't' })`
+        )
+        const wsLocal = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('websync:setConfig', { url: 'http://localhost:4120', token: 't' })`
+        )
+        console.log(
+          '[trash-test] websync [http distant, https, http localhost] ok? (doit être [false,true,true]):',
+          JSON.stringify([wsHttp.ok, wsHttps.ok, wsLocal.ok])
         )
 
         console.log('[trash-test] TERMINÉ')
