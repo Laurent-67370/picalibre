@@ -3,6 +3,23 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.22.0] — 2026-07-19
+
+### Ajouté — Regroupement voyages / événements
+- **Détection temporelle** : les photos sélectionnées sont triées par date
+  de prise de vue (`taken_at`) et regroupées selon un écart maximum
+  configurable (1-72h, défaut 12h). Les photos séparées de moins de cet écart
+  font partie du même voyage/événement.
+- **Aperçu** : avant de créer les albums, l'utilisateur voit la liste des
+  voyages détectés (nom auto + nombre de photos + plage de dates).
+- **Création d'albums** : un album est créé pour chaque groupe via IPC
+  `albums:create` + `albums:addPhotos`. Nom auto : « Voyage — {date début}
+  → {date fin} » (ou date unique si même jour).
+- **UI** : bouton 🧳 Voyages dans la barre du tray (à côté de ✏️ Renommer),
+  dialogue modal avec slider d'écart, bouton de détection, aperçu des
+  groupes, et bouton de création.
+- **États** : `tripOpen`, `tripBusy`, `tripGapHours`, `tripPreview`.
+
 ## [2.21.0] — 2026-07-19
 
 ### Ajouté — Corbeille
