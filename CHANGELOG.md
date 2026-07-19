@@ -3,6 +3,25 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.23.2] — 2026-07-19
+
+### Sécurité
+- **Mise à niveau `exiftool-vendored` 28.8.0 → 35.21.0** pour corriger la
+  vulnérabilité haute sévérité GHSA-cw26-7653-2rp5 (injection d'arguments
+  via retours à la ligne dans les noms de tags — versions ≤ 35.18.0
+  vulnérables). `npm audit` : 0 vulnérabilité après la montée.
+- La v37 (dernière) a été volontairement écartée : elle exige Node ≥ 22
+  alors qu'Electron 33 embarque Node 20.18 — la série 35.19+ corrige la
+  même CVE en restant compatible Node ≥ 20. La v37 redeviendra pertinente
+  lors de la future montée d'Electron.
+
+### Vérifié (Xvfb + Electron réel, Node 20 embarqué)
+- Pipeline complet scan → extraction EXIF → détection voyages sur les 20
+  photos de test : les 13 coordonnées GPS lues à l'identique (Strasbourg,
+  Paris, Marseille), les 20 dates de prise de vue extraites, la photo au
+  GPS corrompu (0,0) toujours correctement normalisée — aucun changement
+  de comportement, même résultat de détection qu'avant la montée.
+
 ## [2.23.1] — 2026-07-19
 
 Correctifs issus d'un audit sécurité/performance/robustesse du code.
