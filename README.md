@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.23.4-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -117,6 +117,14 @@ réels (formats modernes, doublons, undo illimité en édition, galerie
 mobile, open source, découpe non destructive). Les 3 écarts qui restaient
 ouverts (Définition/Clarté, découpe vidéo, extraction d'image fixe) ont
 été comblés et vérifiés avec de vraies vidéos, pas des simulations.
+
+## 🆕 Quoi de neuf en 2.24.0
+
+- ⚡ **Electron 33 → 42** (Chromium 148, Node 24) : clôt le dernier point
+  de l'audit de sécurité — la série 33 en fin de vie cumulait 5 advisories
+  haute sévérité. Montée groupée de l'outillage (better-sqlite3 12,
+  electron-builder 26, exiftool-vendored 37). 0 vulnérabilité en
+  production, toute la batterie de tests repasse à l'identique.
 
 ## 🆕 Quoi de neuf en 2.23.4
 

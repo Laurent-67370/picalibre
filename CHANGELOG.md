@@ -3,6 +3,37 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.0] — 2026-07-19
+
+### Sécurité / infrastructure — montée d'Electron 33 → 42
+Clôt le dernier point de l'audit : la série Electron 33 (fin de vie)
+cumulait 5 advisories haute sévérité, toutes corrigées dans les séries
+courantes.
+- **Electron 42.7.0** (Chromium 148, Node 24.18) — série stable et mûre,
+  choisie plutôt que la toute dernière (43.1.1, trop jeune : pas encore
+  de binaires précompilés better-sqlite3 pour son ABI).
+- **better-sqlite3 11.8 → 12.11** et **electron-builder 25 → 26**
+  (support des Electron récents).
+- **exiftool-vendored 35.21 → 37.0** : la montée différée en 2.23.2
+  (v37 exige Node ≥ 22, incompatible avec le Node 20 d'Electron 33)
+  devient possible avec le Node 24 d'Electron 42 — dette soldée comme
+  prévu.
+- `npm audit` production : 0 vulnérabilité. Il ne reste que 3 alertes
+  dans le serveur de développement (esbuild/electron-vite), jamais
+  embarqué dans l'application livrée.
+- Au passage : le User-Agent des requêtes Nominatim (détection voyages)
+  suit désormais automatiquement la version de l'app au lieu d'être figé.
+
+### Vérifié (Xvfb + Electron 42 réel)
+- Batterie E2E Corbeille/sécurité complète : 13/13 assertions conformes
+  (scan, EXIF, corbeille, restauration, suppression définitive fichier +
+  cache, verrou de confidentialité, protocole thumb 403/200, blocage de
+  navigation, pagination, validation https websync) — aucune dépréciation
+  Electron dans les logs.
+- Détection voyages avec exiftool 37 : résultat strictement identique à
+  la référence (mêmes 4 groupes, mêmes tailles, ruptures géographiques
+  Paris/Marseille fonctionnelles → lecture EXIF dates + GPS conforme).
+
 ## [2.23.4] — 2026-07-19
 
 Derniers correctifs mineurs de l'audit — clôt tout le corrigeable à court

@@ -21,7 +21,7 @@
  * mars 2026". Sans aucune photo géolocalisée dans le groupe, on retombe
  * sur la plage de dates seule.
  */
-import { net } from 'electron'
+import { app, net } from 'electron'
 import { getDb } from '../db'
 
 const GAP_SECONDS = 2 * 24 * 3600 // 2 jours
@@ -99,7 +99,7 @@ async function reverseGeocodeCity(lat: number, lon: number): Promise<string | nu
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`
     const resp = await net.fetch(url, {
-      headers: { 'User-Agent': 'PicaLibre/2.21.0 (photo manager)' }
+      headers: { 'User-Agent': `PicaLibre/${app.getVersion()} (photo manager)` }
     })
     if (!resp.ok) return null
     const data = (await resp.json()) as {
