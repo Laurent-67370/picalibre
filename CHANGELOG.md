@@ -3,6 +3,48 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.23.1] — 2026-07-19
+
+Correctifs issus d'un audit sécurité/performance/robustesse du code.
+
+### Sécurité
+- **La Corbeille respecte désormais le verrou de confidentialité** : une
+  photo masquée protégée par mot de passe, mise à la corbeille depuis la
+  vue Masquées, apparaissait dans la vue Corbeille sans mot de passe
+  (introduit en 2.21.0). `photos:trashed` exclut maintenant les photos
+  masquées tant que le verrou est actif ; en défense en profondeur,
+  `photos:deleteForever` refuse aussi de supprimer une photo masquée
+  verrouillée, même par appel IPC direct.
+
+### Corrigé
+- **Fuite de listeners IPC** côté interface : les abonnements
+  `import:progress` et `export:progress` n'étaient jamais désinscrits au
+  démontage (handlers dupliqués en développement/HMR).
+- **Orphelins disque à la suppression définitive** : les miniatures webp
+  du cache et l'éventuel proxy vidéo H.264 restaient sur le disque pour
+  toujours (seules les lignes en base cascadaient). Ils sont maintenant
+  supprimés, et le cache mémoire de résolution des miniatures est purgé.
+- **GPS corrompu (0,0) dans la détection voyages** : la valeur EXIF
+  classique « 0,0 » (appareil écrivant des zéros) était traitée comme une
+  vraie position dans le golfe de Guinée et déclenchait de fausses
+  ruptures géographiques. Coordonnées hors bornes ou (0,0) exact sont
+  désormais traitées comme absentes.
+
+### Performance
+- La détection voyages n'attend plus 1,1 s après le **dernier** groupe
+  géocodé (le délai de politesse Nominatim ne s'applique qu'entre deux
+  appels réseau réels).
+
+### Vérifié (Xvfb + Electron réel)
+- Verrou : corbeille verrouillée → photo masquée invisible ; déverrouillée
+  → visible ; `deleteForever` verrouillé → 0 suppression, la photo existe
+  toujours en base.
+- Cache : 4 miniatures webp présentes avant suppression définitive, 0
+  restante sur disque après.
+- GPS : une photo (0,0) insérée au milieu d'un groupe sans GPS rejoint
+  son groupe temporel normalement au lieu de le scinder — détection
+  globale inchangée par ailleurs (mêmes 4 groupes).
+
 ## [2.23.0] — 2026-07-19
 
 ### Remplacé — Regroupement voyages / événements (version complète)

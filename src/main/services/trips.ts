@@ -57,6 +57,18 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return 2 * R * Math.asin(Math.sqrt(a))
 }
 
+/**
+ * Coordonnées GPS plausibles : dans les bornes ET différentes du point
+ * (0,0) exact — valeur classique d'EXIF corrompu (appareil qui écrit des
+ * zéros au lieu de rien) qui, traitée comme une vraie position dans le
+ * golfe de Guinée, déclencherait de fausses ruptures géographiques.
+ */
+export function isValidGps(lat: number | null, lon: number | null): boolean {
+  if (lat == null || lon == null) return false
+  if (lat === 0 && lon === 0) return false
+  return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
+}
+
 const MONTHS_FR = [
   'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
   'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
@@ -139,28 +151,40 @@ export function segmentByBreaks(photos: TripPhotoLite[]): TripPhotoLite[][] {
  */
 export async function detectTrips(): Promise<TripGroup[]> {
   const db = getDb()
-  const rows = db
-    .prepare(
-      `SELECT id, taken_at, gps_lat, gps_lon FROM photos
+  const rows = (
+    db
+      .prepare(
+        `SELECT id, taken_at, gps_lat, gps_lon FROM photos
        WHERE status = 'active' AND is_hidden = 0 AND taken_at IS NOT NULL
        ORDER BY taken_at ASC`
-    )
-    .all() as TripPhotoLite[]
+      )
+      .all() as TripPhotoLite[]
+  ).map((p) =>
+    // Normalisation : un GPS implausible est traité comme absent partout
+    // en aval (segmentation ET choix de la photo à géocoder).
+    isValidGps(p.gps_lat, p.gps_lon) ? p : { ...p, gps_lat: null, gps_lon: null }
+  )
 
   const segments = segmentByBreaks(rows).filter((g) => g.length >= MIN_GROUP_SIZE)
 
   const result: TripGroup[] = []
-  for (const g of segments) {
+  const lastGeoIdx = segments.reduce(
+    (acc, g, i) => (g.some((p) => p.gps_lat != null && p.gps_lon != null) ? i : acc),
+    -1
+  )
+  for (let i = 0; i < segments.length; i++) {
+    const g = segments[i]
     const startDate = g[0].taken_at
     const endDate = g[g.length - 1].taken_at
     const geoPhoto = g.find((p) => p.gps_lat != null && p.gps_lon != null)
     let city: string | null = null
     if (geoPhoto && geoPhoto.gps_lat != null && geoPhoto.gps_lon != null) {
       city = await reverseGeocodeCity(geoPhoto.gps_lat, geoPhoto.gps_lon)
-      // Respecte la politique d'usage Nominatim (max ~1 req/s) — seulement
-      // entre deux vrais appels réseau, pas quand city est déjà connu ou
-      // qu'aucune photo du groupe n'a de GPS.
-      await new Promise((r) => setTimeout(r, 1100))
+      // Respecte la politique d'usage Nominatim (max ~1 req/s), mais
+      // uniquement ENTRE deux appels réseau — pas après le dernier groupe
+      // géocodé (l'attente ne protégerait rien et ralentirait l'écran de
+      // review d'une seconde pour rien).
+      if (i < lastGeoIdx) await new Promise((r) => setTimeout(r, 1100))
     }
     const dateRange = formatDateRange(startDate, endDate)
     result.push({

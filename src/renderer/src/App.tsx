@@ -573,14 +573,13 @@ export default function App(): JSX.Element {
     const offBP = window.api.on('batch:progress', (p) => {
       setBatchProgress(p.current >= p.total ? null : p)
     })
-    void off5
-    void off6
-    void offBP
     return () => {
       off1()
       off2()
       off3()
       off4()
+      off5()
+      off6()
       offU()
       offM()
       offWS()

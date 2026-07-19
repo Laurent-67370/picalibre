@@ -696,19 +696,36 @@ function registerIpc(): void {
   })
   ipcMain.handle('photos:trashed', () =>
     getDb()
-      .prepare(`SELECT ${GRID_COLS} FROM photos WHERE status = 'trashed' ORDER BY taken_at DESC`)
+      .prepare(
+        // Verrou de confidentialité : tant que les photos masquées sont
+        // verrouillées, celles mises à la corbeille depuis la vue Masquées
+        // ne doivent PAS apparaître ici — sinon la Corbeille devient un
+        // contournement du mot de passe.
+        `SELECT ${GRID_COLS} FROM photos WHERE status = 'trashed'${isUnlocked() ? '' : ' AND is_hidden = 0'} ORDER BY taken_at DESC`
+      )
       .all()
   )
   ipcMain.handle('photos:deleteForever', async (_e, { photoIds }: { photoIds: number[] }) => {
     const db = getDb()
     const rows = db
       .prepare(
-        `SELECT id, filepath, filename FROM photos WHERE id IN (${photoIds.map(() => '?').join(',') || 'NULL'}) AND status = 'trashed'`
+        // Même défense en profondeur que photos:trashed : verrouillé, on ne
+        // peut pas supprimer définitivement une photo masquée (l'UI ne peut
+        // de toute façon pas la lister, mais un appel IPC direct non plus).
+        `SELECT id, filepath, filename, hash_xxh3, media_type FROM photos
+         WHERE id IN (${photoIds.map(() => '?').join(',') || 'NULL'}) AND status = 'trashed'${isUnlocked() ? '' : ' AND is_hidden = 0'}`
       )
-      .all(...photoIds) as { id: number; filepath: string; filename: string }[]
+      .all(...photoIds) as {
+      id: number
+      filepath: string
+      filename: string
+      hash_xxh3: string
+      media_type: string
+    }[]
     const errors: Array<{ id: number; filename: string; error: string }> = []
     let deleted = 0
     const del = db.prepare('DELETE FROM photos WHERE id = ?')
+    const thumbRows = db.prepare('SELECT cache_path FROM thumbnails WHERE photo_id = ?')
     for (const row of rows) {
       try {
         await fsUnlink(row.filepath)
@@ -719,6 +736,22 @@ function registerIpc(): void {
           errors.push({ id: row.id, filename: row.filename, error: (err as Error).message })
           continue
         }
+      }
+      // Nettoyage du cache disque AVANT le DELETE (la cascade SQL supprime
+      // les lignes thumbnails mais laisserait les .webp orphelins pour
+      // toujours) : miniatures webp + éventuel proxy vidéo H.264.
+      const caches = thumbRows.all(row.id) as { cache_path: string }[]
+      for (const c of caches) {
+        await fsUnlink(c.cache_path).catch(() => {})
+      }
+      if (row.media_type === 'video') {
+        await fsUnlink(
+          join(thumbsCacheDir(), row.hash_xxh3.slice(0, 2), `${row.hash_xxh3}_proxy.mp4`)
+        ).catch(() => {})
+      }
+      // Purge du cache mémoire de résolution des miniatures (toutes tailles)
+      for (const key of thumbPathCache.keys()) {
+        if (key.startsWith(`${row.id}:`)) thumbPathCache.delete(key)
       }
       del.run(row.id)
       deleted++
@@ -1774,8 +1807,15 @@ app.whenReady().then(() => {
         console.log('[trash-test] statut après restauration id=' + restoreId + ':', afterRestore.status)
 
         // 4) Supprimer définitivement les 2 restantes — vérifier fichier ET
-        //    ligne DB réellement absents ensuite
+        //    ligne DB réellement absents ensuite, ET miniatures webp du
+        //    cache disque supprimées (correctif audit : orphelins)
         const deleteIds = ids.slice(1)
+        const cachePathsBefore = deleteIds.flatMap(
+          (id) => db.prepare('SELECT cache_path FROM thumbnails WHERE photo_id = ?').all(id) as {
+            cache_path: string
+          }[]
+        )
+        console.log('[trash-test] miniatures en cache avant suppression:', cachePathsBefore.length)
         const filesBefore = await Promise.all(
           rows
             .filter((r) => deleteIds.includes(r.id))
@@ -1808,6 +1848,65 @@ app.whenReady().then(() => {
           .prepare(`SELECT id FROM photos WHERE id IN (${deleteIds.join(',')})`)
           .all()
         console.log('[trash-test] lignes DB restantes après suppression (doit être []):', JSON.stringify(rowsAfter))
+        const cacheGone = await Promise.all(
+          cachePathsBefore.map(async (c) => ({
+            path: c.cache_path,
+            stillThere: await fs
+              .access(c.cache_path)
+              .then(() => true)
+              .catch(() => false)
+          }))
+        )
+        console.log(
+          '[trash-test] miniatures webp encore sur disque après suppression (doit être 0):',
+          cacheGone.filter((c) => c.stillThere).length
+        )
+
+        // 5) Verrou de confidentialité (correctif audit) : une photo masquée
+        //    mise à la corbeille ne doit PAS apparaître dans photos:trashed
+        //    tant que le verrou est actif, et redevient visible déverrouillée
+        const privId = restoreId // la photo restaurée à l'étape 3
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('privacy:setPassword', { password: 'test-audit' })`
+        )
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:setHidden', { photoIds: [${privId}], hidden: true })`
+        )
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:trash', { photoIds: [${privId}] })`
+        )
+        await mainWindow.webContents.executeJavaScript(`window.api.invoke('privacy:lock', undefined)`)
+        const trashedLocked = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:trashed', undefined).then(r => r.map(p => p.id))`
+        )
+        console.log(
+          '[trash-test] corbeille VERROUILLÉE — photo masquée visible ? (doit être false):',
+          (trashedLocked as number[]).includes(privId)
+        )
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('privacy:unlock', { password: 'test-audit' })`
+        )
+        const trashedUnlocked = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:trashed', undefined).then(r => r.map(p => p.id))`
+        )
+        console.log(
+          '[trash-test] corbeille DÉVERROUILLÉE — photo masquée visible ? (doit être true):',
+          (trashedUnlocked as number[]).includes(privId)
+        )
+        // Défense en profondeur : verrouillé, deleteForever doit refuser la
+        // photo masquée même par appel IPC direct
+        await mainWindow.webContents.executeJavaScript(`window.api.invoke('privacy:lock', undefined)`)
+        const delLocked = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:deleteForever', { photoIds: [${privId}] })`
+        )
+        console.log(
+          '[trash-test] deleteForever VERROUILLÉ sur photo masquée (deleted doit être 0):',
+          JSON.stringify(delLocked)
+        )
+        const privStill = db.prepare('SELECT COUNT(*) c FROM photos WHERE id = ?').get(privId) as {
+          c: number
+        }
+        console.log('[trash-test] la photo masquée existe toujours (doit être 1):', privStill.c)
 
         console.log('[trash-test] TERMINÉ')
         exitTest(0)
