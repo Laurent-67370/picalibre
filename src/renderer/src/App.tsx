@@ -23,7 +23,13 @@ const OnboardingTour = lazy(() => import('./OnboardingTour'))
 // (sans tirer le module au runtime) pour rester compatibles avec React.lazy.
 import type { CollageLayout, CollageFormat } from './CollagePreview'
 import type { PrintLayout, PaperSize } from './PrintDialog'
-import { onboardingDone } from './OnboardingTour'
+
+/** onboardingDone() — inliné ici (et non importé depuis ./OnboardingTour) pour
+ *  éviter de tirer le module complet au démarrage, ce qui annulerait le bénéfice
+ *  du React.lazy. Même clé localStorage que dans OnboardingTour.tsx. */
+function onboardingDone(): boolean {
+  return localStorage.getItem('picalibre.onboarding.done') === '1'
+}
 
 declare global {
   interface Window {
@@ -2373,19 +2379,27 @@ export default function App(): JSX.Element {
           }}
         />
       )}
-      {editing && <Editor photo={editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <Suspense fallback={null}>
+          <Editor photo={editing} onClose={() => setEditing(null)} />
+        </Suspense>
+      )}
       {faceMovieActive && (
-        <FaceMovie
-          photos={shown}
-          faces={faceMovieFaces}
-          onClose={() => setFaceMovieActive(false)}
-        />
+        <Suspense fallback={null}>
+          <FaceMovie
+            photos={shown}
+            faces={faceMovieFaces}
+            onClose={() => setFaceMovieActive(false)}
+          />
+        </Suspense>
       )}
       {slideshow && !screensaverActive && (
-        <Slideshow
-          photos={tray.size > 0 ? [...tray.values()] : shown}
-          onClose={() => setSlideshow(false)}
-        />
+        <Suspense fallback={null}>
+          <Slideshow
+            photos={tray.size > 0 ? [...tray.values()] : shown}
+            onClose={() => setSlideshow(false)}
+          />
+        </Suspense>
       )}
 
       {screensaverActive && (
@@ -2395,20 +2409,24 @@ export default function App(): JSX.Element {
           onKeyDown={() => setScreensaverActive(false)}
           style={{ position: 'fixed', inset: 0, zIndex: 1045, cursor: 'none' }}
         >
-          <Slideshow
-            photos={photosRef.current}
-            onClose={() => setScreensaverActive(false)}
-          />
+          <Suspense fallback={null}>
+            <Slideshow
+              photos={photosRef.current}
+              onClose={() => setScreensaverActive(false)}
+            />
+          </Suspense>
         </div>
       )}
 
       {collagePreview && (
-        <CollagePreview
-          photos={tray.size > 0 ? [...tray.values()] : shown}
-          layout={collageLayout}
-          onClose={() => setCollagePreview(false)}
-          onExport={doCollageExport}
-        />
+        <Suspense fallback={null}>
+          <CollagePreview
+            photos={tray.size > 0 ? [...tray.values()] : shown}
+            layout={collageLayout}
+            onClose={() => setCollagePreview(false)}
+            onExport={doCollageExport}
+          />
+        </Suspense>
       )}
 
       {update && update.status !== 'available' && (
@@ -2646,15 +2664,17 @@ export default function App(): JSX.Element {
 
       {/* ---- Dialogue d'impression ---- */}
       {printDialogOpen && (
-        <PrintDialog
-          photos={tray.size > 0 ? [...tray.values()] : shown}
-          onClose={() => setPrintDialogOpen(false)}
-          onPrint={(layout: PrintLayout, paperSize: PaperSize, marginMm: number) => {
-            const ids = tray.size > 0 ? trayIds : shown.map((p) => p.id)
-            window.api.invoke('photos:print', { photoIds: ids, layout, paperSize, marginMm })
-            setPrintDialogOpen(false)
-          }}
-        />
+        <Suspense fallback={null}>
+          <PrintDialog
+            photos={tray.size > 0 ? [...tray.values()] : shown}
+            onClose={() => setPrintDialogOpen(false)}
+            onPrint={(layout: PrintLayout, paperSize: PaperSize, marginMm: number) => {
+              const ids = tray.size > 0 ? trayIds : shown.map((p) => p.id)
+              window.api.invoke('photos:print', { photoIds: ids, layout, paperSize, marginMm })
+              setPrintDialogOpen(false)
+            }}
+          />
+        </Suspense>
       )}
 
       {/* ---- Dialogue d'options pour l'export groupé ---- */}
@@ -2813,7 +2833,9 @@ export default function App(): JSX.Element {
       )}
 
       {helpOpen && (
-        <HelpCenter onClose={() => setHelpOpen(false)} onNavigate={(view) => loadView({ type: view })} />
+        <Suspense fallback={null}>
+          <HelpCenter onClose={() => setHelpOpen(false)} onNavigate={(view) => loadView({ type: view })} />
+        </Suspense>
       )}
 
       {/* ---- Détection de voyages / événements ---- */}
@@ -2946,7 +2968,11 @@ export default function App(): JSX.Element {
         </div>
       )}
 
-      {showTour && <OnboardingTour onFinish={() => setShowTour(false)} />}
+      {showTour && (
+        <Suspense fallback={null}>
+          <OnboardingTour onFinish={() => setShowTour(false)} />
+        </Suspense>
+      )}
 
       {/* ---- Barre de progression de l'export groupé ---- */}
       {batchProgress && (
