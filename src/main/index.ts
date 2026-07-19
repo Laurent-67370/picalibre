@@ -28,6 +28,7 @@ import { initAutoUpdate, installUpdate } from './services/updater'
 import { buildAppMenu } from './menu'
 import { getConfigForUi, setConfig, testConnection, runWebSync } from './services/websync'
 import { shutdownExiftool } from './services/exif'
+import { detectTrips } from './services/trips'
 import { startFaceScan, isFaceScanRunning, humanModelsPath } from './services/faces'
 import { mergePersons, splitFaces, confirmFaces, rejectFaces, facesByPerson } from './services/faces/manage-core'
 import { startWatchers, stopWatchers } from './services/watcher'
@@ -1180,6 +1181,14 @@ function registerIpc(): void {
       }
     }
   )
+  /**
+   * Détection de voyages/événements : lecture seule, ne propose que —
+   * la création réelle des albums est une étape séparée côté renderer
+   * qui réutilise albums:create + albums:addPhotos (aucune duplication
+   * de logique d'album ici).
+   */
+  ipcMain.handle('trips:detect', () => detectTrips())
+
   ipcMain.handle('edits:get', (_e, { photoId }) => getEditState(photoId))
   ipcMain.handle('edits:save', (_e, { photoId, stack, action }) => {
     const s = saveStack(photoId, stack, action)
@@ -1357,7 +1366,8 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_FOLDER_REMOVE',
     'PICALIBRE_TEST_LIGHTBOX_CONTRAST',
     'PICALIBRE_TEST_BATCHEDIT',
-    'PICALIBRE_TEST_TRASH'
+    'PICALIBRE_TEST_TRASH',
+    'PICALIBRE_TEST_TRIPS'
   ].some((k) => !!process.env[k])
   if (!isTestMode) {
     const hasRoots = getDb().prepare('SELECT 1 FROM scan_roots LIMIT 1').get()
@@ -1711,7 +1721,6 @@ app.whenReady().then(() => {
     }, 500)
   }
 
-  // Test headless du renommage en lot + annulation :
   // Test headless de la Corbeille : PICALIBRE_TEST_TRASH=<dossier>
   const trashTestDir = process.env.PICALIBRE_TEST_TRASH
   if (trashTestDir) {
@@ -1801,6 +1810,73 @@ app.whenReady().then(() => {
         console.log('[trash-test] lignes DB restantes après suppression (doit être []):', JSON.stringify(rowsAfter))
 
         console.log('[trash-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
+  // Test headless de la détection voyages/événements : PICALIBRE_TEST_TRIPS=<dossier>
+  const tripsTestDir = process.env.PICALIBRE_TEST_TRIPS
+  if (tripsTestDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(tripsTestDir)
+    startScan(mainWindow)
+    const t0p = Date.now()
+    const ivp = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos >= 19 && thumbs >= photos * 2) || Date.now() - t0p > 90000) {
+        clearInterval(ivp)
+        const db = getDb()
+        const withDates = db
+          .prepare("SELECT id, taken_at, gps_lat, gps_lon FROM photos WHERE status = 'active' ORDER BY taken_at")
+          .all()
+        console.log('[trips-test] photos indexées avec taken_at/gps:', JSON.stringify(withDates))
+
+        // 1) Détection — lecture seule, doit proposer 4 groupes (Strasbourg,
+        //    Paris, Marseille, sans-GPS) et IGNORER le groupe de 2 photos
+        const groups = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('trips:detect', undefined)`
+        )
+        console.log('[trips-test] groupes détectés:', JSON.stringify(groups))
+        console.log('[trips-test] nombre de groupes (attendu 4):', groups.length)
+        console.log(
+          '[trips-test] tailles de groupes (attendu [5,4,4,4]):',
+          JSON.stringify(groups.map((g: { count: number }) => g.count))
+        )
+        console.log(
+          '[trips-test] villes détectées (attendu 3 non-null, 1 null):',
+          JSON.stringify(groups.map((g: { city: string | null }) => g.city))
+        )
+
+        // Vérifier qu'aucune photo n'a été modifiée par la simple détection
+        const stillActiveCount = (
+          db.prepare("SELECT COUNT(*) c FROM photos WHERE status = 'active'").get() as { c: number }
+        ).c
+        console.log('[trips-test] photos encore actives après détection (doit être 19, rien modifié):', stillActiveCount)
+
+        // 2) Création réelle des albums pour les groupes proposés (comme le
+        //    fait le bouton « Créer » de l'écran de review, mêmes appels IPC)
+        let albumsCreated = 0
+        for (const g of groups as Array<{ suggestedName: string; photoIds: number[] }>) {
+          const { id } = await mainWindow.webContents.executeJavaScript(
+            `window.api.invoke('albums:create', { name: ${JSON.stringify(g.suggestedName)} })`
+          )
+          await mainWindow.webContents.executeJavaScript(
+            `window.api.invoke('albums:addPhotos', { albumId: ${id}, photoIds: ${JSON.stringify(g.photoIds)} })`
+          )
+          albumsCreated++
+        }
+        const albumRows = db
+          .prepare(
+            `SELECT a.id, a.name, COUNT(ai.photo_id) c FROM albums a
+             JOIN album_items ai ON ai.album_id = a.id GROUP BY a.id`
+          )
+          .all()
+        console.log('[trips-test] albums créés en base:', JSON.stringify(albumRows))
+        console.log('[trips-test] albums créés (attendu 4):', albumsCreated)
+
+        console.log('[trips-test] TERMINÉ')
         exitTest(0)
       }
     }, 500)

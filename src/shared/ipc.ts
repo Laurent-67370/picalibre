@@ -127,6 +127,20 @@ export interface ReverseGeocodeResult {
   country?: string
 }
 
+/** Un groupe de voyage/événement proposé par la détection automatique
+ * (rupture temporelle >2j OU géographique >60km). Ne représente qu'une
+ * PROPOSITION — rien n'est modifié en base tant qu'un vrai album n'est
+ * pas créé explicitement à partir de ce groupe. */
+export interface TripGroup {
+  photoIds: number[]
+  count: number
+  startDate: number
+  endDate: number
+  city: string | null
+  suggestedName: string
+  coverPhotoId: number
+}
+
 export interface TagRow {
   id: number
   name: string
@@ -166,6 +180,7 @@ export interface IpcInvokeMap {
   'photos:withGps': { req: void; res: GpsPhoto[] }
   'photos:withGeo': { req: { bbox: BoundingBox } & GridFilters; res: GpsPhoto[] }
   'photos:reverseGeocode': { req: { lat: number; lon: number }; res: ReverseGeocodeResult | null }
+  'trips:detect': { req: void; res: TripGroup[] }
   'duplicates:list': { req: void; res: Array<{ hash: string; photos: PhotoRow[] }> }
   'duplicates:merge': { req: { keepId: number; removeIds: number[] }; res: MergeSnapshot }
   'duplicates:undoMerge': { req: MergeSnapshot; res: void }

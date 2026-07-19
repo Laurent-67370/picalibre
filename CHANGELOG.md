@@ -3,6 +3,50 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.23.0] — 2026-07-19
+
+### Remplacé — Regroupement voyages / événements (version complète)
+Remplace l'implémentation simplifiée de la 2.22.0 (écart horaire sur la
+sélection courante) par le moteur initialement prévu :
+- **Détection sur toute la bibliothèque active**, pas seulement une
+  sélection — plus besoin de choisir des photos au préalable.
+- **Rupture temporelle OU géographique** : nouveau groupe dès que deux
+  photos consécutives (triées par date de prise de vue) sont séparées de
+  plus de 2 jours, OU de plus de 60 km (distance haversine) quand les
+  deux ont des coordonnées GPS. Une rupture géographique peut se
+  déclencher seule, même le même jour (vérifié : Paris → Marseille en
+  quelques heures scindé correctement en 2 groupes).
+- **Groupes de moins de 4 photos ignorés** — pas proposés, aucune photo
+  concernée n'est jamais modifiée par la détection elle-même (lecture
+  seule tant que « Créer » n'est pas cliqué).
+- **Nommage automatique par géocodage inversé** (réutilise l'appel
+  Nominatim déjà en place pour la vue Carte) : « Strasbourg — 15–18 mars
+  2026 ». Sans GPS dans le groupe, repli sur la plage de dates seule.
+- **Écran de review** : cases à cocher par groupe, nom modifiable,
+  aperçu (dates, nombre de photos, ville), création réelle des albums
+  réutilisant l'outillage albums existant (`albums:create` +
+  `albums:addPhotos` — renommables/modifiables ensuite comme n'importe
+  quel autre album).
+- Point d'entrée déplacé dans la barre latérale (« 🧳 Voyages /
+  événements ») puisque l'action porte sur toute la bibliothèque, plus
+  dans la barre du bac. Toujours disponible aussi via Outils → menu natif.
+- Nouveau service backend dédié `src/main/services/trips.ts` et type IPC
+  `TripGroup` (`trips:detect`).
+
+### Vérifié (Xvfb + Electron réel, roundtrip IPC complet)
+19 photos EXIF avec dates/GPS variés (Strasbourg, Paris, Marseille, un
+lot sans GPS, un lot volontairement trop petit) :
+- 4 groupes détectés avec les tailles exactes attendues (5, 4, 4, 4)
+- Rupture géographique seule confirmée (Paris → Marseille, même jour)
+- Groupe de 2 photos bien exclu des propositions
+- Aucune photo modifiée par la détection seule (19 toujours actives)
+- Création réelle des 4 albums confirmée en base avec le bon effectif
+  de photos par album
+- Le géocodage (nom de ville) n'a pas pu être vérifié bout en bout en
+  environnement de build (Nominatim inaccessible depuis ce réseau) —
+  réutilise cependant l'appel déjà en production sur la vue Carte ; le
+  repli sur date seule en cas d'échec réseau, lui, est vérifié.
+
 ## [2.22.0] — 2026-07-19
 
 ### Ajouté — Regroupement voyages / événements

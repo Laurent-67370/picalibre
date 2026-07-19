@@ -152,6 +152,8 @@ export function buildAppMenu(win: BrowserWindow): void {
         { label: '🧩 Créer un collage avec la sélection…', click: act('collage') },
         { label: '🎬 Créer un film avec la sélection…', click: act('movie') },
         { type: 'separator' },
+        { label: '🧳 Détecter voyages/événements…', click: act('detectTrips') },
+        { type: 'separator' },
         { label: '🖨 Imprimer la sélection…', click: act('print') },
         { label: '💾 Exporter la sélection…', click: act('exportSelection') },
         { label: '📤 Export groupé (taille/format)…', click: act('batchExport') },

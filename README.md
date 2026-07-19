@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.22.0-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.23.0-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -118,6 +118,17 @@ mobile, open source, découpe non destructive). Les 3 écarts qui restaient
 ouverts (Définition/Clarté, découpe vidéo, extraction d'image fixe) ont
 été comblés et vérifiés avec de vraies vidéos, pas des simulations.
 
+## 🆕 Quoi de neuf en 2.23.0
+
+- 🧳 **Regroupement voyages / événements (version complète)** : remplace
+  le curseur d'écart horaire de la 2.22.0 par la détection prévue à
+  l'origine — analyse toute la bibliothèque (plus besoin de sélectionner
+  des photos), rupture temporelle (>2 jours) OU géographique (>60 km),
+  groupes de moins de 4 photos ignorés, nommage automatique par ville
+  via géocodage inversé (ex : « Strasbourg — 15–18 mars 2026 »). Écran de
+  review avec cases à cocher et noms modifiables avant création réelle
+  des albums. Accessible depuis la barre latérale.
+
 ## 🆕 Quoi de neuf en 2.22.0
 
 - 🧳 **Regroupement voyages / événements** : sélectionne des photos, clique
@@ -126,6 +137,7 @@ ouverts (Définition/Clarté, découpe vidéo, extraction d'image fixe) ont
   groupe devient un album nommé automatiquement (ex: « Voyage — 14 juil. →
   17 juil. 2026 »). Utilise la date de prise de vue EXIF (`taken_at`) pour
   regrouper temporellement.
+  *(Remplacé en 2.23.0 par une détection plus complète — voir ci-dessus.)*
 
 ## 🆕 Quoi de neuf en 2.21.0
 

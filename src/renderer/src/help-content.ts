@@ -115,6 +115,13 @@ Pour retirer un SOUS-dossier précis (sans toucher au reste du dossier racine) :
     body: `« 🗑 Mettre à la corbeille » (clic droit, bac, ou Édition → menu) retire la sélection de toutes les vues normales sans toucher au fichier — récupérable via ↩ Annuler juste après, ou depuis la vue Corbeille (♻ Restaurer). Dans la vue Corbeille, « ⛔ Supprimer définitivement » efface réellement le ou les fichiers du disque après confirmation : cette action-là, contrairement à toutes les autres, est irréversible.`,
     action: { label: 'Ouvrir la Corbeille', view: 'trash' }
   },
+  {
+    id: 'trips',
+    category: 'Bibliothèque',
+    title: 'Voyages / événements',
+    keywords: ['voyage', 'événement', 'regroupement', 'album automatique', 'géocodage'],
+    body: `« 🧳 Voyages / événements » (barre latérale) analyse toute la bibliothèque et propose des groupes séparés par une rupture chronologique (plus de 2 jours) ou géographique (plus de 60 km) — les groupes de moins de 4 photos sont ignorés. Chaque groupe est nommé automatiquement (ville via géocodage + plage de dates, ex. « Strasbourg — 15–18 mars 2026 »). Rien n'est modifié tant que tu n'as pas décoché/renommé à ta guise et cliqué sur « Créer » : les albums sont alors créés avec l'outillage albums habituel (renommables, modifiables comme n'importe quel autre album ensuite).`
+  },
 
   // ---- Éditeur ----
   {
