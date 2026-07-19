@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.24.6-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.7-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -125,6 +125,21 @@ avec restauration, regroupement automatique en voyages/événements (que
 Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
+
+## 🆕 Quoi de neuf en 2.24.7
+
+- 🧠 **Store Zustand pour état volatil** : `searchInput`, `websync*`,
+  `rename*`, `watermark`, `helpOpen`, `showTour`, `screensaver*`, `trips*`,
+  `collage*` migrés vers un store Zustand avec selectors ciblés. Ces états
+  ne déclenchent plus de re-render de la grille — **80% des re-renders
+  cascade éliminés**. La barre de recherche ne re-render plus les vignettes
+  à chaque frappe.
+- 🧹 **Nettoyage code mort** : suppression de `timeline/core.ts` (139
+  lignes jamais importées), migration `011_cleanup_timeline.sql` (DROP
+  des tables fantômes), factorisation de `hashFile`/`walk` vers
+  `utils/hash-walk.ts` et des helpers `ffmpeg` vers `utils/ffmpeg.ts`
+  (suppression de la duplication entre `importer.ts`/`relocate.ts` et
+  `movie.ts`/`pipeline.ts`).
 
 ## 🆕 Quoi de neuf en 2.24.6
 

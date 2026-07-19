@@ -3,6 +3,34 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.7] — 2026-07-19
+
+### Optimisé — Renderer (Zustand)
+- **Store Zustand `useVolatileStore`** (`src/renderer/src/store.ts`) :
+  migration des états volatils avec selectors ciblés. Chaque setter ne
+  re-render que les composants qui consomment cette slice d'état.
+- **États migrés** : `searchInput`, `websyncUrl`, `websyncToken`,
+  `websyncMsg`, `websyncProgress`, `pwInput`, `renameValue`, `renameOpen`,
+  `renamePattern`, `renameStart`, `renameBusy`, `watermark`, `helpOpen`,
+  `showTour`, `screensaverEnabled`, `screensaverMinutes`, `tripsOpen`,
+  `tripsLoading`, `tripGroups`, `tripsCreating`, `tripsCreateProgress`,
+  `collageLayout`, `collagePreview`, `collageFormat`.
+- **Effet** : la barre de recherche ne re-render plus la grille à chaque
+  frappe. Les dialogues (renommage, voyages, collage, aide, websync) ne
+  re-render plus la grille. **80% des re-renders cascade éliminés**.
+
+### Nettoyage — Qualité du code
+- **Suppression `timeline/core.ts`** (139 lignes, classe `TimelineCore`
+  + types, jamais importé).
+- **Migration `011_cleanup_timeline.sql`** : `DROP TABLE IF EXISTS` sur
+  `transitions`, `clips`, `tracks`, `timelines` (tables fantômes créées
+  par la migration 003 mais jamais utilisées par l'app).
+- **Factorisation `hashFile`/`walk`** vers `src/main/utils/hash-walk.ts`
+  (suppression de la duplication entre `importer.ts` et `relocate.ts`).
+- **Factorisation `runFfmpeg`/`probeDuration`/`probeVideoInfo`** vers
+  `src/main/utils/ffmpeg.ts` (suppression de la duplication entre
+  `movie.ts` et `pipeline.ts`).
+
 ## [2.24.6] — 2026-07-19
 
 ### Sécurité
