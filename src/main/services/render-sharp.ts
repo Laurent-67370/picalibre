@@ -74,84 +74,55 @@ export async function renderEdited(
 
   // Doucette/softfocus : blend(image, blur(image), intensity) —
   // mélange l'original avec une version floutée, opacité = intensity.
-  // Implémentation : floute une copie, puis composite l'original par-dessus
-  // avec opacité (1 - intensity) → l'image reste nette à (1-intensity) et
-  // floutée à intensity.
+  // Implémentation native sharp : on génère un calque flouté avec un canal
+  // alpha uniforme = intensity, puis composite en blend 'over'. libvips
+  // effectue le mélange (base*(1-t) + layer*t) sans materialiser le buffer
+  // raw en JS (24 MP × 3 canaux = 72 Mo évités, pipeline libvips natif).
   const softFocusIntensity = getSoftFocusIntensity(stack)
   if (softFocusIntensity > 0) {
-    const origBuffer = await pass2.clone().raw().toBuffer({ resolveWithObject: true })
-    const blurred = pass2.blur(6)
-    const blurredBuf = await blurred.raw().toBuffer({ resolveWithObject: true })
-    // Blend pixel par pixel : result = orig * (1 - t) + blurred * t
-    const t = softFocusIntensity
-    const od = origBuffer.data
-    const bd = blurredBuf.data
-    const len = Math.min(od.length, bd.length)
-    for (let i = 0; i < len; i++) {
-      od[i] = Math.round(od[i] * (1 - t) + bd[i] * t)
-    }
-    pass2 = sharp(od, {
-      raw: {
-        width: origBuffer.info.width,
-        height: origBuffer.info.height,
-        channels: origBuffer.info.channels
-      }
-    })
+    const base = await pass2.png().toBuffer()
+    const blurred = await pass2
+      .clone()
+      .blur(6)
+      .ensureAlpha(softFocusIntensity)
+      .png()
+      .toBuffer()
+    pass2 = sharp(base).composite([{ input: blurred, blend: 'over' }])
   }
 
-  // Glow : image + blur(bright_parts) — seuille les parties claires, floute,
+  // Glow : image + blur(bright_parts) — floute une version surexposée,
   // puis composite en mode screen pour créer un halo lumineux.
+  // composite (blend 'screen' + alpha du calque = t) produit :
+  //   screen = 255 - (255-base)*(255-layer)/255
+  //   result  = base*(1-t) + screen*t   ← identique au JS précédent.
   const glowIntensity = getGlowIntensity(stack)
   if (glowIntensity > 0) {
-    const origBuf = await pass2.clone().raw().toBuffer({ resolveWithObject: true })
-    const glowBuf = await pass2
+    const base = await pass2.png().toBuffer()
+    const glow = await pass2
+      .clone()
       .modulate({ brightness: 1.3 })
       .blur(10)
-      .raw()
-      .toBuffer({ resolveWithObject: true })
-    const od = origBuf.data
-    const gd = glowBuf.data
-    const len = Math.min(od.length, gd.length)
-    // Screen blend : result = 255 - (255 - a) * (255 - b) / 255, avec opacité
-    const t = glowIntensity
-    for (let i = 0; i < len; i++) {
-      const screen = 255 - ((255 - od[i]) * (255 - gd[i])) / 255
-      od[i] = Math.round(od[i] * (1 - t) + screen * t)
-    }
-    pass2 = sharp(od, {
-      raw: {
-        width: origBuf.info.width,
-        height: origBuf.info.height,
-        channels: origBuf.info.channels
-      }
-    })
+      .ensureAlpha(glowIntensity)
+      .png()
+      .toBuffer()
+    pass2 = sharp(base).composite([{ input: glow, blend: 'screen' }])
   }
 
   // Orton : blend(overexposed, blur(large), 0.5) —
   // sur-expose l'image, floute largement, puis blend à 50% avec l'original.
+  // composite (blend 'over' + alpha du calque = t*0.5) =
+  //   base*(1-t*0.5) + layer*(t*0.5).
   const ortonIntensity = getOrtonIntensity(stack)
   if (ortonIntensity > 0) {
-    const origBuf = await pass2.clone().raw().toBuffer({ resolveWithObject: true })
-    const ortonBuf = await pass2
+    const base = await pass2.png().toBuffer()
+    const orton = await pass2
+      .clone()
       .modulate({ brightness: 1.4 })
       .blur(15)
-      .raw()
-      .toBuffer({ resolveWithObject: true })
-    const od = origBuf.data
-    const id = ortonBuf.data
-    const len = Math.min(od.length, id.length)
-    // Blend à 50% : result = orig * (1 - t*0.5) + orton * (t*0.5)
-    const t = ortonIntensity * 0.5
-    for (let i = 0; i < len; i++) {
-      od[i] = Math.round(od[i] * (1 - t) + id[i] * t)
-    }
-    pass2 = sharp(od, {
-      raw: {
-        width: origBuf.info.width,
-        height: origBuf.info.height,
-        channels: origBuf.info.channels
-      }
-    })
+      .ensureAlpha(ortonIntensity * 0.5)
+      .png()
+      .toBuffer()
+    pass2 = sharp(base).composite([{ input: orton, blend: 'over' }])
   }
 
   // Tilt-shift : flou gaussien sur toute l'image, puis blend avec l'originale
