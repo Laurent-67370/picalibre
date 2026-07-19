@@ -3,6 +3,32 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.23.3] — 2026-07-19
+
+Durcissements issus de l'audit de suivi.
+
+### Sécurité
+- **Blocage de la navigation** : l'app étant une interface 100 % locale,
+  aucune navigation du contenu n'est légitime après le chargement.
+  `will-navigate` neutralise désormais toute navigation hors de la page
+  de l'app elle-même (y compris le glisser-déposer d'un fichier .html sur
+  la fenêtre, vecteur classique), et `setWindowOpenHandler` refuse toute
+  nouvelle fenêtre — les liens https sont délégués au navigateur système.
+- **Verrou de confidentialité étendu au protocole `thumb://`** : tant que
+  les photos masquées sont verrouillées, ni les vignettes ni l'original
+  d'une photo masquée ne sont servis (403), en défense en profondeur —
+  même un renderer compromis ou une régression d'interface ne peut plus
+  afficher le contenu protégé sans mot de passe. Coût mesurable nul
+  quand déverrouillé.
+
+### Vérifié (Xvfb + Electron réel)
+- Photo masquée + verrou actif : vignette ET original → 403 ; après
+  déverrouillage → 200 tous les deux.
+- Tentative de navigation du renderer vers un site externe : URL de la
+  fenêtre inchangée (navigation neutralisée).
+- Toute la batterie Corbeille/confidentialité de la 2.23.1 repasse à
+  l'identique (aucune régression).
+
 ## [2.23.2] — 2026-07-19
 
 ### Sécurité

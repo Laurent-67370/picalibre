@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.23.2-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.23.3-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -117,6 +117,15 @@ réels (formats modernes, doublons, undo illimité en édition, galerie
 mobile, open source, découpe non destructive). Les 3 écarts qui restaient
 ouverts (Définition/Clarté, découpe vidéo, extraction d'image fixe) ont
 été comblés et vérifiés avec de vraies vidéos, pas des simulations.
+
+## 🆕 Quoi de neuf en 2.23.3
+
+- 🛡️ **Durcissements** : navigation de la fenêtre verrouillée (le
+  glisser-déposer d'un fichier .html ne peut plus détourner l'interface,
+  les liens externes s'ouvrent dans le navigateur système), et le verrou
+  des photos masquées s'applique désormais aussi au serveur interne de
+  vignettes — plus aucune image protégée ne peut être servie sans mot de
+  passe, même en cas de compromission de l'interface.
 
 ## 🆕 Quoi de neuf en 2.23.2
 

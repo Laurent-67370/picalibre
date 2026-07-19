@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, protocol, net } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, protocol, net, shell } from 'electron'
 import log from 'electron-log/main'
 
 /**
@@ -162,11 +162,29 @@ const thumbPathCache = new Map<string, string>()
 const THUMB_CACHE_MAX = 30000
 
 function registerThumbProtocol(): void {
+  /**
+   * Durcissement (audit) : tant que les photos masquées sont verrouillées,
+   * le protocole thumb ne doit servir NI l'original NI les vignettes d'une
+   * photo masquée — sinon un renderer compromis (ou une régression UI)
+   * pourrait afficher le contenu protégé sans mot de passe. Coût quand
+   * déverrouillé/pas de mot de passe : un micro-SELECT settings par
+   * requête, négligeable devant la lecture disque du webp.
+   */
+  const isPhotoLocked = (photoId: number): boolean => {
+    if (isUnlocked()) return false
+    const row = getDb().prepare('SELECT is_hidden FROM photos WHERE id = ?').get(photoId) as
+      | { is_hidden: number }
+      | undefined
+    return !!row?.is_hidden
+  }
   protocol.handle('thumb', async (request) => {
     const parts = new URL(request.url).pathname.split('/').filter(Boolean)
     // Taille spéciale 'orig' : sert le fichier original (zoom 100 % de la visionneuse)
     if (parts[0] === 'orig') {
       const pid = parseInt(parts[1], 10)
+      if (Number.isFinite(pid) && isPhotoLocked(pid)) {
+        return new Response('locked', { status: 403, headers: { 'Cache-Control': 'no-store' } })
+      }
       const ph = getDb()
         .prepare('SELECT filepath, media_type, hash_xxh3 FROM photos WHERE id = ?')
         .get(pid) as { filepath: string; media_type: string; hash_xxh3: string } | undefined
@@ -199,6 +217,9 @@ function registerThumbProtocol(): void {
         status: 400,
         headers: { 'Cache-Control': 'no-store' }
       })
+    }
+    if (isPhotoLocked(photoId)) {
+      return new Response('locked', { status: 403, headers: { 'Cache-Control': 'no-store' } })
     }
 
     // Chemin rapide : cache mémoire (ni SQL, ni stat — le fichier est immuable par hash)
@@ -282,6 +303,30 @@ function createWindow(): void {
       sandbox: false
     }
   })
+
+  /**
+   * Durcissement (audit) : l'app est une SPA 100 % locale — aucune
+   * navigation du webContents n'est jamais légitime après le chargement
+   * initial. Sans ces gardes, glisser-déposer un fichier .html (ou une
+   * URL) sur la fenêtre fait naviguer l'application entière hors de son
+   * interface. Les liens externes (window.open / target=_blank) sont
+   * délégués au navigateur système, et uniquement en https.
+   */
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    const isDev = !!process.env.ELECTRON_RENDERER_URL
+    // En prod, seule la page de l'app elle-même (out/renderer) est un
+    // référentiel légitime — pas « n'importe quel file:// », sinon le
+    // drop d'un .html local resterait un vecteur de navigation.
+    const allowed = isDev
+      ? url.startsWith(process.env.ELECTRON_RENDERER_URL as string)
+      : url.startsWith(pathToFileURL(join(__dirname, '../renderer')).toString())
+    if (!allowed) e.preventDefault()
+  })
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://')) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
   const webglTest = !!process.env.PICALIBRE_TEST_WEBGL
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL + (webglTest ? '?webgltest=1' : ''))
@@ -1907,6 +1952,45 @@ app.whenReady().then(() => {
           c: number
         }
         console.log('[trash-test] la photo masquée existe toujours (doit être 1):', privStill.c)
+
+        // 6) Durcissement protocole thumb (correctif audit) : verrouillé,
+        //    ni la vignette ni l'original d'une photo masquée ne doivent
+        //    être servis (403) ; déverrouillé, tout redevient accessible.
+        //    Testé via net.fetch côté main : la CSP du renderer interdit de
+        //    toute façon fetch() vers thumb: (connect-src), et le contrôle
+        //    à valider vit dans le handler du protocole, pas dans le client.
+        const thumbLocked = [
+          (await net.fetch(`thumb://library/256/${privId}`)).status,
+          (await net.fetch(`thumb://library/orig/${privId}`)).status
+        ]
+        console.log(
+          '[trash-test] thumb VERROUILLÉ [vignette, orig] (doit être [403,403]):',
+          JSON.stringify(thumbLocked)
+        )
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('privacy:unlock', { password: 'test-audit' })`
+        )
+        const thumbUnlocked = [
+          (await net.fetch(`thumb://library/256/${privId}`)).status,
+          (await net.fetch(`thumb://library/orig/${privId}`)).status
+        ]
+        console.log(
+          '[trash-test] thumb DÉVERROUILLÉ [vignette, orig] (doit être [200,200]):',
+          JSON.stringify(thumbUnlocked)
+        )
+
+        // 7) Blocage de navigation (correctif audit) : une tentative de
+        //    navigation du renderer vers un site externe doit être
+        //    neutralisée — l'URL de la fenêtre ne doit pas changer
+        const urlBefore = mainWindow.webContents.getURL()
+        await mainWindow.webContents.executeJavaScript(
+          `new Promise(res => { try { location.href = 'https://example.com/'; } catch {} setTimeout(res, 800) })`
+        )
+        const urlAfter = mainWindow.webContents.getURL()
+        console.log(
+          '[trash-test] navigation externe bloquée ? (doit être true):',
+          urlBefore === urlAfter
+        )
 
         console.log('[trash-test] TERMINÉ')
         exitTest(0)
