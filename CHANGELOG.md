@@ -3,6 +3,22 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.8] — 2026-07-19
+
+### Optimisé — Export (render-sharp)
+- **softFocus, glow, orton** : conversion des boucles pixel-par-pixel JS
+  vers `sharp.composite` (libvips natif). L'opacité est encodée dans le
+  canal alpha du calque via `ensureAlpha(t)`, libvips appliquant le
+  blending nativement.
+- **Avant** : chaque effet décodait l'image en buffer raw (72 Mo pour
+  24 MP × 3 canaux), faisait une boucle JS sur tous les pixels, puis
+  recréait un pipeline sharp. Pics >500 Mo pour 6 effets.
+- **Après** : le pipeline stream via libvips sans materialiser de buffer
+  raw en JS. **Gain estimé : 5-20× sur l'export.**
+- **tiltShift, hdr, definition** : restent en JS (logique de masque
+  radial/linéaire et tone mapping trop complexes pour composite sans
+  masque alpha gradient).
+
 ## [2.24.7] — 2026-07-19
 
 ### Optimisé — Renderer (Zustand)

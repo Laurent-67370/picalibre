@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.24.7-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.8-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -125,6 +125,15 @@ avec restauration, regroupement automatique en voyages/événements (que
 Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
+
+## 🆕 Quoi de neuf en 2.24.8
+
+- ⚡ **Effets render-sharp via ops natives sharp** : softFocus, glow et
+  orton convertis de boucles pixel-par-pixel JS vers `sharp.composite`
+  (libvips natif). Le pipeline stream via libvips sans materialiser de
+  buffer raw 72 Mo en JS par effet. **Gain estimé : 5-20× sur l'export.**
+  tiltShift et hdr restent en JS (logique de masque trop complexe pour
+  composite).
 
 ## 🆕 Quoi de neuf en 2.24.7
 
