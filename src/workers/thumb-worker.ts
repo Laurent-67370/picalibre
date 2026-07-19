@@ -169,11 +169,14 @@ async function run(items: ThumbItem[], cacheDir: string): Promise<void> {
     }
   }
 
-  // Pool de concurrence simple
-  const queue = [...items]
+  // Pool de concurrence simple. On n'utilise PAS Array.shift() (O(n) car
+  // décale tout le tableau à chaque appel — O(n²) pour 50 000 miniatures) :
+  // un simple index tête-de-lecture partagé donne un défilement FIFO O(1).
+  const queue = items
+  let head = 0
   const workers = Array.from({ length: CONCURRENCY }, async () => {
-    while (queue.length > 0) {
-      const item = queue.shift()
+    while (head < queue.length) {
+      const item = queue[head++]
       if (!item) break
       let results = await processItem(item, cacheDir)
       if (results.some((r) => !r.ok)) {

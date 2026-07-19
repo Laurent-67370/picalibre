@@ -157,9 +157,25 @@ async function generateThumbOnTheFly(
 }
 
 /** Cache mémoire des chemins de miniatures — évite une requête SQL + un stat disque
- *  par vignette affichée. Les chemins sont adressés par hash de contenu, donc stables. */
+ *  par vignette affichée. Les chemins sont adressés par hash de contenu, donc stables.
+ *
+ *  Éviction LRU par batch plutôt que clear() intégral : à 30 000 entrées, vider tout
+ *  le cache d'un coup provoque un « thundering herd » (toutes les vignettes suivantes
+ *  retombent sur le chemin lent SQL + stat). À la place, on supprime les 5 000 plus
+ *  anciennes via l'ordre d'insertion du Map (itéré dans l'ordre chronologique). */
 const thumbPathCache = new Map<string, string>()
 const THUMB_CACHE_MAX = 30000
+const THUMB_CACHE_EVICT = 5000
+
+function evictThumbCacheOldest(): void {
+  // Map itère dans l'ordre d'insertion : les premières clés sont les plus
+  // anciennes. On en supprime un batch fixe plutôt que tout vider.
+  let removed = 0
+  for (const key of thumbPathCache.keys()) {
+    thumbPathCache.delete(key)
+    if (++removed >= THUMB_CACHE_EVICT) break
+  }
+}
 
 function registerThumbProtocol(): void {
   /**
@@ -235,7 +251,7 @@ function registerThumbProtocol(): void {
       if (cachePath) {
         try {
           await access(cachePath)
-          if (thumbPathCache.size >= THUMB_CACHE_MAX) thumbPathCache.clear()
+          if (thumbPathCache.size >= THUMB_CACHE_MAX) evictThumbCacheOldest()
           thumbPathCache.set(cacheKey, cachePath)
         } catch {
           cachePath = undefined
@@ -853,6 +869,21 @@ function registerIpc(): void {
           .replace(/\{n\}/g, counter)
           .replace(/\{name\}/g, base)
           .replace(/\{date\}/g, date) + ext
+      // Sécurité : rejeter les path traversal (/, \, ..) dans le nouveau nom
+      if (
+        newFilename.includes('/') ||
+        newFilename.includes('\\') ||
+        newFilename.includes('..') ||
+        newFilename.includes('\0')
+      ) {
+        errors.push({
+          id,
+          filename: row.filename,
+          error: 'caractères interdits dans le motif de renommage (/, \\, ..)'
+        })
+        n++
+        continue
+      }
       const newPath = join(dirname(row.filepath), newFilename)
       n++
       if (newPath === row.filepath) continue
