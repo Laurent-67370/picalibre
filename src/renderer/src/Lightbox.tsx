@@ -11,7 +11,7 @@
  *   zoom/pan/édition — thumb://library/orig/{id} sert le fichier original,
  *   quel que soit le média.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { PhotoRow, RendererApi } from '@shared/ipc'
 
 declare global {
@@ -20,7 +20,7 @@ declare global {
   }
 }
 
-export default function Lightbox({
+function Lightbox({
   photos,
   index,
   onIndexChange,
@@ -418,3 +418,5 @@ export default function Lightbox({
     </div>
   )
 }
+
+export default memo(Lightbox)

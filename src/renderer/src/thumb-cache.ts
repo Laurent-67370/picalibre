@@ -144,5 +144,7 @@ export class ThumbLRUCache {
   }
 }
 
-/** Instance globale — partagée par tous les ThumbCanvas. */
-export const thumbCache = new ThumbLRUCache(200)
+/** Instance globale — partagée par tous les ThumbCanvas.
+ *  Limite 500 : sur un écran 4K (~60 vignettes visibles), couvre ~8 écrans
+ *  de scroll au lieu de ~3 avec 200. */
+export const thumbCache = new ThumbLRUCache(500)

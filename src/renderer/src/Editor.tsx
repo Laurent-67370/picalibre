@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { PhotoRow, RendererApi } from '@shared/ipc'
 import {
   ColorOpType,
@@ -150,7 +150,7 @@ const FILTERS: Array<{ name: FilterName; label: string }> = [
   { name: 'grain', label: 'Grain de film' }
 ]
 
-export default function Editor({
+function Editor({
   photo,
   onClose
 }: {
@@ -1680,3 +1680,5 @@ export default function Editor({
     </div>
   )
 }
+
+export default memo(Editor)

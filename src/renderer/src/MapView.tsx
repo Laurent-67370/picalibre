@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { BoundingBox, GpsPhoto, GridFilters, ReverseGeocodeResult, RendererApi } from '@shared/ipc'
@@ -81,7 +81,7 @@ export interface MapViewProps {
   onGeotagged: () => void
 }
 
-export default function MapView({
+function MapView({
   trayIds,
   filters,
   onPhotoClick,
@@ -361,3 +361,5 @@ export default function MapView({
     </div>
   )
 }
+
+export default memo(MapView)
