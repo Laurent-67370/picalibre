@@ -104,7 +104,7 @@ Pour retirer un SOUS-dossier précis (sans toucher au reste du dossier racine) :
     category: 'Bibliothèque',
     title: 'Photos masquées et confidentialité',
     keywords: ['masquer', 'cacher', 'privé', 'mot de passe', 'confidentialité'],
-    body: `Masquer une sélection (clic droit → Masquer, ou bouton du bac) la retire de toutes les vues normales. Un mot de passe optionnel (Réglages) peut verrouiller l'accès à la vue Masquées. Rien ne quitte jamais ton ordinateur : PicaLibre est 100 % local, aucun cloud.`,
+    body: `Masquer une sélection (clic droit → Masquer, ou bouton du bac) la retire de toutes les vues normales. Un mot de passe optionnel (Réglages) peut verrouiller l'accès à la vue Masquées. Le verrou couvre tout : tant qu'il est actif, une photo masquée reste invisible partout, y compris dans la Corbeille si elle y a été mise, et même ses vignettes ne sont pas servies. Rien ne quitte jamais ton ordinateur : PicaLibre est 100 % local, aucun cloud.`,
     action: { label: 'Ouvrir les Photos masquées', view: 'hidden' }
   },
   {
@@ -247,7 +247,7 @@ Pour retirer un SOUS-dossier précis (sans toucher au reste du dossier racine) :
     category: 'Partage',
     title: 'Galerie mobile (accès web)',
     keywords: ['web', 'mobile', 'sync', 'serveur', 'à distance'],
-    body: `Réglages → Galerie mobile : synchronise miniatures et métadonnées (jamais les fichiers originaux) vers un petit serveur que tu héberges toi-même, consultable depuis ton téléphone. Protection par jeton d'accès.`,
+    body: `Réglages → Galerie mobile : synchronise miniatures et métadonnées (jamais les fichiers originaux) vers un petit serveur que tu héberges toi-même, consultable depuis ton téléphone. Protection par jeton d'accès. L'adresse du serveur doit être en https — le jeton part avec chaque requête et ne doit jamais circuler en clair (http reste accepté uniquement pour localhost, quand le serveur tourne sur la même machine).`,
     action: { label: 'Ouvrir les Réglages', view: 'settings' }
   },
 

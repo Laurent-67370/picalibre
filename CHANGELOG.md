@@ -3,6 +3,20 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.3] — 2026-07-19
+
+### Documentation
+- **Centre d'aide vérifié et mis à jour** après revue complète des 33
+  sujets contre l'interface actuelle : navigations toutes valides, tour
+  d'accueil intact (ses 5 ancres existent), sujets Corbeille et Voyages
+  déjà exacts. Deux compléments apportés suite aux durcissements de
+  sécurité du jour :
+  - Galerie mobile : mention de l'exigence https (le jeton ne circule
+    jamais en clair ; http accepté uniquement pour localhost) — évite
+    un refus incompris à la configuration.
+  - Photos masquées : précision que le verrou couvre tout, y compris la
+    Corbeille et le serveur interne de vignettes.
+
 ## [2.24.2] — 2026-07-19
 
 ### Performance
