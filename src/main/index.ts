@@ -1454,7 +1454,8 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_LIGHTBOX_CONTRAST',
     'PICALIBRE_TEST_BATCHEDIT',
     'PICALIBRE_TEST_TRASH',
-    'PICALIBRE_TEST_TRIPS'
+    'PICALIBRE_TEST_TRIPS',
+    'PICALIBRE_TEST_MAP'
   ].some((k) => !!process.env[k])
   if (!isTestMode) {
     const hasRoots = getDb().prepare('SELECT 1 FROM scan_roots LIMIT 1').get()
@@ -2041,6 +2042,82 @@ app.whenReady().then(() => {
         )
 
         console.log('[trash-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
+  // Test headless de la vue Carte : PICALIBRE_TEST_MAP=<dossier>
+  // Reproduit le bug rapporté : cliquer un cluster zoomait sur des
+  // coordonnées arrondies aberrantes et les photos « disparaissaient ».
+  const mapTestDir = process.env.PICALIBRE_TEST_MAP
+  if (mapTestDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(mapTestDir)
+    startScan(mainWindow)
+    const t0m = Date.now()
+    const ivm = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos >= 24 && thumbs >= photos * 2) || Date.now() - t0m > 90000) {
+        clearInterval(ivm)
+        const geoCount = q('SELECT COUNT(*) c FROM photos WHERE gps_lat IS NOT NULL')
+        console.log('[map-test] photos géolocalisées en base:', geoCount)
+
+        // Ouvrir la vue Carte via l'action du menu natif
+        mainWindow.webContents.send('menu:action', { action: 'goMap' })
+        await new Promise((r) => setTimeout(r, 2500))
+
+        const countMarkers = `(() => ({
+          clusters: document.querySelectorAll('.picalibre-map-cluster').length,
+          singles: document.querySelectorAll('.picalibre-map-marker').length
+        }))()`
+        const before = await mainWindow.webContents.executeJavaScript(countMarkers)
+        console.log('[map-test] marqueurs AVANT clic [clusters, photos seules]:', JSON.stringify(before))
+
+        // Cliquer le premier cluster (le scénario exact du bug)
+        const clicked = await mainWindow.webContents.executeJavaScript(`(() => {
+          const c = document.querySelector('.picalibre-map-cluster')
+          if (!c) return false
+          c.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+          return true
+        })()`)
+        console.log('[map-test] clic sur un cluster effectué:', clicked)
+
+        // Laisser l'animation fitBounds + le debounce moveend (300ms) + la
+        // requête bbox se dérouler entièrement
+        await new Promise((r) => setTimeout(r, 3000))
+
+        const after = await mainWindow.webContents.executeJavaScript(countMarkers)
+        const total = (after as { clusters: number; singles: number })
+        console.log('[map-test] marqueurs APRÈS zoom [clusters, photos seules]:', JSON.stringify(after))
+        console.log(
+          '[map-test] les photos restent visibles après le zoom ? (doit être true):',
+          total.clusters + total.singles > 0
+        )
+
+        // Second clic si un cluster subsiste — vérifier la stabilité au
+        // niveau de zoom suivant aussi
+        const clicked2 = await mainWindow.webContents.executeJavaScript(`(() => {
+          const c = document.querySelector('.picalibre-map-cluster')
+          if (!c) return false
+          c.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+          return true
+        })()`)
+        if (clicked2) {
+          await new Promise((r) => setTimeout(r, 3000))
+          const after2 = await mainWindow.webContents.executeJavaScript(countMarkers)
+          const t2 = after2 as { clusters: number; singles: number }
+          console.log('[map-test] marqueurs après 2e zoom:', JSON.stringify(after2))
+          console.log(
+            '[map-test] toujours visibles après 2e zoom ? (doit être true):',
+            t2.clusters + t2.singles > 0
+          )
+        } else {
+          console.log('[map-test] plus de cluster après le 1er zoom — photos déjà individuelles')
+        }
+
+        console.log('[map-test] TERMINÉ')
         exitTest(0)
       }
     }, 500)

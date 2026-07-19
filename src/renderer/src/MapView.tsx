@@ -17,9 +17,16 @@ interface Cluster {
 }
 
 function clusterPhotos(photos: GpsPhoto[], zoom: number): Cluster[] {
-  // Plus le zoom est faible, plus les clusters sont gros
-  const precision = Math.max(1, Math.floor(zoom / 2))
-  const factor = Math.pow(10, 5 - precision)
+  // Granularité de regroupement : FINE quand on zoome, GROSSIÈRE en vue
+  // monde. L'ancienne formule (10^(5-precision)) était inversée : en
+  // zoomant, l'arrondi devenait de plus en plus grossier (10° près à
+  // zoom 12 !), toutes les photos fusionnaient en un cluster positionné
+  // sur des coordonnées aberrantes, et le zoom-clic partait si loin des
+  // vraies photos que la bounding box ne les contenait plus → elles
+  // « disparaissaient ». Ici : zoom 2 → 0,1° (~11 km), zoom ≥ 8 →
+  // 0,0001° (~11 m), photos quasi co-localisées uniquement.
+  const precision = Math.min(4, Math.max(1, Math.floor(zoom / 2)))
+  const factor = Math.pow(10, precision)
   const map = new Map<string, Cluster>()
 
   for (const p of photos) {
@@ -32,6 +39,14 @@ function clusterPhotos(photos: GpsPhoto[], zoom: number): Cluster[] {
       map.set(key, cluster)
     }
     cluster.photos.push(p)
+  }
+
+  // Position affichée = barycentre RÉEL des photos du cluster, pas la clé
+  // arrondie — le marqueur tombe au milieu des photos, et le zoom-clic
+  // reste centré sur elles.
+  for (const c of map.values()) {
+    c.lat = c.photos.reduce((s, p) => s + p.gps_lat, 0) / c.photos.length
+    c.lon = c.photos.reduce((s, p) => s + p.gps_lon, 0) / c.photos.length
   }
 
   return Array.from(map.values())
@@ -128,8 +143,19 @@ export default function MapView({
           icon: makeClusterIcon(cluster.photos.length)
         })
         clusterMarker.on('click', () => {
-          // Zoom sur le cluster
-          map.setView([cluster.lat, cluster.lon], Math.min(zoom + 2, 16), { animate: true })
+          // Cadre la vue sur les photos RÉELLES du cluster (avec marge) au
+          // lieu de zoomer aveuglément sur son centre : quelle que soit leur
+          // dispersion, elles restent toutes dans la bounding box après le
+          // zoom, donc toujours renvoyées par la requête — plus de
+          // « disparition ». Si le cluster est insécable (photos
+          // co-localisées) et qu'on est déjà au zoom max, ouvrir la
+          // première photo.
+          const b = L.latLngBounds(cluster.photos.map((p) => [p.gps_lat, p.gps_lon]))
+          if (zoom >= 16 && map.getBounds().contains(b)) {
+            onPhotoClickRef.current(cluster.photos[0].id)
+            return
+          }
+          map.fitBounds(b.pad(0.3), { maxZoom: 17, animate: true })
         })
         clusterMarker.addTo(layer)
       }

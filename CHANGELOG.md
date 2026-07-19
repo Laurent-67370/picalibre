@@ -3,6 +3,32 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.4] — 2026-07-19
+
+### Corrigé
+- **Carte : les photos d'un groupe ne disparaissent plus quand on zoome
+  dessus.** La formule de granularité du regroupement était inversée :
+  en zoomant, les coordonnées des clusters étaient arrondies de plus en
+  plus grossièrement (jusqu'à ~10° près, soit un positionnement à des
+  centaines de kilomètres des vraies photos) ; le zoom-clic partait donc
+  vers un point fictif dont la zone visible ne contenait plus les photos
+  → la requête n'en renvoyait plus aucune. Corrections :
+  - granularité désormais fine quand on zoome (0,1° en vue monde,
+    0,0001° dès le zoom ville) ;
+  - les clusters sont positionnés au barycentre réel de leurs photos ;
+  - le clic cadre la vue sur les photos réelles du groupe (avec marge)
+    au lieu de zoomer aveuglément sur son centre — quelle que soit leur
+    dispersion, elles restent toutes dans la zone visible ;
+  - cas des photos strictement co-localisées : au zoom maximum, cliquer
+    le groupe ouvre la première photo au lieu de ne rien faire.
+
+### Vérifié (Xvfb + Electron réel, vraie vue Leaflet)
+Nouveau test E2E dédié reproduisant le scénario rapporté : 17 photos
+géolocalisées scannées, vue Carte ouverte, 5 clusters + 2 photos à
+l'écran, clic sur un cluster → après l'animation et le rechargement de
+la zone, 6 photos individuelles visibles, zéro disparition (l'ancien
+code aboutissait à 0 marqueur sur ce même scénario).
+
 ## [2.24.3] — 2026-07-19
 
 ### Documentation
