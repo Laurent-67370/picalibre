@@ -16,6 +16,7 @@ import migration006 from './migrations/006_fts_triggers.sql?raw'
 import migration007 from './migrations/007_fts_folder_column.sql?raw'
 import migration008 from './migrations/008_gps_columns.sql?raw'
 import migration009 from './migrations/009_video_trim.sql?raw'
+import migration010 from './migrations/010_trash_hidden_indexes.sql?raw'
 
 /** Migrations embarquées dans le bundle (import Vite ?raw) — ordre croissant. */
 const MIGRATIONS: Array<{ version: number; sql: string }> = [
@@ -27,7 +28,8 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
   { version: 6, sql: migration006 },
   { version: 7, sql: migration007 },
   { version: 8, sql: migration008 },
-  { version: 9, sql: migration009 }
+  { version: 9, sql: migration009 },
+  { version: 10, sql: migration010 }
 ]
 
 let db: Database.Database

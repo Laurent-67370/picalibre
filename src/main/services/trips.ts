@@ -146,8 +146,12 @@ export function segmentByBreaks(photos: TripPhotoLite[]): TripPhotoLite[][] {
 /**
  * Détecte les voyages/événements sur toute la bibliothèque active. Lecture
  * seule — ne modifie rien, ne fait que proposer. Les appels de géocodage
- * sont espacés (politique d'usage Nominatim : 1 req/s max) et limités à
- * un seul par groupe retenu (pas par photo).
+ * sont espacés (politique d'usage Nominatim : 1 req/s max) et mutualisés :
+ * deux groupes dont la position représentative tombe dans la même zone
+ * (~20 km, arrondi à 0,2°) partagent le même résultat — un seul appel
+ * réseau, et aucune attente de politesse pour les résultats servis depuis
+ * le cache (typique : plusieurs week-ends dans la même ville → 1 appel
+ * au lieu de N, et N-1 × 1,1 s d'attente économisées).
  */
 export async function detectTrips(): Promise<TripGroup[]> {
   const db = getDb()
@@ -168,23 +172,31 @@ export async function detectTrips(): Promise<TripGroup[]> {
   const segments = segmentByBreaks(rows).filter((g) => g.length >= MIN_GROUP_SIZE)
 
   const result: TripGroup[] = []
-  const lastGeoIdx = segments.reduce(
-    (acc, g, i) => (g.some((p) => p.gps_lat != null && p.gps_lon != null) ? i : acc),
-    -1
-  )
-  for (let i = 0; i < segments.length; i++) {
-    const g = segments[i]
+  // Cache par zone : clé = coordonnées arrondies à 0,2° (~20 km). Sous le
+  // seuil de rupture géographique (60 km), donc deux groupes distincts de
+  // la même ville tombent bien dans la même zone la plupart du temps.
+  const cityCache = new Map<string, string | null>()
+  let lastCallWasNetwork = false
+  for (const g of segments) {
     const startDate = g[0].taken_at
     const endDate = g[g.length - 1].taken_at
     const geoPhoto = g.find((p) => p.gps_lat != null && p.gps_lon != null)
     let city: string | null = null
     if (geoPhoto && geoPhoto.gps_lat != null && geoPhoto.gps_lon != null) {
-      city = await reverseGeocodeCity(geoPhoto.gps_lat, geoPhoto.gps_lon)
-      // Respecte la politique d'usage Nominatim (max ~1 req/s), mais
-      // uniquement ENTRE deux appels réseau — pas après le dernier groupe
-      // géocodé (l'attente ne protégerait rien et ralentirait l'écran de
-      // review d'une seconde pour rien).
-      if (i < lastGeoIdx) await new Promise((r) => setTimeout(r, 1100))
+      const zoneKey = `${Math.round(geoPhoto.gps_lat * 5) / 5},${Math.round(geoPhoto.gps_lon * 5) / 5}`
+      if (cityCache.has(zoneKey)) {
+        city = cityCache.get(zoneKey) ?? null
+        lastCallWasNetwork = false
+        if (process.env.PICALIBRE_TEST_TRIPS) console.log('[trips] zone en cache:', zoneKey)
+      } else {
+        // Politesse Nominatim : 1,1 s d'écart entre deux vrais appels
+        // réseau — jamais avant le premier ni après un résultat en cache.
+        if (lastCallWasNetwork) await new Promise((r) => setTimeout(r, 1100))
+        if (process.env.PICALIBRE_TEST_TRIPS) console.log('[trips] appel Nominatim:', zoneKey)
+        city = await reverseGeocodeCity(geoPhoto.gps_lat, geoPhoto.gps_lon)
+        cityCache.set(zoneKey, city)
+        lastCallWasNetwork = true
+      }
     }
     const dateRange = formatDateRange(startDate, endDate)
     result.push({

@@ -3,6 +3,34 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.2] — 2026-07-19
+
+### Performance
+- **Index partiels pour les vues Corbeille et Masquées** (migration 10) :
+  ces vues parcouraient l'index général de toute la bibliothèque pour
+  n'en garder qu'une poignée de lignes. Elles utilisent désormais des
+  index couvrants limités aux seules photos concernées — coût
+  proportionnel à la taille de la corbeille, plus à celle de la
+  bibliothèque, pour un surcoût d'écriture/stockage quasi nul.
+- **Cache de géocodage par zone dans la détection voyages** : deux
+  groupes dont la position tombe dans la même zone (~20 km) partagent
+  désormais le même résultat Nominatim — un seul appel réseau au lieu
+  d'un par groupe, et l'attente de politesse de 1,1 s ne s'applique
+  plus qu'entre vrais appels. Typique : plusieurs week-ends dans la
+  même ville → détection nettement plus rapide.
+
+### Vérifié (Xvfb + Electron réel)
+- Plans de requêtes en vraie base : Corbeille et Masquées passent de
+  « SCAN via index général » à « COVERING INDEX partiel » ; migration 10
+  appliquée automatiquement au démarrage.
+- Cache de zone prouvé par les horodatages : dataset enrichi d'un 2e
+  séjour dans la même ville → 3 appels réseau (3 villes distinctes,
+  espacés de 1,1 s), puis le 2e séjour servi depuis le cache en 9 ms,
+  sans appel ni attente. Détection conforme : 5 groupes [5,4,4,5,4],
+  24 photos inchangées, 5 albums créés.
+- Batterie E2E Corbeille/sécurité : 13/13 assertions conformes avec les
+  nouveaux index.
+
 ## [2.24.1] — 2026-07-19
 
 ### Infrastructure — dernier reliquat de l'audit soldé

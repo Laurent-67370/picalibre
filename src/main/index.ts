@@ -2056,7 +2056,7 @@ app.whenReady().then(() => {
       const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
       const photos = q('SELECT COUNT(*) c FROM photos')
       const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
-      if ((photos >= 19 && thumbs >= photos * 2) || Date.now() - t0p > 90000) {
+      if ((photos >= 24 && thumbs >= photos * 2) || Date.now() - t0p > 90000) {
         clearInterval(ivp)
         const db = getDb()
         const withDates = db
@@ -2070,13 +2070,13 @@ app.whenReady().then(() => {
           `window.api.invoke('trips:detect', undefined)`
         )
         console.log('[trips-test] groupes détectés:', JSON.stringify(groups))
-        console.log('[trips-test] nombre de groupes (attendu 4):', groups.length)
+        console.log('[trips-test] nombre de groupes (attendu 5):', groups.length)
         console.log(
-          '[trips-test] tailles de groupes (attendu [5,4,4,4]):',
+          '[trips-test] tailles de groupes (attendu [5,4,4,5,4]):',
           JSON.stringify(groups.map((g: { count: number }) => g.count))
         )
         console.log(
-          '[trips-test] villes détectées (attendu 3 non-null, 1 null):',
+          '[trips-test] villes détectées (attendu 4 géocodées dont 2 même zone, 1 null):',
           JSON.stringify(groups.map((g: { city: string | null }) => g.city))
         )
 
@@ -2084,7 +2084,7 @@ app.whenReady().then(() => {
         const stillActiveCount = (
           db.prepare("SELECT COUNT(*) c FROM photos WHERE status = 'active'").get() as { c: number }
         ).c
-        console.log('[trips-test] photos encore actives après détection (doit être 19, rien modifié):', stillActiveCount)
+        console.log('[trips-test] photos encore actives après détection (doit être 24, rien modifié):', stillActiveCount)
 
         // 2) Création réelle des albums pour les groupes proposés (comme le
         //    fait le bouton « Créer » de l'écran de review, mêmes appels IPC)
@@ -2105,7 +2105,7 @@ app.whenReady().then(() => {
           )
           .all()
         console.log('[trips-test] albums créés en base:', JSON.stringify(albumRows))
-        console.log('[trips-test] albums créés (attendu 4):', albumsCreated)
+        console.log('[trips-test] albums créés (attendu 5):', albumsCreated)
 
         console.log('[trips-test] TERMINÉ')
         exitTest(0)
