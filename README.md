@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.24.5-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.6-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -125,6 +125,21 @@ avec restauration, regroupement automatique en voyages/événements (que
 Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
+
+## 🆕 Quoi de neuf en 2.24.6
+
+- 🔒 **Sécurité** : injection de commande corrigée dans `setWallpaper`
+  (exec → execFile sans shell), path traversal bloqué dans `batchRename`
+  (sanitization du pattern), fichiers secrets retirés du dépôt.
+- ⚡ **Perf backend** : `queue.shift()` O(n) → index O(1) (fin du O(n²)
+  sur 50k miniatures), éviction LRU par batch au lieu de `clear()` (fin
+  du thundering herd), transactions englobantes pour `deleteForever` et
+  `folders:remove`, `db.prepare()` sortis des boucles.
+- ⚡ **Perf renderer** : throttle 300 ms du handler `library:changed`
+  (fini les re-renders en cascade pendant un scan), `React.lazy` +
+  `Suspense` pour 8 composants rarement utilisés (MapView, Editor,
+  Slideshow, FaceMovie, CollagePreview, PrintDialog, HelpCenter,
+  OnboardingTour) → bundle initial réduit de ~150-250 ko.
 
 ## 🆕 Quoi de neuf en 2.24.5
 

@@ -3,6 +3,38 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.6] — 2026-07-19
+
+### Sécurité
+- **Injection commande `setWallpaper`** : `exec` (shell) → `execFile`
+  (sans shell) sur les 3 plateformes (Linux gsettings, Windows powershell,
+  macOS osascript). Nom de fichier temporaire sanitizé (`[^a-zA-Z0-9._-]`
+  → `_`).
+- **Path traversal `batchRename`** : validation du pattern — rejet de `/`,
+  `\`, `..`, `\0` dans `newFilename` avant `join(dirname, newFilename)`.
+- **Fichiers secrets** : `.git-credentials-temp` et `.push_url.txt`
+  supprimés du dépôt (tokens GitHub en clair).
+
+### Optimisé — Backend
+- **`thumb-worker.ts`** : `queue.shift()` O(n) → index tête-de-lecture O(1).
+  Fin du O(n²) sur 50 000 miniatures.
+- **`index.ts`** : `thumbPathCache.clear()` → éviction LRU par batch
+  (suppression des 5 000 plus anciennes). Fin du thundering herd.
+- **`index.ts`** : transactions englobantes pour `deleteForever` (tous
+  les `del.run()` dans une transaction) et `folders:remove`/`undoRemove`
+  (UPDATE dossier + photos atomiques).
+- **`index.ts`** : `db.prepare()` sortis des boucles — `batchRename`,
+  `undoBatchRename`, `duplicates:merge`, `duplicates:undoMerge` (de 7N
+  préparations à 7).
+
+### Optimisé — Renderer
+- **Throttle 300 ms `library:changed`** : leading + trailing, via `useRef`
+  + `useEffect` cleanup. Fini les re-renders en cascade pendant un scan.
+- **`React.lazy` + `Suspense`** pour 8 composants rarement utilisés :
+  MapView (Leaflet ~140 ko), Editor, Slideshow, FaceMovie, CollagePreview,
+  PrintDialog, HelpCenter, OnboardingTour. Bundle initial réduit de
+  ~150-250 ko gzip.
+
 ## [2.24.5] — 2026-07-19
 
 ### Optimisé — Fluidité pendant un scan
