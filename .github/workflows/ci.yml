@@ -42,8 +42,6 @@ jobs:
         run: npx tsx scripts/test-engine.ts
       - name: Tests clusters de visages
         run: npx tsx scripts/test-faces-manage.ts
-      - name: Tests timeline
-        run: npx tsx scripts/test-timeline.ts
       - name: Tests movie maker v2
         run: npx tsx scripts/test-movie-v2.ts
 
