@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.24.8-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.9-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -125,6 +125,19 @@ avec restauration, regroupement automatique en voyages/événements (que
 Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
+
+## 🆕 Quoi de neuf en 2.24.9
+
+- ⚡ **SQL optimisé** : N+1 doublons → une seule requête `IN`,
+  sous-requête persons → CTE `ROW_NUMBER`, lookup visages O(n) → `Map`
+  O(1), `photos:details` 4 requêtes → 1 seule, métadonnées sharp lues une
+  seule fois.
+- ⚡ **Renderer mémoïsé** : `MapView`, `Lightbox`, `Editor` enveloppés de
+  `React.memo`, cache LRU vignettes 200 → 500 (couverture 4K ~8 écrans).
+- 🔒 **Sécurité renforcée** : allowlist IPC preload (88 canaux + 12
+  events avec garde d'exhaustivité), token WebSync chiffré via
+  `safeStorage`, validation runtime des canaux sensibles (rating, GPS,
+  scan roots).
 
 ## 🆕 Quoi de neuf en 2.24.8
 

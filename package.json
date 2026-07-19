@@ -1,6 +1,6 @@
 {
   "name": "picalibre",
-  "version": "2.24.8",
+  "version": "2.24.9",
   "description": "Gestionnaire de photos open-source inspiré de Picasa — Electron + React + TypeScript + SQLite",
   "main": "./out/main/index.js",
   "author": {

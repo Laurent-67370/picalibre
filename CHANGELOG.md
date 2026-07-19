@@ -3,6 +3,40 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.9] — 2026-07-19
+
+### Optimisé — SQL
+- **`duplicates:list`** : pattern N+1 (une requête par hash) → une seule
+  requête `WHERE hash_xxh3 IN (...)` + regroupement JS par `Map`.
+- **`persons:list`** : sous-requête corrélée `SELECT id FROM faces WHERE
+  person_id = pe.id ORDER BY confidence DESC LIMIT 1` → CTE `ROW_NUMBER()
+  OVER (PARTITION BY person_id ORDER BY confidence DESC)` + `rn = 1`.
+- **`faces/index.ts`** : `persons.find()` O(n) par visage → `Map<number,
+  PersonCentroid>` O(1), maintenu à jour lors de la création de personnes.
+- **`photos:details`** : 4 requêtes SQL (photo + tags + COUNT faces +
+  albums) → 1 seule avec `GROUP_CONCAT(CHAR(31))` et COUNT corrélé.
+- **`generateThumbOnTheFly`** : double décodage `sharp(input).metadata()`
+  → une seule lecture en amont, réutilisée.
+
+### Optimisé — Renderer
+- **`MapView`, `Lightbox`, `Editor`** : `export default function` →
+  `export default memo()`. Évite les re-renders quand App re-render pour
+  des raisons sans rapport (ex. `setProgress` pendant un scan).
+- **`thumb-cache.ts`** : cache LRU 200 → 500 entrées. Sur un écran 4K
+  (~60 vignettes visibles), 500 couvrent ~8 écrans de scroll au lieu de 3.
+
+### Sécurité — Défense en profondeur
+- **Allowlist IPC preload** : 88 canaux `invoke` + 12 events `on` avec
+  garde d'exhaustivité à la compilation (`satisfies readonly IpcChannel[]`).
+  Tout canal non listé est rejeté avant d'atteindre `ipcRenderer`.
+- **Token WebSync chiffré** : `safeStorage` (Electron) au repos. Helpers
+  `encryptToken`/`decryptToken` avec rétrocompatibilité pour tokens
+  hérités non chiffrés.
+- **Validation runtime** : `assertSetRating` (0-5), `assertSetGps`
+  (lat -90..90, lon -180..180), `assertScanRootAdd` (path non vide, pas
+  de `..`). 3 handlers `ipcMain.handle` valident leur payload avant
+  exécution.
+
 ## [2.24.8] — 2026-07-19
 
 ### Optimisé — Export (render-sharp)
