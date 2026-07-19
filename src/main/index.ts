@@ -494,20 +494,32 @@ function registerIpc(): void {
       .prepare("SELECT id FROM photos WHERE folder_id = ? AND status = 'active'")
       .all(folderId)
       .map((r) => (r as { id: number }).id)
-    db.prepare('UPDATE folders SET is_hidden = 1 WHERE id = ?').run(folderId)
-    db.prepare("UPDATE photos SET status = 'trashed' WHERE folder_id = ?").run(folderId)
+    // Transaction englobante : sans elle, un crash entre le marquage du
+    // dossier (is_hidden=1) et la mise à la corbeille des photos laisse la
+    // base dans un état incohérent (dossier masqué mais photos actives).
+    const tx = db.transaction((fid: number) => {
+      db.prepare('UPDATE folders SET is_hidden = 1 WHERE id = ?').run(fid)
+      db.prepare("UPDATE photos SET status = 'trashed' WHERE folder_id = ?").run(fid)
+    })
+    tx(folderId)
     return { photoIds }
   })
 
   ipcMain.handle('folders:undoRemove', (_e, { folderId, photoIds }) => {
     const db = getDb()
-    db.prepare('UPDATE folders SET is_hidden = 0 WHERE id = ?').run(folderId)
-    if (photoIds.length > 0) {
-      const placeholders = photoIds.map(() => '?').join(',')
-      db.prepare(`UPDATE photos SET status = 'active' WHERE id IN (${placeholders})`).run(
-        ...photoIds
-      )
-    }
+    // Transaction englobante : le rétablissement du dossier et celui des
+    // photos doivent rester atomiques (sinon on pourrait voir un dossier
+    // visible dont toutes les photos resteraient à la corbeille).
+    const tx = db.transaction((fid: number, ids: number[]) => {
+      db.prepare('UPDATE folders SET is_hidden = 0 WHERE id = ?').run(fid)
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',')
+        db.prepare(`UPDATE photos SET status = 'active' WHERE id IN (${placeholders})`).run(
+          ...ids
+        )
+      }
+    })
+    tx(folderId, photoIds as number[])
   })
 
   ipcMain.handle('photos:byFolder', (_e, { folderId, offset, limit, minStars, typeFilter, sortMode }) => {
@@ -796,6 +808,11 @@ function registerIpc(): void {
     let deleted = 0
     const del = db.prepare('DELETE FROM photos WHERE id = ?')
     const thumbRows = db.prepare('SELECT cache_path FROM thumbnails WHERE photo_id = ?')
+    // Les suppressions de fichiers disque sont lentes et peuvent échouer :
+    // on les fait hors transaction. On collecte les ids dont le fichier a
+    // pu être supprimé (ou était déjà absent — ENOENT), puis on supprime
+    // toutes les lignes SQL correspondantes dans une seule transaction.
+    const toDelete: number[] = []
     for (const row of rows) {
       try {
         await fsUnlink(row.filepath)
@@ -823,9 +840,18 @@ function registerIpc(): void {
       for (const key of thumbPathCache.keys()) {
         if (key.startsWith(`${row.id}:`)) thumbPathCache.delete(key)
       }
-      del.run(row.id)
-      deleted++
+      toDelete.push(row.id)
     }
+    // Transaction englobante : un à un sans transaction, N photos = N commits
+    // (fsync à chaque fois). Une seule transaction réduit drastiquement le
+    // coût disque et garantit l'atomicité si l'app est interrompue.
+    if (toDelete.length > 0) {
+      const tx = db.transaction((ids: number[]) => {
+        for (const id of ids) del.run(id)
+      })
+      tx(toDelete)
+    }
+    deleted = toDelete.length
     return { deleted, errors }
   })
 
@@ -844,6 +870,11 @@ function registerIpc(): void {
     const db = getDb()
     const get = db.prepare(
       'SELECT id, filepath, filename, taken_at, file_mtime FROM photos WHERE id = ?'
+    )
+    // Préparé hors boucle : le même statement est réutilisé pour chaque photo
+    // (gain mesurable sur un batch de plusieurs centaines de renommages).
+    const updatePath = db.prepare(
+      'UPDATE photos SET filepath = ?, filename = ? WHERE id = ?'
     )
     const renamed: Array<{
       id: number
@@ -895,20 +926,12 @@ function registerIpc(): void {
         /* n'existe pas encore — bon signe, on continue */
       }
       try {
-        db.prepare('UPDATE photos SET filepath = ?, filename = ? WHERE id = ?').run(
-          newPath,
-          newFilename,
-          id
-        )
+        updatePath.run(newPath, newFilename, id)
         await fsRename(row.filepath, newPath)
         renamed.push({ id, oldPath: row.filepath, oldFilename: row.filename, newPath, newFilename })
       } catch (err) {
         // Rollback BDD si le renommage disque a échoué après la mise à jour
-        db.prepare('UPDATE photos SET filepath = ?, filename = ? WHERE id = ?').run(
-          row.filepath,
-          row.filename,
-          id
-        )
+        updatePath.run(row.filepath, row.filename, id)
         errors.push({ id, filename: row.filename, error: (err as Error).message })
       }
     }
@@ -919,6 +942,10 @@ function registerIpc(): void {
   ipcMain.handle('photos:undoBatchRename', async (_e, items) => {
     await stopWatchers()
     const db = getDb()
+    // Préparé hors boucle (même raison que batchRename).
+    const updatePath = db.prepare(
+      'UPDATE photos SET filepath = ?, filename = ? WHERE id = ?'
+    )
     for (const it of items as Array<{
       id: number
       oldPath: string
@@ -927,11 +954,7 @@ function registerIpc(): void {
       newFilename: string
     }>) {
       try {
-        db.prepare('UPDATE photos SET filepath = ?, filename = ? WHERE id = ?').run(
-          it.oldPath,
-          it.oldFilename,
-          it.id
-        )
+        updatePath.run(it.oldPath, it.oldFilename, it.id)
         await fsRename(it.newPath, it.oldPath)
       } catch (err) {
         console.error('[undoBatchRename] échec pour', it.id, (err as Error).message)
@@ -1084,28 +1107,42 @@ function registerIpc(): void {
       }))
     }
 
+    // Préparation des statements hors de la boucle : avant, chaque tour
+    // de la transaction recompilait 7 statements (INSERT album_items, DELETE,
+    // INSERT photo_tags, DELETE, UPDATE faces, UPDATE photos rating, UPDATE
+    // status) — sur un doublon de N photos, c'est 7N préparations au lieu de 7.
+    const stmts = {
+      albumInsert: db.prepare(
+        `INSERT OR IGNORE INTO album_items (album_id, photo_id, position, added_at)
+         SELECT album_id, ?, position, added_at FROM album_items WHERE photo_id = ?`
+      ),
+      albumDelete: db.prepare('DELETE FROM album_items WHERE photo_id = ?'),
+      tagInsert: db.prepare(
+        `INSERT OR IGNORE INTO photo_tags (photo_id, tag_id)
+         SELECT ?, tag_id FROM photo_tags WHERE photo_id = ?`
+      ),
+      tagDelete: db.prepare('DELETE FROM photo_tags WHERE photo_id = ?'),
+      faceMove: db.prepare('UPDATE faces SET photo_id = ? WHERE photo_id = ?'),
+      keepBest: db.prepare(
+        `UPDATE photos SET
+           rating = MAX(rating, (SELECT rating FROM photos WHERE id = ?)),
+           is_favorite = MAX(is_favorite, (SELECT is_favorite FROM photos WHERE id = ?))
+         WHERE id = ?`
+      ),
+      trash: db.prepare(`UPDATE photos SET status = 'trashed' WHERE id = ?`)
+    }
+
     const tx = db.transaction((ids: number[]) => {
       for (const rid of ids) {
         // Fusion des références : albums, tags, visages pointent vers la photo gardée
-        db.prepare(
-          `INSERT OR IGNORE INTO album_items (album_id, photo_id, position, added_at)
-           SELECT album_id, ?, position, added_at FROM album_items WHERE photo_id = ?`
-        ).run(keepId, rid)
-        db.prepare('DELETE FROM album_items WHERE photo_id = ?').run(rid)
-        db.prepare(
-          `INSERT OR IGNORE INTO photo_tags (photo_id, tag_id)
-           SELECT ?, tag_id FROM photo_tags WHERE photo_id = ?`
-        ).run(keepId, rid)
-        db.prepare('DELETE FROM photo_tags WHERE photo_id = ?').run(rid)
-        db.prepare('UPDATE faces SET photo_id = ? WHERE photo_id = ?').run(keepId, rid)
+        stmts.albumInsert.run(keepId, rid)
+        stmts.albumDelete.run(rid)
+        stmts.tagInsert.run(keepId, rid)
+        stmts.tagDelete.run(rid)
+        stmts.faceMove.run(keepId, rid)
         // La meilleure note/favori survit
-        db.prepare(
-          `UPDATE photos SET
-             rating = MAX(rating, (SELECT rating FROM photos WHERE id = ?)),
-             is_favorite = MAX(is_favorite, (SELECT is_favorite FROM photos WHERE id = ?))
-           WHERE id = ?`
-        ).run(rid, rid, keepId)
-        db.prepare(`UPDATE photos SET status = 'trashed' WHERE id = ?`).run(rid)
+        stmts.keepBest.run(rid, rid, keepId)
+        stmts.trash.run(rid)
       }
     })
     tx(removeIds)
@@ -1113,27 +1150,38 @@ function registerIpc(): void {
   })
   ipcMain.handle('duplicates:undoMerge', (_e, snapshot: MergeSnapshot) => {
     const db = getDb()
+    // Préparation hors boucle (même raison que merge) : on a 4 statements
+    // distincts exécutés en boucle, on les prépare une fois.
+    const stmts = {
+      restoreKeep: db.prepare(
+        'UPDATE photos SET rating = ?, is_favorite = ? WHERE id = ?'
+      ),
+      restoreStatus: db.prepare(`UPDATE photos SET status = 'active' WHERE id = ?`),
+      albumInsert: db.prepare(
+        `INSERT OR IGNORE INTO album_items (album_id, photo_id, position, added_at)
+         VALUES (?, ?, ?, ?)`
+      ),
+      tagInsert: db.prepare(
+        'INSERT OR IGNORE INTO photo_tags (photo_id, tag_id) VALUES (?, ?)'
+      ),
+      faceRestore: db.prepare('UPDATE faces SET photo_id = ? WHERE id = ?')
+    }
     const tx = db.transaction((snap: MergeSnapshot) => {
-      db.prepare('UPDATE photos SET rating = ?, is_favorite = ? WHERE id = ?').run(
+      stmts.restoreKeep.run(
         snap.keepBefore.rating,
         snap.keepBefore.is_favorite,
         snap.keepId
       )
       for (const r of snap.removed) {
-        db.prepare(`UPDATE photos SET status = 'active' WHERE id = ?`).run(r.id)
+        stmts.restoreStatus.run(r.id)
         for (const ai of r.albumItems) {
-          db.prepare(
-            `INSERT OR IGNORE INTO album_items (album_id, photo_id, position, added_at)
-             VALUES (?, ?, ?, ?)`
-          ).run(ai.album_id, r.id, ai.position, ai.added_at)
+          stmts.albumInsert.run(ai.album_id, r.id, ai.position, ai.added_at)
         }
         for (const tagId of r.tagIds) {
-          db.prepare(
-            'INSERT OR IGNORE INTO photo_tags (photo_id, tag_id) VALUES (?, ?)'
-          ).run(r.id, tagId)
+          stmts.tagInsert.run(r.id, tagId)
         }
         for (const faceId of r.faceIds) {
-          db.prepare('UPDATE faces SET photo_id = ? WHERE id = ?').run(r.id, faceId)
+          stmts.faceRestore.run(r.id, faceId)
         }
       }
     })

@@ -1,19 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { AlbumRow, FaceLite, FolderRow, MergeSnapshot, PersonRow, PhotoRow, ScanProgress, RendererApi, TripGroup } from '@shared/ipc'
 import type { EditStack } from '@shared/edit-engine'
-import MapView from './MapView'
-import Slideshow from './Slideshow'
-import FaceMovie from './FaceMovie'
-import Editor from './Editor'
 import Lightbox from './Lightbox'
 import InfoPanel from './InfoPanel'
 import ThumbCanvas from './ThumbCanvas'
-import CollagePreview, { type CollageLayout, type CollageFormat } from './CollagePreview'
-import PrintDialog, { type PrintLayout, type PaperSize } from './PrintDialog'
 import { prefetchBidirectionalThumbs, cleanupPrefetch } from './thumb-prefetch'
-import HelpCenter from './HelpCenter'
-import OnboardingTour, { onboardingDone } from './OnboardingTour'
+
+// Composants rarement utilisés → chargés à la demande (React.lazy + Suspense)
+// pour alléger le bundle initial. MapView notamment entraîne Leaflet (~140 ko)
+// qu'on ne veut pas payer au démarrage.
+const MapView = lazy(() => import('./MapView'))
+const Slideshow = lazy(() => import('./Slideshow'))
+const FaceMovie = lazy(() => import('./FaceMovie'))
+const Editor = lazy(() => import('./Editor'))
+const CollagePreview = lazy(() => import('./CollagePreview'))
+const PrintDialog = lazy(() => import('./PrintDialog'))
+const HelpCenter = lazy(() => import('./HelpCenter'))
+const OnboardingTour = lazy(() => import('./OnboardingTour'))
+
+// Types nommés exportés par les composants lazy — importés comme types purs
+// (sans tirer le module au runtime) pour rester compatibles avec React.lazy.
+import type { CollageLayout, CollageFormat } from './CollagePreview'
+import type { PrintLayout, PaperSize } from './PrintDialog'
+import { onboardingDone } from './OnboardingTour'
 
 declare global {
   interface Window {
@@ -523,34 +533,77 @@ export default function App(): JSX.Element {
     }
   }, [minStars, typeFilter, sortMode, loadView])
 
+  // ---- Throttle des handlers library:changed / persons:changed ----
+  // Pendant un scan, l'évènement library:changed peut être émis plusieurs
+  // fois par seconde. Sans throttle, chaque émission déclenche un
+  // refreshSidebar() + setPhotos() → recalcule gridRows (useMemo) et
+  // re-rend toute la grille. On amortit à 300 ms (leading + trailing).
+  const libraryChangedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
+    return () => {
+      if (libraryChangedTimerRef.current) clearTimeout(libraryChangedTimerRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    // Marqueur « leading » : le 1er événement d'une rafale est traité tout de
+    // suite, puis on ignore les suivants pendant 300 ms avant un flush
+    // final (trailing) pour ne pas rater la dernière mise à jour.
+    let lastLibraryFlush = 0
+    let pendingLib: {
+      folderIds: number[]
+      isPersons: boolean
+    } | null = null
+    const flushLibraryChanged = (info: { folderIds: number[]; isPersons: boolean }) => {
+      lastLibraryFlush = Date.now()
+      pendingLib = null
+      if (info.isPersons) {
+        refreshSidebar()
+        return
+      }
+      refreshSidebar()
+      const folderIds = info.folderIds
+      // Correctif: si l'utilisateur vient d'ajouter un dossier et qu'aucune vue
+      // n'est encore sélectionnée, on ouvre automatiquement le 1er dossier
+      // touché. Sinon l'utilisateur voit "Sélectionne un dossier..." alors
+      // que le scan vient de finir.
+      if (!viewRef.current && Array.isArray(folderIds) && folderIds.length > 0) {
+        loadView({ type: 'folder', id: folderIds[0] })
+        return
+      }
+      if (viewRef.current && viewRef.current.type !== 'map') loadView(viewRef.current)
+    }
+    const scheduleLibraryChanged = (info: { folderIds: number[]; isPersons: boolean }) => {
+      pendingLib = info
+      if (libraryChangedTimerRef.current) clearTimeout(libraryChangedTimerRef.current)
+      const elapsed = Date.now() - lastLibraryFlush
+      if (elapsed >= 300) {
+        // Leading : déclenche immédiatement le 1er évènement
+        flushLibraryChanged(info)
+        return
+      }
+      // Trailing : flush final après le reste du délai de 300 ms
+      libraryChangedTimerRef.current = setTimeout(() => {
+        if (pendingLib) flushLibraryChanged(pendingLib)
+      }, 300 - elapsed)
+    }
+
     refreshSidebar()
     const off1 = window.api.on('scan:progress', (p) => {
       setProgress(p)
       if (p.phase === 'done') refreshSidebar()
     })
     const off2 = window.api.on('library:changed', (ev: unknown) => {
-      refreshSidebar()
       const folderIds = (ev as { folderIds?: number[] } | undefined)?.folderIds ?? []
-      // Correctif: si l'utilisateur vient d'ajouter un dossier et qu'aucune vue
-      // n'est encore sélectionnée, on ouvre automatiquement le 1er dossier
-      // touché. Sinon l'utilisateur voit "Sélectionne un dossier..." alors
-      // que le scan vient de finir.
-      if (
-        !viewRef.current &&
-        Array.isArray(folderIds) &&
-        folderIds.length > 0
-      ) {
-        loadView({ type: 'folder', id: folderIds[0] })
-        return
-      }
-      if (viewRef.current && viewRef.current.type !== 'map') loadView(viewRef.current)
+      scheduleLibraryChanged({ folderIds, isPersons: false })
     })
     const off3 = window.api.on('faces:progress', (p) => {
       setFaceProgress(p.done >= p.total ? null : p)
       if (p.done >= p.total) refreshSidebar()
     })
-    const off4 = window.api.on('persons:changed', () => refreshSidebar())
+    const off4 = window.api.on('persons:changed', () => {
+      scheduleLibraryChanged({ folderIds: [], isPersons: true })
+    })
     const offP = window.api.on('photo:action', ({ action, photoId }) => {
       const i = photosRef.current.findIndex((x) => x.id === photoId)
       if (action === 'open' && i >= 0) setLightboxIndex(i)
@@ -1993,6 +2046,7 @@ export default function App(): JSX.Element {
               )}
             </div>
           ) : view?.type === 'map' ? (
+            <Suspense fallback={null}>
             <MapView
               trayIds={trayIds}
               filters={{ minStars, typeFilter, sortMode }}
@@ -2023,6 +2077,7 @@ export default function App(): JSX.Element {
                 /* les marqueurs se rechargent dans MapView */
               }}
             />
+            </Suspense>
           ) : (
           <>
           <div
