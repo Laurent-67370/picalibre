@@ -26,10 +26,12 @@ plutôt que masqués. ✅ = équivalent · ➕ = PicaLibre va plus loin ·
 | Notation | ★ simple (on/off) | ➕ 0 à 5 étoiles |
 | Tags / mots-clés | ✅ | ✅ (cherchables) |
 | Reconnaissance des visages | ✅ | ✅ + fusion/scission manuelle |
-| Géolocalisation + carte | ✅ | ✅ (clustering) |
+| Géolocalisation + carte | ✅ (via Google Earth/Maps) | ➕ clustering au barycentre, zoom intelligent sur les groupes, géotag par clic, fond hors-ligne |
 | Recherche (nom, tag, légende) | ✅ | ✅ + FTS5 plein texte |
 | Détection de doublons | ✅ (expérimental) | ➕ fusion complète (albums/tags/visages transférés) + annulable |
-| Photos masquées | ✅ (exclusion simple) | ➕ + verrouillage par mot de passe |
+| Photos masquées | ✅ (exclusion simple) | ➕ verrouillage par mot de passe de bout en bout (vue, Corbeille et vignettes comprises) |
+| Corbeille | Corbeille système uniquement | ➕ corbeille intégrée : vue dédiée, restauration, mise à la corbeille annulable, suppression définitive avec confirmation |
+| Regroupement voyages / événements | ❌ | ➕ détection automatique (rupture temporelle ou géographique), nommage par ville via géocodage, création d'albums en un clic |
 | Renommage en lot | ✅ | ✅ ({n}/{name}/{date}, aperçu live, annulable) |
 
 ### Édition photo
@@ -107,6 +109,7 @@ plutôt que masqués. ✅ = équivalent · ➕ = PicaLibre va plus loin ·
 - 📱 **Galerie mobile auto-hébergée** — accès depuis son téléphone via un serveur qu'on héberge soi-même (miniatures + métadonnées seulement, jamais les originaux)
 - 🎨 **Thème clair (inspiré de Picasa) et sombre**, au choix
 - ❓ **Aide interactive** : visite guidée au premier lancement + centre d'aide cherchable
+- 🛡️ **Sécurité d'aujourd'hui, pas de 2016** : audit complet (bac à sable Chromium, verrou de confidentialité appliqué jusqu'au serveur interne de vignettes, navigation verrouillée, https obligatoire pour la galerie mobile), moteur Electron/Chromium à jour, zéro vulnérabilité connue dans les dépendances — Picasa n'a plus reçu un seul correctif depuis 2016
 - 🧩 **DSL d'édition non destructive en JSON**, entièrement inspectable et versionnable
 
 ### Bilan honnête
@@ -117,6 +120,11 @@ réels (formats modernes, doublons, undo illimité en édition, galerie
 mobile, open source, découpe non destructive). Les 3 écarts qui restaient
 ouverts (Définition/Clarté, découpe vidéo, extraction d'image fixe) ont
 été comblés et vérifiés avec de vraies vidéos, pas des simulations.
+Depuis, PicaLibre a dépassé le cadre de la parité : Corbeille intégrée
+avec restauration, regroupement automatique en voyages/événements (que
+Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
+et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
+point vérifié par des tests automatisés sur les trois systèmes.
 
 ## 🆕 Quoi de neuf en 2.24.4
 
