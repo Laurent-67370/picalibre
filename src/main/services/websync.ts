@@ -5,6 +5,7 @@
  */
 import { createReadStream } from 'node:fs'
 import { getDb } from '../db'
+import { safeStorage } from 'electron'
 import type { BrowserWindow } from 'electron'
 
 export interface WebSyncConfig {
@@ -19,10 +20,54 @@ export interface WebSyncProgress {
   message?: string
 }
 
+/**
+ * Chiffrement au repos du token WebSync via safeStorage (Electron).
+ *
+ * safeStorage s'appuie sur le trousseau de l'OS (Keychain macOS, DPAPI
+ * Windows, libsecret/Linux). Le token est stocké chiffré dans settings.websync_token
+ * — un dump SQLite ne suffit plus pour le récupérer.
+ *
+ * Helpers `encryptToken` / `decryptToken` gèrent le cas où safeStorage n'est
+ * pas disponible (tête-à-tête CLI, sandbox) : on logue un avertissement et
+ * on retombe sur le stockage clair pour ne pas bloquer l'app, mais le chemin
+ * nominal (app graphique packagée) est toujours chiffré.
+ */
+function safeStorageAvailable(): boolean {
+  return typeof safeStorage !== 'undefined' && safeStorage.isEncryptionAvailable()
+}
+
+function encryptToken(token: string): string {
+  if (!safeStorageAvailable()) {
+    console.warn('[websync] safeStorage indisponible — token stocké en clair (fallback).')
+    return token
+  }
+  const buf = safeStorage.encryptString(token)
+  // On encode en base64 pour stockage en TEXT SQLite.
+  return buf.toString('base64')
+}
+
+function decryptToken(stored: string): string {
+  if (!stored) return stored
+  // Heuristique : un token chiffré est une chaîne base64 potentiellement
+  // longue ; un token clair est généralement court. On tente safeStorage
+  // d'abord ; si ça échoue (ou si la valeur n'était pas chiffrée), on
+  // retourne la valeur brute — rétrocompatible avec les tokens existants.
+  if (!safeStorageAvailable()) return stored
+  try {
+    const buf = Buffer.from(stored, 'base64')
+    return safeStorage.decryptString(buf)
+  } catch {
+    // Probablement un token hérité non chiffré : on retourne tel quel.
+    return stored
+  }
+}
+
 function getConfig(): WebSyncConfig | null {
   const db = getDb()
   const url = (db.prepare("SELECT value FROM settings WHERE key='websync_url'").get() as { value: string } | undefined)?.value
-  const token = (db.prepare("SELECT value FROM settings WHERE key='websync_token'").get() as { value: string } | undefined)?.value
+  const tokenRaw = (db.prepare("SELECT value FROM settings WHERE key='websync_token'").get() as { value: string } | undefined)?.value
+  if (!url || !tokenRaw) return null
+  const token = decryptToken(tokenRaw)
   return url && token ? { url: url.replace(/\/$/, ''), token } : null
 }
 
@@ -45,7 +90,7 @@ export function setConfig(cfg: WebSyncConfig): { ok: boolean; error?: string } {
     `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`
   )
   set.run('websync_url', cfg.url.replace(/\/$/, ''))
-  set.run('websync_token', cfg.token)
+  set.run('websync_token', encryptToken(cfg.token))
   return { ok: true }
 }
 
