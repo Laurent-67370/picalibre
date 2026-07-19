@@ -44,6 +44,11 @@ export async function startFaceScan(mainWin: BrowserWindow): Promise<void> {
   running = true
 
   // Centroïdes en mémoire pendant toute la passe
+  // Tableau pour bestMatch (boucle cosine) ET Map<number, PersonCentroid>
+  // parallèle pour l'update du centroïde par id en O(1) — avant, chaque
+  // visage déclenchait un persons.find(x => x.id === personId) O(n) sur
+  // le tableau. À 10 000 personnes et 100 000 visages, c'était 10^9
+  // comparaisons juste pour retrouver le centroïde déjà identifié.
   const persons: PersonCentroid[] = (
     db.prepare('SELECT id, centroid, face_count FROM persons WHERE is_ignored = 0').all() as {
       id: number
@@ -53,6 +58,9 @@ export async function startFaceScan(mainWin: BrowserWindow): Promise<void> {
   )
     .filter((p) => p.centroid)
     .map((p) => ({ id: p.id, centroid: blobToF32(p.centroid!), count: p.face_count }))
+  const personsById = new Map<number, PersonCentroid>(
+    persons.map((p) => [p.id, p])
+  )
 
   const insertFace = db.prepare(
     `INSERT INTO faces (photo_id, person_id, bbox_x, bbox_y, bbox_w, bbox_h, embedding, confidence, assignment)
@@ -76,14 +84,17 @@ export async function startFaceScan(mainWin: BrowserWindow): Promise<void> {
         let personId: number
         if (match) {
           personId = match.personId
-          const p = persons.find((x) => x.id === personId)!
+          // Map.get O(1) — avant persons.find(x => x.id === personId) O(n).
+          const p = personsById.get(personId)!
           p.centroid = mergeCentroid(p.centroid, p.count, emb)
           p.count++
           updatePerson.run(f32ToBlob(p.centroid), personId)
         } else {
           const row = createPerson.get(f32ToBlob(emb)) as { id: number }
           personId = row.id
-          persons.push({ id: personId, centroid: emb, count: 1 })
+          const np: PersonCentroid = { id: personId, centroid: emb, count: 1 }
+          persons.push(np)
+          personsById.set(personId, np)
         }
         insertFace.run(
           photoId,

@@ -27,6 +27,7 @@ import { getEditState, saveStack, undo, redo } from './services/edits'
 import { initAutoUpdate, installUpdate } from './services/updater'
 import { buildAppMenu } from './menu'
 import { getConfigForUi, setConfig, testConnection, runWebSync } from './services/websync'
+import { assertScanRootAdd, assertSetRating, assertSetGps } from './services/ipc-validators'
 import { shutdownExiftool } from './services/exif'
 import { detectTrips } from './services/trips'
 import { startFaceScan, isFaceScanRunning, humanModelsPath } from './services/faces'
@@ -457,7 +458,9 @@ function registerIpc(): void {
   ipcMain.handle('scanRoots:list', () =>
     getDb().prepare('SELECT id, path, mode FROM scan_roots').all()
   )
-  ipcMain.handle('scanRoots:add', (_e, { path, mode = 'watch' }) => {
+  ipcMain.handle('scanRoots:add', (_e, payload) => {
+    assertScanRootAdd(payload)
+    const { path, mode = 'watch' } = payload
     const r = getDb()
       .prepare('INSERT INTO scan_roots (path, mode) VALUES (?, ?) RETURNING id')
       .get(path, mode) as { id: number }
@@ -604,7 +607,9 @@ function registerIpc(): void {
     ])
     menu.popup({ window: mainWindow })
   })
-  ipcMain.handle('photos:setRating', (_e, { photoId, rating }) => {
+  ipcMain.handle('photos:setRating', (_e, payload) => {
+    assertSetRating(payload)
+    const { photoId, rating } = payload
     getDb().prepare('UPDATE photos SET rating = ? WHERE id = ?').run(rating, photoId)
   })
   ipcMain.handle('photos:timeline', (_e, { offset, limit, minStars, typeFilter, sortMode }) => {
@@ -1284,7 +1289,9 @@ function registerIpc(): void {
       )
       .all()
   )
-  ipcMain.handle('photos:setGps', (_e, { photoIds, lat, lon }) => {
+  ipcMain.handle('photos:setGps', (_e, payload) => {
+    assertSetGps(payload)
+    const { photoIds, lat, lon } = payload
     const db = getDb()
     const stmt = db.prepare(
       'UPDATE photos SET gps_lat = ?, gps_lon = ?, gps_manual = 1 WHERE id = ?'
