@@ -20,7 +20,7 @@
  * Si le protocole thumb:// n'est pas accessible depuis le worker, on
  * bascule sur createImageBitmap + requestIdleCallback dans le main thread.
  */
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, memo } from 'react'
 import { thumbCache } from './thumb-cache'
 
 interface ThumbCanvasProps {
@@ -83,7 +83,7 @@ function cancelIdleCallbackCompat(handle: IdleCallbackHandle): void {
   clearTimeout(handle)
 }
 
-export default function ThumbCanvas({
+function ThumbCanvas({
   photoId,
   v,
   size = 256,
@@ -337,3 +337,20 @@ export default function ThumbCanvas({
     </div>
   )
 }
+
+/**
+ * Mémoïsation : on ne re-render le canvas que si les props visuelles changent.
+ * Les callbacks (onClick, onDoubleClick, onContextMenu) sont ignorés du
+ * comparateur car ils sont recréés à chaque render du parent, mais leur
+ * comportement ne dépend que de photoId/gi qui sont stables.
+ */
+export default memo(ThumbCanvas, (prev, next) => {
+  return (
+    prev.photoId === next.photoId &&
+    prev.v === next.v &&
+    prev.size === next.size &&
+    prev.alt === next.alt &&
+    prev.fitMode === next.fitMode &&
+    prev.loading === next.loading
+  )
+})
