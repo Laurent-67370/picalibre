@@ -19,6 +19,7 @@ import { opendir } from 'node:fs/promises'
 import { cpus } from 'node:os'
 import { getDb, getKnownFilesForRoots, upsertScannedBatch } from '../db'
 import { runPostScanPipeline } from './pipeline'
+import { createProgressThrottle, type ProgressSender } from './progress-throttle'
 
 /** Nombre maximum de workers en parallèle (cpus − 1, au moins 1). */
 const MAX_WORKERS = Math.max(1, (cpus().length || 2) - 1)
@@ -128,8 +129,13 @@ export async function startScan(win: BrowserWindow, rootsOverride?: string[]): P
   const totalWorkers = partitions.length
   let pipelineStarted = false
 
+  // Throttle des événements scan:progress : limite à ~10/s (100 ms minimum
+  // entre émissions) pour éviter 10 000+ redraws du renderer sur une grosse
+  // bibliothèque. Le dernier état est flushé quand tous les workers terminent.
+  const progressSender: ProgressSender = createProgressThrottle(win, 100)
+
   const sendAggregatedProgress = (): void => {
-    win.webContents.send('scan:progress', {
+    progressSender.send({
       phase: 'hashing',
       filesFound: progress.filesFound,
       filesProcessed: progress.filesProcessed,
@@ -140,6 +146,9 @@ export async function startScan(win: BrowserWindow, rootsOverride?: string[]): P
   const launchPostScan = (): void => {
     if (pipelineStarted) return
     pipelineStarted = true
+    // Flush final : garantit que le renderer reçoit le dernier état de la
+    // phase 'hashing' avant d'enchaîner sur les phases exif/thumbs du pipeline.
+    progressSender.flush()
     void runPostScanPipeline(win)
   }
 

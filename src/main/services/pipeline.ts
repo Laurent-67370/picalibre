@@ -13,6 +13,7 @@ import { getDb } from '../db'
 import { probeVideoInfo } from './movie'
 import { extractExifBatch } from './exif'
 import { startFaceScan } from './faces'
+import { createProgressThrottle, type ProgressSender } from './progress-throttle'
 import type { ThumbResult } from '../../workers/thumb-worker'
 
 let running = false
@@ -33,13 +34,21 @@ export async function runPostScanPipeline(win: BrowserWindow): Promise<void> {
   }
   running = true
   try {
+    // Throttle partagé par toutes les phases du pipeline (exif/thumbs) :
+    // limite à ~10 événements scan:progress par seconde. Flush avant chaque
+    // transition de phase et avant 'done' pour garantir le décompte final.
+    const progressSender: ProgressSender = createProgressThrottle(win, 100)
     do {
       pending = false
-      await exifPhase(win)
-      await thumbsPhase(win)
-      await videoThumbsPhase(win)
+      await exifPhase(win, progressSender)
+      progressSender.flush()
+      await thumbsPhase(win, progressSender)
+      progressSender.flush()
+      await videoThumbsPhase(win, progressSender)
+      progressSender.flush()
       await videoProxyPhase()
     } while (pending) // relance si un scan est arrivé entre-temps
+    progressSender.flush()
     win.webContents.send('scan:progress', { phase: 'done', filesFound: 0, filesProcessed: 0 })
     win.webContents.send('library:changed', { folderIds: [] })
 
@@ -166,7 +175,7 @@ async function videoProxyPhase(): Promise<void> {
   }
 }
 
-async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
+async function videoThumbsPhase(win: BrowserWindow, progressSender: ProgressSender): Promise<void> {
   const db = getDb()
   const items = db
     .prepare(
@@ -240,7 +249,7 @@ async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
       console.error('[video-thumb]', item.filepath, (err as Error).message)
     }
     done++
-    win.webContents.send('scan:progress', {
+    progressSender.send({
       phase: 'thumbs',
       filesFound: items.length,
       filesProcessed: done
@@ -248,7 +257,7 @@ async function videoThumbsPhase(win: BrowserWindow): Promise<void> {
   }
 }
 
-async function exifPhase(win: BrowserWindow): Promise<void> {
+async function exifPhase(win: BrowserWindow, progressSender: ProgressSender): Promise<void> {
   const targets = getDb()
     .prepare(
       `SELECT id, filepath FROM photos
@@ -258,7 +267,7 @@ async function exifPhase(win: BrowserWindow): Promise<void> {
   if (targets.length === 0) return
 
   await extractExifBatch(targets, (done, total) => {
-    win.webContents.send('scan:progress', {
+    progressSender.send({
       phase: 'exif',
       filesFound: total,
       filesProcessed: done
@@ -266,7 +275,7 @@ async function exifPhase(win: BrowserWindow): Promise<void> {
   })
 }
 
-function thumbsPhase(win: BrowserWindow): Promise<void> {
+function thumbsPhase(win: BrowserWindow, progressSender: ProgressSender): Promise<void> {
   const db = getDb()
   const items = db
     .prepare(
@@ -305,7 +314,7 @@ function thumbsPhase(win: BrowserWindow): Promise<void> {
           break
         }
         case 'thumb-progress':
-          win.webContents.send('scan:progress', {
+          progressSender.send({
             phase: 'thumbs',
             filesFound: msg.total,
             filesProcessed: msg.done
