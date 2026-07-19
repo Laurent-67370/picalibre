@@ -12,7 +12,7 @@
  * Le premier usage vidéo sur une machine sans ffmpeg déclenche le
  * téléchargement (~77 Mo, une seule fois) ; les suivants sont instantanés.
  */
-import { execFileSync, execFile } from 'node:child_process'
+import { execFileSync, execFile, spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
 import { access, chmod, mkdir, rename } from 'node:fs/promises'
 import { join, sep } from 'node:path'
@@ -168,4 +168,92 @@ export function getFfmpegPath(): Promise<string> {
     _resolving = null // permettre une nouvelle tentative (réseau revenu, etc.)
   })
   return _resolving
+}
+
+// ---------------------------------------------------------------------------
+// Helpers ffmpeg mutualisés : spawn + parse stderr.
+//
+// Extraits de movie.ts où ils étaient définis, et consommés par movie.ts
+// et pipeline.ts. Les fonctions `probeDuration` et `probeVideoInfo` étaient
+// exportées par movie.ts et importées par pipeline.ts — c'est désormais
+// ici qu'elles vivent, movie.ts les réexporte par commodité (compat).
+// ---------------------------------------------------------------------------
+
+/**
+ * Lance ffmpeg, capture le stderr (tronqué à 40 ko), et résout avec ce
+ * stderr (utile quand l'appelant veut parser des infos dedans). Rejette
+ * avec un message incluant les 800 derniers caractères en cas de code != 0.
+ */
+export function runFfmpeg(ffmpegPath: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+    let stderr = ''
+    proc.stderr.on('data', (d) => {
+      stderr += d.toString()
+      if (stderr.length > 40000) stderr = stderr.slice(-20000)
+    })
+    proc.on('error', reject)
+    proc.on('close', (code) => {
+      if (code === 0) resolve(stderr)
+      else reject(new Error(`ffmpeg code ${code}: ${stderr.slice(-800)}`))
+    })
+  })
+}
+
+const PROBE_TIMEOUT_MS = 15_000
+
+/** Capture le stderr d'un `ffmpeg -i file` avec timeout (le `-i` seul sort en code 1, normal). */
+function probeStderr(ffmpegPath: string, file: string): Promise<string> {
+  return new Promise<string>((resolve) => {
+    const proc = spawn(ffmpegPath, ['-i', file], { stdio: ['ignore', 'ignore', 'pipe'] })
+    let out = ''
+    const killTimer = setTimeout(() => {
+      proc.kill('SIGKILL')
+      resolve(out)
+    }, PROBE_TIMEOUT_MS)
+    proc.stderr.on('data', (d) => (out += d.toString()))
+    proc.on('close', () => {
+      clearTimeout(killTimer)
+      resolve(out)
+    })
+    proc.on('error', () => {
+      clearTimeout(killTimer)
+      resolve(out)
+    })
+  })
+}
+
+function parseDuration(stderr: string): number | null {
+  const m = stderr.match(/Duration:\s*(\d+):(\d+):(\d+)\.(\d+)/)
+  if (!m) return null
+  return (
+    parseInt(m[1], 10) * 3600 +
+    parseInt(m[2], 10) * 60 +
+    parseInt(m[3], 10) +
+    parseInt(m[4], 10) / Math.pow(10, m[4].length)
+  )
+}
+
+/** Durée d'un média via `ffmpeg -i` (parse "Duration: HH:MM:SS.cc"), sans ffprobe. */
+export async function probeDuration(ffmpegPath: string, file: string): Promise<number> {
+  const stderr = await probeStderr(ffmpegPath, file)
+  const d = parseDuration(stderr)
+  if (d == null) throw new Error(`Durée introuvable pour ${file}`)
+  return d
+}
+
+/**
+ * Durée + codec vidéo en un seul appel `ffmpeg -i` (au lieu de deux spawns
+ * séparés) — le codec sert à détecter les vidéos HEVC/H.265, que Chromium
+ * (build Electron standard) ne décode pas nativement (licence des brevets,
+ * contrairement à H.264/VP9/AV1). Renvoie duration=0 si introuvable.
+ */
+export async function probeVideoInfo(
+  ffmpegPath: string,
+  file: string
+): Promise<{ duration: number; codec: string | null }> {
+  const stderr = await probeStderr(ffmpegPath, file)
+  const d = parseDuration(stderr)
+  const cm = stderr.match(/Video:\s*([a-zA-Z0-9_]+)/)
+  return { duration: d ?? 0, codec: cm ? cm[1].toLowerCase() : null }
 }

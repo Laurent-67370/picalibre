@@ -17,6 +17,7 @@ import migration007 from './migrations/007_fts_folder_column.sql?raw'
 import migration008 from './migrations/008_gps_columns.sql?raw'
 import migration009 from './migrations/009_video_trim.sql?raw'
 import migration010 from './migrations/010_trash_hidden_indexes.sql?raw'
+import migration011 from './migrations/011_cleanup_timeline.sql?raw'
 
 /** Migrations embarquées dans le bundle (import Vite ?raw) — ordre croissant. */
 const MIGRATIONS: Array<{ version: number; sql: string }> = [
@@ -29,7 +30,8 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
   { version: 7, sql: migration007 },
   { version: 8, sql: migration008 },
   { version: 9, sql: migration009 },
-  { version: 10, sql: migration010 }
+  { version: 10, sql: migration010 },
+  { version: 11, sql: migration011 }
 ]
 
 let db: Database.Database
@@ -68,19 +70,6 @@ function runMigrations(): void {
 
 export function getDb(): Database.Database {
   return db
-}
-
-/** Carte (filepath → size/mtime) des fichiers connus, pour le rescan incrémental.
- *  @deprecated Préférer getKnownFilesForRoots() qui ne charge que les fichiers
- *  d'une partition, réduisant l'empreinte mémoire de 50-100 Mo sur les grosses
- *  bibliothèques (500k+ photos). */
-export function getKnownFiles(): Record<string, { size: number; mtime: number }> {
-  const rows = db
-    .prepare(`SELECT filepath, file_size AS size, file_mtime AS mtime FROM photos WHERE status != 'trashed'`)
-    .all() as { filepath: string; size: number; mtime: number }[]
-  const map: Record<string, { size: number; mtime: number }> = {}
-  for (const r of rows) map[r.filepath] = { size: r.size, mtime: r.mtime }
-  return map
 }
 
 /**

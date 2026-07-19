@@ -17,12 +17,16 @@
  * La durée des vidéos est sondée sans dépendance supplémentaire en parsant
  * la sortie `Duration:` de `ffmpeg -i`.
  */
-import { spawn } from 'node:child_process'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { EditStack } from '../../shared/edit-engine'
 import { renderEdited } from './render-sharp'
+import { runFfmpeg, probeDuration } from '../utils/ffmpeg'
+
+// Réexport pour compat : pipeline.ts et d'éventuels tests importaient ces
+// fonctions depuis './movie'. Elles vivent désormais dans utils/ffmpeg.
+export { probeDuration, probeVideoInfo } from '../utils/ffmpeg'
 
 export interface MovieItem {
   filepath: string
@@ -50,89 +54,6 @@ export interface MovieOptions {
 }
 
 const FADE_D = 0.5
-
-function runFfmpeg(ffmpegPath: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] })
-    let stderr = ''
-    proc.stderr.on('data', (d) => {
-      stderr += d.toString()
-      if (stderr.length > 40000) stderr = stderr.slice(-20000)
-    })
-    proc.on('error', reject)
-    proc.on('close', (code) => {
-      if (code === 0) resolve(stderr)
-      else reject(new Error(`ffmpeg code ${code}: ${stderr.slice(-800)}`))
-    })
-  })
-}
-
-/** Durée d'un média via `ffmpeg -i` (parse "Duration: HH:MM:SS.cc"), sans ffprobe. */
-export async function probeDuration(ffmpegPath: string, file: string): Promise<number> {
-  const stderr = await new Promise<string>((resolve) => {
-    const proc = spawn(ffmpegPath, ['-i', file], { stdio: ['ignore', 'ignore', 'pipe'] })
-    let out = ''
-    const killTimer = setTimeout(() => {
-      proc.kill('SIGKILL')
-      resolve(out)
-    }, 15_000)
-    proc.stderr.on('data', (d) => (out += d.toString()))
-    proc.on('close', () => {
-      clearTimeout(killTimer)
-      resolve(out) // -i seul sort en code 1, normal
-    })
-    proc.on('error', () => {
-      clearTimeout(killTimer)
-      resolve(out)
-    })
-  })
-  const m = stderr.match(/Duration:\s*(\d+):(\d+):(\d+)\.(\d+)/)
-  if (!m) throw new Error(`Durée introuvable pour ${file}`)
-  return (
-    parseInt(m[1], 10) * 3600 +
-    parseInt(m[2], 10) * 60 +
-    parseInt(m[3], 10) +
-    parseInt(m[4], 10) / Math.pow(10, m[4].length)
-  )
-}
-
-/**
- * Durée + codec vidéo en un seul appel `ffmpeg -i` (au lieu de deux
- * spawns séparés) — le codec sert à détecter les vidéos HEVC/H.265,
- * que Chromium (build Electron standard) ne décode pas nativement
- * (licence des brevets, contrairement à H.264/VP9/AV1).
- */
-export async function probeVideoInfo(
-  ffmpegPath: string,
-  file: string
-): Promise<{ duration: number; codec: string | null }> {
-  const stderr = await new Promise<string>((resolve) => {
-    const proc = spawn(ffmpegPath, ['-i', file], { stdio: ['ignore', 'ignore', 'pipe'] })
-    let out = ''
-    const killTimer = setTimeout(() => {
-      proc.kill('SIGKILL')
-      resolve(out)
-    }, 15_000)
-    proc.stderr.on('data', (d) => (out += d.toString()))
-    proc.on('close', () => {
-      clearTimeout(killTimer)
-      resolve(out)
-    })
-    proc.on('error', () => {
-      clearTimeout(killTimer)
-      resolve(out)
-    })
-  })
-  const dm = stderr.match(/Duration:\s*(\d+):(\d+):(\d+)\.(\d+)/)
-  const duration = dm
-    ? parseInt(dm[1], 10) * 3600 +
-      parseInt(dm[2], 10) * 60 +
-      parseInt(dm[3], 10) +
-      parseInt(dm[4], 10) / Math.pow(10, dm[4].length)
-    : 0
-  const cm = stderr.match(/Video:\s*([a-zA-Z0-9_]+)/)
-  return { duration, codec: cm ? cm[1].toLowerCase() : null }
-}
 
 /** Filtres de fondu vidéo+audio cuits dans le segment. */
 function fadeFilters(duration: number, transition: MovieTransition): { v: string; a: string } {
