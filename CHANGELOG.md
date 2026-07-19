@@ -3,6 +3,24 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.1] — 2026-07-19
+
+### Infrastructure — dernier reliquat de l'audit soldé
+- **electron-vite 2 → 5, Vite 5 → 7, @vitejs/plugin-react 4 → 5** :
+  élimine les 3 dernières alertes de sécurité, toutes situées dans le
+  serveur de développement (esbuild — GHSA-67mh-4wv8-2f99 : n'importe
+  quel site web pouvait interroger le serveur de dev local). Sans impact
+  sur l'app livrée, mais autant ne rien laisser traîner.
+- **`npm audit` intégral (production ET développement) : 0 vulnérabilité.**
+
+### Vérifié (Xvfb + Electron réel)
+- Bundle produit par Vite 7 : structure strictement identique (workers,
+  2 preloads, 2 pages) ; le preload reste compatible sandbox (seul
+  require : electron).
+- Batterie E2E Corbeille/sécurité : 13/13 assertions conformes.
+- Détection voyages : résultat identique à la référence.
+- Mode développement : serveur Vite 7 + lancement Electron fonctionnels.
+
 ## [2.24.0] — 2026-07-19
 
 ### Sécurité / infrastructure — montée d'Electron 33 → 42
