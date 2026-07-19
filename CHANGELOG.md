@@ -3,6 +3,32 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.5] — 2026-07-19
+
+### Optimisé — Fluidité pendant un scan
+- **Throttle des événements `scan:progress`** : création de
+  `progress-throttle.ts` avec `createProgressThrottle(100ms)`. Les
+  événements sont limités à ~10/sec max avec `send()` (throttlé) et
+  `flush()` (envoi immédiat du dernier état pending). Appliqué au scanner
+  (phase hashing) et au pipeline (exif, thumbs, video thumbs). Flush
+  avant chaque transition de phase et avant l'événement terminal `done`.
+  - **Avant** : 1 événement par fichier → 10 000+ messages pour 10k photos
+  - **Après** : ~10 events/sec max + flush final → ~100 events pour 10s de scan
+- **Mémoïsation des cellules de grille** : `ThumbCanvas` est enveloppé de
+  `React.memo` avec un comparateur custom comparant `photoId`, `v` (hash),
+  `size`, `alt`, `fitMode`, `loading`. Les callbacks (`onClick`,
+  `onDoubleClick`, `onContextMenu`) sont ignorés du comparateur car ils
+  sont recréés à chaque render mais leur comportement ne dépend que de
+  `photoId`/`gi` qui sont stables.
+  - **Avant** : chaque événement `scan:progress` redessinait toutes les
+    vignettes visibles (React reconciliation sur toutes les cellules)
+  - **Après** : les vignettes ne se re-rendent que si la photo change
+    réellement (id, hash, taille)
+- **Effet combiné** : les deux optimisations se multipliaient — pendant un
+  scan, chaque event (10 000+) déclenchait le redraw de toutes les
+  vignettes. Maintenant les events sont limités (~100) ET les vignettes
+  ne se redessinent plus inutilement.
+
 ## [2.24.4] — 2026-07-19
 
 ### Corrigé
