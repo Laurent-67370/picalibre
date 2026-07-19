@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { AlbumRow, FaceLite, FolderRow, MergeSnapshot, PersonRow, PhotoRow, ScanProgress, RendererApi, TripGroup } from '@shared/ipc'
+import { useVolatileStore } from './store'
 import type { EditStack } from '@shared/edit-engine'
 import Lightbox from './Lightbox'
 import InfoPanel from './InfoPanel'
@@ -160,7 +161,13 @@ export default function App(): JSX.Element {
   const [albums, setAlbums] = useState<AlbumRow[]>([])
   const [persons, setPersons] = useState<PersonRow[]>([])
   const [faceProgress, setFaceProgress] = useState<{ done: number; total: number } | null>(null)
-  const [renameValue, setRenameValue] = useState('')
+  // --- États volatiles migrés vers Zustand (store externe) ---
+  // Ces états ne touchent pas la grille: les consommer via selectors ciblés
+  // (useVolatileStore(s => s.xxx)) évite que leur mutation re-render
+  // l'intégralité de App.tsx — et donc la grille, la sidebar et la barre
+  // d'outils. On récupère setters et valeurs à l'entrée du composant.
+  const renameValue = useVolatileStore(s => s.renameValue)
+  const setRenameValue = useVolatileStore(s => s.setRenameValue)
   const [manageFaces, setManageFaces] = useState(false)
   const [faceList, setFaceList] = useState<FaceLite[]>([])
   const [selFaces, setSelFaces] = useState<Set<number>>(new Set())
@@ -170,36 +177,44 @@ export default function App(): JSX.Element {
   const [dupGroups, setDupGroups] = useState<Array<{ hash: string; photos: PhotoRow[] }>>([])
   const [roots, setRoots] = useState<Array<{ id: number; path: string; mode: string }>>([])
   const [privacy, setPrivacy] = useState<{ hasPassword: boolean; unlocked: boolean }>({ hasPassword: false, unlocked: true })
-  const [pwInput, setPwInput] = useState('')
-  const [websyncUrl, setWebsyncUrl] = useState('')
-  const [websyncToken, setWebsyncToken] = useState('')
-  const [websyncMsg, setWebsyncMsg] = useState('')
-  const [websyncProgress, setWebsyncProgress] = useState<{
-    phase: 'checking' | 'metadata' | 'thumbnails' | 'done' | 'error'
-    done: number
-    total: number
-    message?: string
-  } | null>(null)
+  const pwInput = useVolatileStore(s => s.pwInput)
+  const setPwInput = useVolatileStore(s => s.setPwInput)
+  const websyncUrl = useVolatileStore(s => s.websyncUrl)
+  const setWebsyncUrl = useVolatileStore(s => s.setWebsyncUrl)
+  const websyncToken = useVolatileStore(s => s.websyncToken)
+  const setWebsyncToken = useVolatileStore(s => s.setWebsyncToken)
+  const websyncMsg = useVolatileStore(s => s.websyncMsg)
+  const setWebsyncMsg = useVolatileStore(s => s.setWebsyncMsg)
+  const websyncProgress = useVolatileStore(s => s.websyncProgress)
+  const setWebsyncProgress = useVolatileStore(s => s.setWebsyncProgress)
   const [exportPreset, setExportPreset] = useState<number | 0>(0)
-  const [watermark, setWatermark] = useState('')
+  const watermark = useVolatileStore(s => s.watermark)
+  const setWatermark = useVolatileStore(s => s.setWatermark)
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null)
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null)
   const [batchExportOpen, setBatchExportOpen] = useState(false)
-  const [renameOpen, setRenameOpen] = useState(false)
-  const [renamePattern, setRenamePattern] = useState('{name}')
-  const [renameStart, setRenameStart] = useState(1)
-  const [renameBusy, setRenameBusy] = useState(false)
-  const [tripsOpen, setTripsOpen] = useState(false)
-  const [tripsLoading, setTripsLoading] = useState(false)
-  const [tripGroups, setTripGroups] = useState<
-    Array<TripGroup & { included: boolean; name: string }>
-  >([])
-  const [tripsCreating, setTripsCreating] = useState(false)
-  const [tripsCreateProgress, setTripsCreateProgress] = useState<{ done: number; total: number } | null>(
-    null
-  )
-  const [helpOpen, setHelpOpen] = useState(false)
-  const [showTour, setShowTour] = useState(!onboardingDone())
+  const renameOpen = useVolatileStore(s => s.renameOpen)
+  const setRenameOpen = useVolatileStore(s => s.setRenameOpen)
+  const renamePattern = useVolatileStore(s => s.renamePattern)
+  const setRenamePattern = useVolatileStore(s => s.setRenamePattern)
+  const renameStart = useVolatileStore(s => s.renameStart)
+  const setRenameStart = useVolatileStore(s => s.setRenameStart)
+  const renameBusy = useVolatileStore(s => s.renameBusy)
+  const setRenameBusy = useVolatileStore(s => s.setRenameBusy)
+  const tripsOpen = useVolatileStore(s => s.tripsOpen)
+  const setTripsOpen = useVolatileStore(s => s.setTripsOpen)
+  const tripsLoading = useVolatileStore(s => s.tripsLoading)
+  const setTripsLoading = useVolatileStore(s => s.setTripsLoading)
+  const tripGroups = useVolatileStore(s => s.tripGroups)
+  const setTripGroups = useVolatileStore(s => s.setTripGroups)
+  const tripsCreating = useVolatileStore(s => s.tripsCreating)
+  const setTripsCreating = useVolatileStore(s => s.setTripsCreating)
+  const tripsCreateProgress = useVolatileStore(s => s.tripsCreateProgress)
+  const setTripsCreateProgress = useVolatileStore(s => s.setTripsCreateProgress)
+  const helpOpen = useVolatileStore(s => s.helpOpen)
+  const setHelpOpen = useVolatileStore(s => s.setHelpOpen)
+  const showTour = useVolatileStore(s => s.showTour)
+  const setShowTour = useVolatileStore(s => s.setShowTour)
   const [batchSize, setBatchSize] = useState<number | 0>(0)
   const [batchFormat, setBatchFormat] = useState<'jpeg' | 'webp' | 'png'>('jpeg')
   const [batchQuality, setBatchQuality] = useState(90)
@@ -208,15 +223,16 @@ export default function App(): JSX.Element {
   const [faceMovieFaces, setFaceMovieFaces] = useState<FaceLite[]>([])
   const [printDialogOpen, setPrintDialogOpen] = useState(false)
   const [screensaverActive, setScreensaverActive] = useState(false)
-  const [screensaverEnabled, setScreensaverEnabled] = useState<boolean>(
-    () => localStorage.getItem('picalibre.screensaver.enabled') === 'true'
-  )
-  const [screensaverMinutes, setScreensaverMinutes] = useState<number>(
-    () => Number(localStorage.getItem('picalibre.screensaver.minutes')) || 5
-  )
-  const [collageLayout, setCollageLayout] = useState<CollageLayout>('grid')
-  const [collagePreview, setCollagePreview] = useState(false)
-  const [collageFormat, setCollageFormat] = useState<CollageFormat>('jpeg')
+  const screensaverEnabled = useVolatileStore(s => s.screensaverEnabled)
+  const setScreensaverEnabled = useVolatileStore(s => s.setScreensaverEnabled)
+  const screensaverMinutes = useVolatileStore(s => s.screensaverMinutes)
+  const setScreensaverMinutes = useVolatileStore(s => s.setScreensaverMinutes)
+  const collageLayout = useVolatileStore(s => s.collageLayout)
+  const setCollageLayout = useVolatileStore(s => s.setCollageLayout)
+  const collagePreview = useVolatileStore(s => s.collagePreview)
+  const setCollagePreview = useVolatileStore(s => s.setCollagePreview)
+  const collageFormat = useVolatileStore(s => s.collageFormat)
+  const setCollageFormat = useVolatileStore(s => s.setCollageFormat)
   const [movieBusy, setMovieBusy] = useState(false)
   const [importProgress, setImportProgress] = useState<{ done: number; total: number; copied: number; skipped: number } | null>(null)
   const [view, setView] = useState<View | null>(null)
@@ -224,7 +240,8 @@ export default function App(): JSX.Element {
   const [hasMore, setHasMore] = useState(false)
   const loadingMoreRef = useRef(false)
   const [progress, setProgress] = useState<ScanProgress | null>(null)
-  const [searchInput, setSearchInput] = useState('')
+  const searchInput = useVolatileStore(s => s.searchInput)
+  const setSearchInput = useVolatileStore(s => s.setSearchInput)
   const [editing, setEditing] = useState<PhotoRow | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [cellSize, setCellSize] = useState<number>(() => {
@@ -255,6 +272,15 @@ export default function App(): JSX.Element {
   useEffect(() => localStorage.setItem('picalibre.fit', fitMode), [fitMode])
   useEffect(() => localStorage.setItem('picalibre.screensaver.enabled', String(screensaverEnabled)), [screensaverEnabled])
   useEffect(() => localStorage.setItem('picalibre.screensaver.minutes', String(screensaverMinutes)), [screensaverMinutes])
+
+  // Initialisation du tour d'onboarding: le store Zustand ne peut pas appeler
+  // onboardingDone() à sa création (il vit hors du cycle React et on veut garder
+  // le comportement "n'afficher qu'au premier lancement"). On synchronise donc
+  // une fois au montage, dépendances [] pour ne pas re-trigger.
+  useEffect(() => {
+    if (!onboardingDone()) setShowTour(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   /** Photos réellement affichées : le filtrage (minStars, typeFilter) et le tri
    *  (sortMode) sont maintenant effectués côté SQL par les handlers IPC.
