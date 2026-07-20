@@ -1541,8 +1541,10 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_BATCHEDIT',
     'PICALIBRE_TEST_TRASH',
     'PICALIBRE_TEST_TRIPS',
+    'PICALIBRE_TEST_HELPSHOT',
     'PICALIBRE_TEST_MAP',
-    'PICALIBRE_TEST_SCANPERF'
+    'PICALIBRE_TEST_SCANPERF',
+    'PICALIBRE_TEST_HELPCONTRAST'
   ].some((k) => !!process.env[k])
   if (!isTestMode) {
     const hasRoots = getDb().prepare('SELECT 1 FROM scan_roots LIMIT 1').get()
@@ -2153,6 +2155,120 @@ app.whenReady().then(() => {
         exitTest(0)
       }
     }, 250)
+  }
+
+  // Mesure de contraste du centre d'aide (thème sombre) : PICALIBRE_TEST_HELPCONTRAST=1
+  // Reproduit le scénario signalé (photo d'écran illisible) : ouvre l'aide
+  // en thème sombre, sélectionne un sujet, et calcule le VRAI ratio de
+  // contraste WCAG (luminance relative) entre chaque texte et son fond
+  // effectif — pas une estimation, une mesure sur les couleurs réellement
+  // rendues par le navigateur.
+  if (process.env.PICALIBRE_TEST_HELPCONTRAST) {
+    setTimeout(async () => {
+      mainWindow.webContents.send('menu:action', { action: 'openHelp' })
+      await new Promise((r) => setTimeout(r, 1200))
+      const diag = await mainWindow.webContents.executeJavaScript(
+        `({ modalOpen: !!document.querySelector('input[placeholder*="Chercher dans"]'), topicCount: document.querySelectorAll('[data-help="topic-item"]').length })`
+      )
+      console.log('[help-contrast] diagnostic ouverture:', JSON.stringify(diag))
+      const result = await mainWindow.webContents.executeJavaScript(`(async () => {
+        document.documentElement.dataset.theme = 'dark'
+        await new Promise(r => setTimeout(r, 300))
+        const first = document.querySelector('[data-help="topic-item"]')
+        if (first) { first.click(); await new Promise(r => setTimeout(r, 500)) }
+
+        function lin(c) { c/=255; return c>0.03928 ? Math.pow((c+0.055)/1.055,2.4) : c/12.92 }
+        function lum(rgb) {
+          const m = rgb.match(/[\\d.]+/g).map(Number)
+          return 0.2126*lin(m[0])+0.7152*lin(m[1])+0.0722*lin(m[2])
+        }
+        function effectiveBg(el) {
+          let n = el
+          while (n) {
+            const bg = getComputedStyle(n).backgroundColor
+            if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg
+            n = n.parentElement
+          }
+          return 'rgb(255,255,255)'
+        }
+        function contrast(fg, bg) {
+          const l1 = lum(fg), l2 = lum(bg)
+          const hi = Math.max(l1,l2), lo = Math.min(l1,l2)
+          return (hi+0.05)/(lo+0.05)
+        }
+        const out = {}
+        for (const sel of ['category-label','topic-item','body-title','body-text','footer']) {
+          const els = document.querySelectorAll('[data-help="' + sel + '"]')
+          if (els.length === 0) { out[sel] = 'ABSENT'; continue }
+          const el = els[els.length - 1] // le dernier = celui du panneau détail pour category-label
+          const cs = getComputedStyle(el)
+          out[sel] = Number(contrast(cs.color, effectiveBg(el)).toFixed(2))
+          out[sel + '_raw'] = cs.color + ' / ' + effectiveBg(el)
+        }
+        return out
+      })()`)
+      console.log('[help-contrast] ratios mesurés (WCAG AA ≥ 4.5, AAA ≥ 7.0):', JSON.stringify(result))
+      const values = Object.entries(result).filter(([, v]) => typeof v === 'number') as Array<
+        [string, number]
+      >
+      const failing = values.filter(([, v]) => v < 4.5)
+      console.log(
+        '[help-contrast] tous ≥ 4.5 (AA) ? (doit être true):',
+        failing.length === 0,
+        failing.length ? JSON.stringify(failing) : ''
+      )
+      console.log('[help-contrast] TERMINÉ')
+      exitTest(failing.length === 0 ? 0 : 1)
+    }, 1500)
+  }
+
+  // Capture visuelle du centre d'aide (vérification contraste) :
+  // PICALIBRE_TEST_HELPSHOT=<chemin .png de sortie>
+  if (process.env.PICALIBRE_TEST_HELPSHOT) {
+    const outPath = process.env.PICALIBRE_TEST_HELPSHOT
+    setTimeout(async () => {
+      // Thème sombre + ouverture du centre d'aide + sélection du même
+      // sujet que sur la capture d'écran rapportée ("Ajouter un dossier
+      // à la bibliothèque"), puis contrôle programmatique des couleurs
+      // calculées (getComputedStyle) en plus de la capture visuelle.
+      const report = await mainWindow.webContents.executeJavaScript(`(async () => {
+        localStorage.setItem('picalibre.theme', 'dark')
+        document.documentElement.dataset.theme = 'dark'
+        await new Promise(r => setTimeout(r, 200))
+        // Ouvrir l'aide comme le fait le bouton "?" / la touche F1
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F1' }))
+        await new Promise(r => setTimeout(r, 400))
+        const items = [...document.querySelectorAll('[data-help="topic-item"]')]
+        const target = items.find(el => el.textContent.includes('Ajouter un dossier'))
+        if (target) target.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        await new Promise(r => setTimeout(r, 300))
+        const cs = (sel) => {
+          const el = document.querySelector(sel)
+          if (!el) return null
+          const s = getComputedStyle(el)
+          return { color: s.color, background: s.backgroundColor, text: el.textContent?.slice(0, 40) }
+        }
+        return {
+          title: cs('[data-help="body-title"]'),
+          body: cs('[data-help="body-text"]'),
+          categoryLabel: cs('[data-help="category-label"]'),
+          searchInput: (() => {
+            const inp = document.querySelector('input[placeholder*="Chercher dans l\\'aide"]')
+            if (!inp) return null
+            const s = getComputedStyle(inp)
+            const modal = inp.closest('div[style*="border-radius: 12px"]')
+            const ms = modal ? getComputedStyle(modal) : null
+            return { inputBg: s.backgroundColor, modalBg: ms?.backgroundColor }
+          })()
+        }
+      })()`)
+      console.log('[helpshot] contrôle des couleurs calculées:', JSON.stringify(report, null, 2))
+      await mainWindow.webContents.capturePage().then((img) => {
+        require('node:fs').writeFileSync(outPath, img.toPNG())
+        console.log('[helpshot] capture écrite:', outPath)
+      })
+      exitTest(0)
+    }, 2500)
   }
 
   // Test headless de la vue Carte : PICALIBRE_TEST_MAP=<dossier>

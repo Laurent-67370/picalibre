@@ -83,7 +83,12 @@ export default function HelpCenter({
               setSelected(null)
             }}
             placeholder="Chercher dans l'aide… (ex : recadrer, vidéo, tag, thème)"
-            style={{ flex: 1, fontSize: 14 }}
+            style={{
+              flex: 1,
+              fontSize: 14,
+              background: 'var(--bg-elevated)',
+              borderColor: 'var(--border)'
+            }}
           />
           <button onClick={onClose} title="Fermer (Échap)">
             ✕
@@ -108,8 +113,10 @@ export default function HelpCenter({
             {[...categories.entries()].map(([cat, topics]) => (
               <div key={cat} style={{ marginBottom: 6 }}>
                 <div
+                  data-help="category-label"
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
+                    fontWeight: 700,
                     letterSpacing: '0.06em',
                     textTransform: 'uppercase',
                     color: 'var(--muted)',
@@ -121,11 +128,14 @@ export default function HelpCenter({
                 {topics.map((t) => (
                   <div
                     key={t.id}
+                    data-help="topic-item"
                     onClick={() => setSelected(t)}
                     style={{
                       padding: '8px 16px',
                       fontSize: 13,
+                      color: 'var(--text)',
                       cursor: 'pointer',
+                      fontWeight: selected?.id === t.id ? 600 : 400,
                       background: selected?.id === t.id ? 'var(--card-2)' : 'transparent',
                       borderLeft:
                         selected?.id === t.id ? '3px solid var(--accent)' : '3px solid transparent'
@@ -152,6 +162,7 @@ export default function HelpCenter({
             {selected && (
               <>
                 <div
+                  data-help="category-label"
                   style={{
                     fontSize: 11,
                     letterSpacing: '0.06em',
@@ -162,8 +173,16 @@ export default function HelpCenter({
                 >
                   {selected.category}
                 </div>
-                <h2 style={{ margin: '0 0 14px', fontSize: 20 }}>{selected.title}</h2>
-                <p style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-line' }}>
+                <h2
+                  data-help="body-title"
+                  style={{ margin: '0 0 14px', fontSize: 20, color: 'var(--text)' }}
+                >
+                  {selected.title}
+                </h2>
+                <p
+                  data-help="body-text"
+                  style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-line', color: 'var(--text)' }}
+                >
                   {selected.body}
                 </p>
                 {selected.action && (
@@ -184,6 +203,7 @@ export default function HelpCenter({
         </div>
 
         <div
+          data-help="footer"
           style={{
             padding: '8px 18px',
             borderTop: '1px solid var(--border)',

@@ -3,6 +3,31 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.12] — 2026-07-20
+
+### Corrigé
+- **Centre d'aide illisible en thème sombre** (rapporté avec capture
+  d'écran) : le champ de recherche avait un fond **strictement
+  identique** à celui de la fenêtre (contraste 0 — confirmé par
+  `getComputedStyle`), le rendant quasi invisible ; les libellés de
+  catégorie (11 px, majuscules) et le texte secondaire étaient trop
+  faibles en contraste pour une lecture confortable à l'écran.
+  - Champ de recherche : fond distinct (`--bg-elevated`) de la fenêtre.
+  - `--muted` (thème sombre) renforcé : 5,71:1 → 7,13:1 (confort AAA).
+  - Libellés de catégorie : 11px → 12px, graisse 700.
+  - Titre et texte du sujet : couleur explicite (`--text`), plus de
+    dépendance à l'héritage CSS.
+
+### Vérifié (Xvfb + Electron réel)
+Nouveau test `PICALIBRE_TEST_HELPSHOT` : ouverture réelle du centre
+d'aide en thème sombre, sélection du **même sujet** que sur la capture
+rapportée (« Ajouter un dossier à la bibliothèque »), lecture des
+couleurs réellement calculées par le navigateur (pas une relecture du
+code) — titre et texte en `rgb(226,232,240)` sur fond `rgb(30,41,59)`
+(11,87:1, largement au-dessus du seuil AA), champ de recherche
+`rgb(17,24,39)` distinct du fond de fenêtre `rgb(30,41,59)`. Capture
+d'écran generée en artefact de preuve.
+
 ## [2.24.11] — 2026-07-20
 
 ### Performance — solde du résiduel de l'audit

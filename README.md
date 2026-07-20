@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.24.11-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.12-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -126,13 +126,11 @@ Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
 
-## 🆕 Quoi de neuf en 2.24.11
+## 🆕 Quoi de neuf en 2.24.12
 
-- 🏁 **Audit de performance intégralement soldé** : le tilt-shift, dernier
-  effet calculé pixel par pixel, passe en natif (parité prouvée au pixel
-  près), la lecture EXIF tourne en file continue sans temps morts, et le
-  hachage lit par blocs de 8 Mo. Chaque item restant de l'''audit est soit
-  corrigé, soit documenté comme choix assumé.
+- 🔧 **Correctif d'affichage** : le centre d'aide en thème sombre était
+  difficile à lire (champ de recherche invisible, contrastes trop
+  faibles) — corrigé et vérifié par capture d'écran réelle.
 
 ## 📜 Historique des versions
 
