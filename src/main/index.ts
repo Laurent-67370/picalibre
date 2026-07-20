@@ -1563,6 +1563,7 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_TRIPS',
     'PICALIBRE_TEST_HELPSHOT',
     'PICALIBRE_TEST_PERSONS',
+    'PICALIBRE_TEST_FOLDERSEARCH',
     'PICALIBRE_TEST_MAP',
     'PICALIBRE_TEST_SCANPERF',
     'PICALIBRE_TEST_HELPCONTRAST'
@@ -2316,6 +2317,83 @@ app.whenReady().then(() => {
         console.log('[persons-test] 1 photo restaurée — réapparue, count=1 attendu:', JSON.stringify(entry))
 
         console.log('[persons-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
+  // Test headless de la recherche par nom de dossier :
+  // PICALIBRE_TEST_FOLDERSEARCH=<dossier racine>
+  const folderSearchDir = process.env.PICALIBRE_TEST_FOLDERSEARCH
+  if (folderSearchDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(folderSearchDir)
+    startScan(mainWindow)
+    const t0fs = Date.now()
+    const ivfs = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos >= 3 && thumbs >= photos * 2) || Date.now() - t0fs > 60000) {
+        clearInterval(ivfs)
+        const db = getDb()
+        const folders = db.prepare('SELECT id, path FROM folders').all()
+        console.log('[foldersearch-test] dossiers en base:', JSON.stringify(folders))
+        const ftsContent = db.prepare('SELECT rowid, folder FROM photos_search_content').all()
+        console.log('[foldersearch-test] contenu FTS (colonne folder):', JSON.stringify(ftsContent))
+
+        const results = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:search', { query: 'Colmar', offset: 0, limit: 50 }).then(r => r.map(p => p.filename))`
+        )
+        console.log('[foldersearch-test] photos:search("Colmar") →', JSON.stringify(results))
+        console.log(
+          '[foldersearch-test] contient photo1+photo2, PAS photo3 ? (attendu true):',
+          (results as string[]).includes('photo1.jpg') &&
+            (results as string[]).includes('photo2.jpg') &&
+            !(results as string[]).includes('photo3.jpg')
+        )
+
+        // Scénario UI réel : taper "Colmar" caractère par caractère dans le
+        // vrai champ de la barre latérale (comme un utilisateur), sans
+        // appuyer sur Entrée — reproduit exactement le geste rapporté.
+        await mainWindow.webContents.executeJavaScript(`(() => {
+          const inp = document.querySelector('input[placeholder*="Rechercher"]')
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+          setter.call(inp, 'Colmar')
+          inp.dispatchEvent(new Event('input', { bubbles: true }))
+        })()`)
+        // Débounce 300ms + rechargement de la vue + de la liste de dossiers
+        await new Promise((r) => setTimeout(r, 900))
+        const uiState = await mainWindow.webContents.executeJavaScript(`(() => {
+          const folderDivs = [...document.querySelectorAll('aside div[title]')]
+            .map(d => d.title)
+            .filter(t => t.startsWith('/') || t.startsWith('\\\\') || /^[A-Za-z]:\\\\/.test(t))
+          const grid = [...document.querySelectorAll('img[alt]')].map(img => img.alt)
+          return { visibleFolders: folderDivs, gridAltCount: grid.length }
+        })()`)
+        console.log('[foldersearch-test] dossiers visibles dans la barre latérale après frappe "Colmar":', JSON.stringify(uiState.visibleFolders))
+        console.log(
+          '[foldersearch-test] contient les 2 dossiers Colmar, PAS Strasbourg ? (attendu true):',
+          (uiState.visibleFolders as string[]).some((p) => p.includes('Colmar 2023')) &&
+            (uiState.visibleFolders as string[]).some((p) => p.includes('Voyage Colmar')) &&
+            !(uiState.visibleFolders as string[]).some((p) => p.includes('Strasbourg'))
+        )
+
+        // Effacer le champ → doit revenir à la Chronologie (tous les dossiers réapparaissent)
+        await mainWindow.webContents.executeJavaScript(`(() => {
+          const inp = document.querySelector('input[placeholder*="Rechercher"]')
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+          setter.call(inp, '')
+          inp.dispatchEvent(new Event('input', { bubbles: true }))
+        })()`)
+        await new Promise((r) => setTimeout(r, 500))
+        const afterClear = await mainWindow.webContents.executeJavaScript(`(() => {
+          return [...document.querySelectorAll('aside div[title]')]
+            .map(d => d.title)
+            .filter(t => t.startsWith('/') || t.startsWith('\\\\') || /^[A-Za-z]:\\\\/.test(t)).length
+        })()`)
+        console.log('[foldersearch-test] dossiers visibles après effacement (doit être 3):', afterClear)
+
+        console.log('[foldersearch-test] TERMINÉ')
         exitTest(0)
       }
     }, 500)

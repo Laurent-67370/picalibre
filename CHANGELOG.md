@@ -3,6 +3,38 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.14] — 2026-07-20
+
+### Ajouté / corrigé
+- **Recherche par nom de dossier — enfin visible et en direct.** Le
+  moteur de recherche indexait déjà le chemin complet de chaque dossier
+  et retrouvait correctement les photos correspondantes (ex : taper
+  « Colmar » retrouve les photos de « Colmar 2023 » et « Voyage Colmar
+  été »), mais deux manques la rendaient invisible/peu utilisable :
+  - Il fallait appuyer sur **Entrée** pour déclencher la recherche —
+    taper simplement le nom, comme n'importe quel champ de recherche
+    moderne, ne faisait rien.
+  - **La liste des dossiers dans la barre latérale ne se filtrait
+    jamais** : impossible de voir "quels dossiers correspondent" à la
+    recherche, seule la grille de photos changeait.
+- Recherche désormais **en direct** (300 ms après la dernière frappe,
+  Entrée reste disponible pour un déclenchement immédiat), et **la
+  liste des dossiers se filtre en même temps que la grille de photos** —
+  en tapant « Colmar », seuls les dossiers dont le chemin contient
+  « Colmar » restent affichés, avec un compteur (« 2/5 correspondant à
+  « Colmar » »). Effacer le champ revient à la Chronologie complète.
+- Normalisation accents/casse alignée sur le moteur de recherche
+  (« colmar » retrouve aussi « Colmär »).
+
+### Vérifié (Xvfb + Electron réel)
+Bibliothèque avec 2 dossiers contenant « Colmar » (« Colmar 2023 »,
+« Voyage Colmar été ») et 1 dossier sans rapport (« Strasbourg ») :
+recherche backend confirmée exacte (2 photos sur 2 attendues, aucun
+faux positif) ; frappe caractère par caractère du mot « Colmar » dans
+le vrai champ de la barre latérale (sans Entrée) → grille filtrée ET
+liste des dossiers réduite aux 2 dossiers Colmar, Strasbourg absent ;
+effacement du champ → les 3 dossiers réapparaissent.
+
 ## [2.24.13] — 2026-07-20
 
 ### Corrigé

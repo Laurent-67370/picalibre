@@ -156,6 +156,13 @@ const folderName = (path: string): string => {
   return path.slice(i + 1) || path
 }
 
+/** Normalisation identique au tokenizer FTS (unicode61 remove_diacritics) :
+ * insensible à la casse et aux accents, pour que le filtrage local de la
+ * liste des dossiers corresponde exactement à ce que renverra la
+ * recherche côté base (ex: "colmar" retrouve aussi "Colmär"). */
+const normalizeSearch = (s: string): string =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
 export default function App(): JSX.Element {
   const [folders, setFolders] = useState<FolderRow[]>([])
   const [albums, setAlbums] = useState<AlbumRow[]>([])
@@ -517,6 +524,36 @@ export default function App(): JSX.Element {
       setHasMore(result.length >= PAGE_SIZE)
     })
   }, [])
+
+  /**
+   * Recherche en direct (debounce 300 ms) — avant, il fallait appuyer sur
+   * Entrée pour que la recherche parte, ce qui donnait l'impression
+   * qu'elle "ne marchait pas" en tapant simplement un nom de dossier.
+   * Effacer le champ revient à la Chronologie.
+   */
+  useEffect(() => {
+    const q = searchInput.trim()
+    if (q.length === 0) {
+      if (viewRef.current?.type === 'search') loadView({ type: 'timeline' })
+      return
+    }
+    const t = setTimeout(() => {
+      if (viewRef.current?.type !== 'search' || viewRef.current.query !== q) {
+        loadView({ type: 'search', query: q })
+      }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchInput, loadView])
+
+  /** Liste des dossiers filtrée par la recherche en cours (même
+   * normalisation accents/casse que le tokenizer FTS côté base, pour que
+   * "ce qui apparaît dans la barre latérale" corresponde exactement à "ce
+   * que la recherche va effectivement trouver"). */
+  const filteredFolders = useMemo(() => {
+    const q = normalizeSearch(searchInput.trim())
+    if (!q) return folders
+    return folders.filter((f) => normalizeSearch(f.path).includes(q))
+  }, [folders, searchInput])
 
   /** Charge la page suivante de photos pour la vue courante et les concatène. */
   const loadMore = useCallback(() => {
@@ -1548,8 +1585,16 @@ export default function App(): JSX.Element {
             </div>
           )}
 
-          <div style={{ fontSize: 11, opacity: 0.5, margin: '12px 0 4px' }}>DOSSIERS</div>
-          {folders.map((f) => (
+          <div style={{ fontSize: 11, opacity: 0.5, margin: '12px 0 4px' }}>
+            DOSSIERS
+            {searchInput.trim() && (
+              <span style={{ opacity: 0.7 }}>
+                {' '}
+                · {filteredFolders.length}/{folders.length} correspondant à « {searchInput.trim()} »
+              </span>
+            )}
+          </div>
+          {filteredFolders.map((f) => (
             <div
               key={f.id}
               style={{ display: 'flex', alignItems: 'center', gap: 2 }}
@@ -1588,6 +1633,11 @@ export default function App(): JSX.Element {
               </button>
             </div>
           ))}
+          {searchInput.trim() && filteredFolders.length === 0 && (
+            <div style={{ fontSize: 12, opacity: 0.5, padding: '4px 8px' }}>
+              Aucun dossier ne correspond.
+            </div>
+          )}
         </aside>
 
         {/* ---- Zone principale ---- */}

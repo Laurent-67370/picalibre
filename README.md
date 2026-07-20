@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.24.13-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.14-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -126,12 +126,12 @@ Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
 
-## 🆕 Quoi de neuf en 2.24.13
+## 🆕 Quoi de neuf en 2.24.14
 
-- 🔧 **Correctif** : une personne mise entièrement à la corbeille (ou
-  masquée) restait affichée dans la barre latérale — corrigé, le
-  décompte est désormais calculé en direct sur les photos réellement
-  visibles.
+- 🔍 **Recherche par dossier, enfin visible** : tape un nom (ex.
+  « Colmar ») et la liste des dossiers dans la barre latérale se filtre
+  en direct — plus besoin d'appuyer sur Entrée, plus de doute sur quels
+  dossiers correspondent.
 
 ## 📜 Historique des versions
 

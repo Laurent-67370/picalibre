@@ -60,7 +60,7 @@ Pour retirer un SOUS-dossier précis (sans toucher au reste du dossier racine) :
     category: 'Bibliothèque',
     title: 'Rechercher et filtrer',
     keywords: ['recherche', 'filtre', 'étoile', 'note', 'tag', 'nom'],
-    body: `La barre de recherche (nom, tag) est en haut de la barre latérale. Dans la grille, les menus déroulants permettent de filtrer par note minimale (★) et par type (photos/vidéos). Le curseur en bas à droite ajuste la taille des vignettes.`
+    body: `La barre de recherche (nom, tag, dossier) est en haut de la barre latérale — les résultats s'affichent en direct pendant la frappe, pas besoin d'appuyer sur Entrée. Elle cherche aussi dans le chemin des dossiers : taper « Colmar » retrouve toutes les photos des dossiers dont le nom contient « Colmar », et la liste des dossiers dans la barre latérale se filtre en même temps pour ne montrer que ceux-là. Effacer le champ revient à la Chronologie complète. Dans la grille, les menus déroulants permettent de filtrer par note minimale (★) et par type (photos/vidéos). Le curseur en bas à droite ajuste la taille des vignettes.`
   },
   {
     id: 'selection',
