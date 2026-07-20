@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.24.15-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.16-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -126,11 +126,13 @@ Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
 
-## 🆕 Quoi de neuf en 2.24.15
+## 🆕 Quoi de neuf en 2.24.16
 
-- 🔍 **Recherche par nom d'album** : les albums (dont ceux créés
-  automatiquement par Voyages/événements, nommés d'après le lieu
-  détecté) sont désormais pris en compte par la recherche.
+- 🔧 **Correctif d'affichage** : les photos de la grille pouvaient se
+  chevaucher (surtout avec des captures d'écran de téléphone, très
+  étroites) donnant l'impression de photos indistinctes les unes des
+  autres — corrigé et vérifié sur toute la plage de tailles de
+  vignette.
 
 ## 📜 Historique des versions
 

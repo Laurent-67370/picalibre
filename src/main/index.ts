@@ -1564,6 +1564,7 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_HELPSHOT',
     'PICALIBRE_TEST_PERSONS',
     'PICALIBRE_TEST_FOLDERSEARCH',
+    'PICALIBRE_TEST_GRIDOVERLAP',
     'PICALIBRE_TEST_MAP',
     'PICALIBRE_TEST_SCANPERF',
     'PICALIBRE_TEST_HELPCONTRAST'
@@ -2317,6 +2318,72 @@ app.whenReady().then(() => {
         console.log('[persons-test] 1 photo restaurée — réapparue, count=1 attendu:', JSON.stringify(entry))
 
         console.log('[persons-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
+  // Test headless du chevauchement de lignes dans la grille (rapporté :
+  // "les photos n'ont pas l'air distinctes l'une de l'autre") :
+  // PICALIBRE_TEST_GRIDOVERLAP=<dossier avec plusieurs photos>
+  const gridOverlapDir = process.env.PICALIBRE_TEST_GRIDOVERLAP
+  if (gridOverlapDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(gridOverlapDir)
+    startScan(mainWindow)
+    const t0go = Date.now()
+    const ivgo = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      const expected = Number(process.env.PICALIBRE_TEST_GRIDOVERLAP_COUNT ?? '20')
+      if ((photos >= expected && thumbs >= photos * 2) || Date.now() - t0go > 60000) {
+        clearInterval(ivgo)
+        // Aucune vue n'est chargée par défaut au démarrage — naviguer
+        // explicitement vers la Chronologie comme le ferait l'utilisateur.
+        mainWindow.webContents.send('menu:action', { action: 'goTimeline' })
+        await new Promise((r) => setTimeout(r, 800)) // laisser la grille se stabiliser
+        const measure = async (): Promise<unknown> =>
+          mainWindow.webContents.executeJavaScript(`(() => {
+            const rows = [...document.querySelectorAll('[data-grid-row]')]
+              .map(el => ({ index: Number(el.dataset.gridRow), rect: el.getBoundingClientRect() }))
+              .sort((a, b) => a.index - b.index)
+            const overlaps = []
+            for (let i = 0; i < rows.length - 1; i++) {
+              const gap = rows[i + 1].rect.top - rows[i].rect.bottom
+              if (gap < 0) overlaps.push({ rows: [rows[i].index, rows[i + 1].index], overlapPx: Math.round(-gap) })
+            }
+            return { rowCount: rows.length, overlaps }
+          })()`)
+        const setCellSize = async (size: number): Promise<void> => {
+          await mainWindow.webContents.executeJavaScript(`(() => {
+            const inp = document.querySelector('input[type="range"][min="100"][max="320"]')
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+            setter.call(inp, '${size}')
+            inp.dispatchEvent(new Event('input', { bubbles: true }))
+          })()`)
+          await new Promise((r) => setTimeout(r, 400))
+        }
+        // Balaie toute la plage du curseur de taille — le nombre de
+        // colonnes et le reliquat de largeur (floor() du nombre de
+        // colonnes) varient à chaque cran, exposant ou non le décalage
+        // selon la configuration exacte.
+        const sweepResults: Array<{ size: number; overlaps: number; maxOverlapPx: number }> = []
+        for (let size = 100; size <= 320; size += 20) {
+          await setCellSize(size)
+          const m = (await measure()) as { rowCount: number; overlaps: Array<{ overlapPx: number }> }
+          sweepResults.push({
+            size,
+            overlaps: m.overlaps.length,
+            maxOverlapPx: m.overlaps.reduce((mx, o) => Math.max(mx, o.overlapPx), 0)
+          })
+        }
+        console.log('[gridoverlap-test] balayage cellSize 100→320 :', JSON.stringify(sweepResults))
+        const totalOverlaps = sweepResults.reduce((s, r) => s + r.overlaps, 0)
+        console.log(
+          '[gridoverlap-test] aucun chevauchement sur toute la plage ? (attendu true):',
+          totalOverlaps === 0
+        )
+        console.log('[gridoverlap-test] TERMINÉ')
         exitTest(0)
       }
     }, 500)

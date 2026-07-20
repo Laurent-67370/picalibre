@@ -3,6 +3,38 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.16] — 2026-07-20
+
+### Corrigé
+- **Les photos de la grille se chevauchaient, se donnant l'impression de
+  ne plus être distinctes** (rapporté avec capture d'écran). Les lignes
+  de la grille utilisaient des colonnes CSS élastiques (`1fr`) alors que
+  la virtualisation (TanStack Virtual) positionne chaque ligne à partir
+  d'une hauteur fixe calculée en JavaScript, sans se resynchroniser sur
+  la taille réellement affichée. Dès que la largeur de la fenêtre
+  n'était pas un multiple exact de la taille de cellule — donc presque
+  toujours en pratique — l'espace restant du `floor()` du nombre de
+  colonnes se répartissait sur chaque colonne via `1fr`, agrandissant
+  les cellules au-delà de la taille prévue ; la hauteur suivant
+  (ratio 1:1), les lignes devenaient plus hautes que prévu et
+  chevauchaient la ligne suivante.
+  - Colonnes désormais en pixels fixes (taille de vignette exacte),
+    toujours synchronisées avec la hauteur utilisée par la
+    virtualisation — l'espace en trop (s'il y en a) reste une marge
+    inoccupée invisible à droite, jamais un chevauchement.
+  - Correction au passage d'un calcul de largeur disponible qui ne
+    tenait pas compte de la totalité du padding du conteneur.
+
+### Vérifié (Xvfb + Electron réel, mesures DOM réelles)
+Balayage automatisé de toute la plage de taille de vignette (100 à
+320 px, 60 photos dont des portraits très étroits comme sur la capture
+rapportée) avec mesure `getBoundingClientRect()` de chaque ligne réelle
+du DOM : **l'ancien code chevauchait sur 6 des 12 tailles testées,
+jusqu'à 125 px de chevauchement** (photos quasi totalement fondues les
+unes dans les autres) ; le code corrigé : **zéro chevauchement sur les
+12 tailles**. Non-régression : batterie Corbeille/sécurité (13/13)
+repassée à l'identique.
+
 ## [2.24.15] — 2026-07-20
 
 ### Ajouté

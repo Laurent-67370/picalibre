@@ -1219,7 +1219,11 @@ export default function App(): JSX.Element {
 
   const CELL = cellSize + 12
   const ROW_H = cellSize + 54
-  const columns = Math.max(1, Math.floor((gridWidth - 16) / CELL))
+  // gridRef a un padding de 8px 16px (data-tour="grid" plus haut) : la
+  // largeur réellement disponible pour la grille est gridWidth - 32
+  // (16px de chaque côté), pas gridWidth - 16 — l'ancien calcul
+  // surestimait légèrement l'espace utile.
+  const columns = Math.max(1, Math.floor((gridWidth - 32) / CELL))
 
   // Lignes groupées par mois : [header, photos, photos, header, …]
   const grouped = sortMode === 'date_desc' || sortMode === 'date_asc'
@@ -2255,6 +2259,7 @@ export default function App(): JSX.Element {
                   return (
                   <div
                     key={row.key}
+                    data-grid-row={row.index}
                     style={{
                       position: 'absolute',
                       top: 0,
@@ -2262,7 +2267,21 @@ export default function App(): JSX.Element {
                       width: '100%',
                       transform: `translateY(${row.start}px)`,
                       display: 'grid',
-                      gridTemplateColumns: `repeat(${columns}, 1fr)`,
+                      // Colonnes en pixels FIXES (cellSize), pas 1fr : avec 1fr,
+                      // l'espace restant après le floor() du nombre de colonnes
+                      // est redistribué sur chaque colonne, agrandissant la
+                      // largeur réelle des cellules au-delà de cellSize. Comme
+                      // la hauteur suit (aspectRatio: '1'), la ligne devient
+                      // plus haute que ROW_H — la valeur fixe utilisée par le
+                      // virtualiseur (TanStack Virtual n'a pas de mesure
+                      // dynamique ici) pour positionner la ligne suivante,
+                      // qui se retrouve alors partiellement superposée à la
+                      // précédente (signalé : "les photos n'ont pas l'air
+                      // distinctes"). Avec des colonnes en px fixes, largeur
+                      // réelle = cellSize à l'exact pixel près, toujours
+                      // synchronisée avec ROW_H — l'espace en trop (s'il y en
+                      // a) reste une marge inoccupée à droite, invisible.
+                      gridTemplateColumns: `repeat(${columns}, ${cellSize}px)`,
                       gap: 8
                     }}
                   >
