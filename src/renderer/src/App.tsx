@@ -244,6 +244,14 @@ export default function App(): JSX.Element {
   const [importProgress, setImportProgress] = useState<{ done: number; total: number; copied: number; skipped: number } | null>(null)
   const [view, setView] = useState<View | null>(null)
   const [photos, setPhotos] = useState<PhotoRow[]>([])
+  /** Photos ajoutées par le complément géographique de la recherche —
+   * état SÉPARÉ de `photos` (jamais fusionné dedans) pour éliminer tout
+   * risque de course avec la réponse FTS qui, elle, réécrit `photos`
+   * intégralement à chaque nouvelle recherche : `shown` (juste plus bas)
+   * recombine les deux à l'affichage, sans jamais pouvoir en perdre un
+   * bout selon l'ordre d'arrivée réseau vs local. `null` = pas encore
+   * résolu pour la recherche en cours (distinct de "résolu, 0 résultat"). */
+  const [geoExtras, setGeoExtras] = useState<PhotoRow[] | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const loadingMoreRef = useRef(false)
   const [progress, setProgress] = useState<ScanProgress | null>(null)
@@ -293,7 +301,15 @@ export default function App(): JSX.Element {
    *  (sortMode) sont maintenant effectués côté SQL par les handlers IPC.
    *  Le renderer reçoit directement les photos dans le bon ordre — plus de
    *  Array.filter ni Array.sort sur 10k lignes en JS. */
-  const shown = photos
+  const shown = useMemo(() => {
+    if (view?.type !== 'search' || !geoExtras || geoExtras.length === 0) return photos
+    const existingIds = new Set(photos.map((p) => p.id))
+    return [...photos, ...geoExtras.filter((p) => !existingIds.has(p.id))]
+  }, [photos, geoExtras, view])
+  /** Nombre de photos réellement ajoutées par le complément géo, une fois
+   * dédupliquées de ce que la recherche FTS trouvait déjà (ex: l'album
+   * "Colmar" ET le GPS "Colmar" peuvent se recouper en partie). */
+  const geoAdditionsCount = shown.length - photos.length
 
   const [infoOpen, setInfoOpen] = useState<boolean>(
     localStorage.getItem('picalibre.infoOpen') !== '0'
@@ -564,13 +580,26 @@ export default function App(): JSX.Element {
   useEffect(() => {
     const q = searchInput.trim()
     if (q.length === 0) {
+      setGeoExtras(null)
       if (viewRef.current?.type === 'search') loadView({ type: 'timeline' })
       return
     }
     const t = setTimeout(() => {
-      if (viewRef.current?.type !== 'search' || viewRef.current.query !== q) {
+      const isNewSearch = viewRef.current?.type !== 'search' || viewRef.current.query !== q
+      if (isNewSearch) {
+        setGeoExtras(null)
         loadView({ type: 'search', query: q })
       }
+      // Complément géo (lieu géotagué, indépendant de tout dossier/album) :
+      // requête réseau séparée et volontairement NON bloquante — les
+      // résultats texte (FTS, 100% locaux) s'affichent sans attendre.
+      // Écrit dans geoExtras (état séparé de `photos`, jamais fusionné
+      // dedans) : `shown` recombine les deux à l'affichage, sans risque
+      // de course selon l'ordre d'arrivée réseau vs local.
+      window.api.invoke('photos:searchGeo', { query: q }).then((geoPhotos) => {
+        if (viewRef.current?.type !== 'search' || viewRef.current.query !== q) return
+        setGeoExtras(geoPhotos)
+      })
     }, 300)
     return () => clearTimeout(t)
   }, [searchInput, loadView])
@@ -1740,7 +1769,7 @@ export default function App(): JSX.Element {
           )}
           {view?.type === 'search' && (
             <div style={{ padding: '8px 16px', fontSize: 13, opacity: 0.7 }}>
-              {photos.length} résultat(s) pour « {view.query} »
+              {shown.length} résultat(s) pour « {view.query} »
             </div>
           )}
           {view?.type === 'person' && (
@@ -2294,7 +2323,8 @@ export default function App(): JSX.Element {
               {fitMode === 'cover' ? '▣ Carré' : '⬒ Ratio'}
             </button>
             <span style={{ color: 'var(--muted)', marginLeft: 'auto' }}>
-              {shown.length}{shown.length !== photos.length ? ` / ${photos.length}` : ''} élément(s)
+              {shown.length} élément(s)
+              {geoAdditionsCount > 0 && ` (dont ${geoAdditionsCount} géolocalisé(s) à proximité)`}
             </span>
             <button
               data-tour="help-button"

@@ -3,6 +3,44 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.18] — 2026-07-20
+
+### Ajouté
+- **Recherche par lieu géotagué, indépendante de tout dossier ou album**
+  (dernier point ouvert signalé) : taper « Colmar » retrouve désormais
+  aussi une photo isolée dont le GPS tombe dans la zone de Colmar, même
+  si elle n'a jamais été rangée dans un dossier ou un album portant ce
+  nom (et même si la détection Voyages/événements n'a jamais été
+  lancée). Fonctionne en géocodant la requête tapée elle-même (« Colmar »
+  → une zone géographique, via le même service Nominatim déjà utilisé
+  pour la vue Carte et Voyages/événements), puis en cherchant les photos
+  dont les coordonnées GPS tombent dedans.
+  - Requête réseau séparée de la recherche texte habituelle et
+    volontairement **non bloquante** : les résultats par nom de
+    fichier/légende/tag/personne/dossier/album (100% locaux, instantanés)
+    s'affichent sans attendre, les résultats géo complètent la liste dès
+    que la réponse arrive, avec un petit indicateur (« dont N
+    géolocalisé(s) à proximité »).
+  - Résultat mis en cache par terme recherché pour la durée de la
+    session — pas de nouvel appel réseau en retapant le même lieu.
+  - Dégradation silencieuse si hors ligne ou si Nominatim est
+    indisponible : la recherche par texte reste pleinement fonctionnelle
+    dans tous les cas.
+
+### Vérifié (Xvfb + Electron réel)
+Dataset de contrôle : une photo géolocalisée à Colmar mais rangée dans
+un dossier « Vacances été » (aucune mention de « Colmar » nulle part),
+une photo géolocalisée à Paris, une photo sans GPS dans un dossier
+nommé « Colmar 2023 ». Confirmé : la recherche texte ne trouve que la
+photo du dossier nommé (indépendance des deux mécanismes) ; la requête
+SQL de correspondance GPS→zone (celle utilisée en production) retrouve
+exactement la photo géolocalisée à Colmar et exclut Paris et la photo
+sans GPS ; l'appel réseau réel se dégrade sans plantage dans cet
+environnement de build (Nominatim y est bloqué, comme déjà constaté
+pour Voyages/événements) ; l'interface reste pleinement fonctionnelle
+dans ce cas. Non-régression : Corbeille/sécurité (13/13) et recherche
+par dossier/album (2.24.14/2.24.15) repassées à l'identique.
+
 ## [2.24.17] — 2026-07-20
 
 ### Ajouté

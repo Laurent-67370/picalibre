@@ -29,6 +29,7 @@ const INVOKE_CHANNELS = [
   'photos:byAlbum',
   'photos:byPerson',
   'photos:search',
+  'photos:searchGeo',
   'photos:setRating',
   'photos:setGps',
   'photos:setTrim',

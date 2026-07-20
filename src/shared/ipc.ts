@@ -162,6 +162,7 @@ export interface IpcInvokeMap {
   'photos:byFolder': { req: { folderId: number; offset: number; limit: number } & GridFilters; res: PhotoRow[] }
   'photos:byAlbum': { req: { albumId: number; offset: number; limit: number } & GridFilters; res: PhotoRow[] }
   'photos:search': { req: { query: string; offset: number; limit: number } & GridFilters; res: PhotoRow[] }
+  'photos:searchGeo': { req: { query: string }; res: PhotoRow[] }
   'photos:setRating': { req: { photoId: number; rating: number }; res: void }
   'albums:list': { req: void; res: AlbumRow[] }
   'albums:create': { req: { name: string }; res: { id: number } }

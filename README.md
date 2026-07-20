@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.24.17-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.18-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -126,13 +126,12 @@ Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
 
-## 🆕 Quoi de neuf en 2.24.17
+## 🆕 Quoi de neuf en 2.24.18
 
-- 🗂️ **Barre latérale réorganisée** : Personnes, Albums et Dossiers
-  sont désormais repliables indépendamment, chacun avec une hauteur
-  maximale et son propre défilement — une longue liste de personnes ne
-  pousse plus les autres sections hors de portée. Personnes se replie
-  automatiquement au-delà de 8 entrées.
+- 🌍 **Recherche par lieu géotagué** : une photo isolée jamais rangée
+  dans un dossier ou un album nommé d'après le lieu remonte désormais
+  aussi en tapant ce lieu, grâce à son GPS — dernier maillon de la
+  recherche unifiée (texte, dossier, album, lieu).
 
 ## 📜 Historique des versions
 

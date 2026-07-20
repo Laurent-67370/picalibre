@@ -59,8 +59,8 @@ Pour retirer un SOUS-dossier précis (sans toucher au reste du dossier racine) :
     id: 'search-filter',
     category: 'Bibliothèque',
     title: 'Rechercher et filtrer',
-    keywords: ['recherche', 'filtre', 'étoile', 'note', 'tag', 'nom'],
-    body: `La barre de recherche (nom, tag, dossier) est en haut de la barre latérale — les résultats s'affichent en direct pendant la frappe, pas besoin d'appuyer sur Entrée. Elle cherche aussi dans le chemin des dossiers : taper « Colmar » retrouve toutes les photos des dossiers dont le nom contient « Colmar », et la liste des dossiers dans la barre latérale se filtre en même temps pour ne montrer que ceux-là. Effacer le champ revient à la Chronologie complète. Dans la grille, les menus déroulants permettent de filtrer par note minimale (★) et par type (photos/vidéos). Le curseur en bas à droite ajuste la taille des vignettes.`
+    keywords: ['recherche', 'filtre', 'étoile', 'note', 'tag', 'nom', 'lieu', 'ville', 'géolocalisation'],
+    body: `La barre de recherche (nom, légende, tag, personne, dossier, album, lieu) est en haut de la barre latérale — les résultats s'affichent en direct pendant la frappe, pas besoin d'appuyer sur Entrée. Elle cherche aussi dans le chemin des dossiers et le nom des albums (dont ceux créés par Voyages/événements) : taper « Colmar » retrouve toutes les photos dont le dossier ou l'album contient « Colmar », et la liste des dossiers dans la barre latérale se filtre en même temps. En plus, une recherche par lieu (ex : une ville) retrouve aussi les photos géolocalisées à cet endroit même si elles ne sont dans aucun dossier ou album portant ce nom — un petit délai réseau peut s'ajouter pour ce complément-là, sans jamais ralentir le reste des résultats. Effacer le champ revient à la Chronologie complète. Dans la grille, les menus déroulants permettent de filtrer par note minimale (★) et par type (photos/vidéos). Le curseur en bas à droite ajuste la taille des vignettes.`
   },
   {
     id: 'selection',
