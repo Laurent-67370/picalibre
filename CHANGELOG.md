@@ -3,6 +3,33 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.10] — 2026-07-20
+
+### Performance — parallélisme (audit, items 14 et 23)
+- **Miniatures vidéo en parallèle** : l'extraction d'image (ffmpeg) était
+  traitée une vidéo à la fois ; désormais un pool de 2 à 4 extractions
+  simultanées selon le nombre de cœurs (ajustable via la variable
+  d'environnement `PICALIBRE_VIDEO_CONCURRENCY`).
+- **Uploads de la galerie mobile en parallèle** : chaque miniature payait
+  un aller-retour réseau complet en série ; désormais 6 envois
+  simultanés — le gain croît avec la latence vers le serveur (VPS
+  distant typiquement).
+- Nouveau mode de mesure reproductible `PICALIBRE_TEST_SCANPERF`
+  (chronomètre un scan complet) et instrumentation de la phase vidéo
+  (durée + pic de concurrence) en mode test.
+- Au passage, constat : l'item « sondage codec à chaque scan » de
+  l'audit était déjà traité (marqueur `.skip` par vidéo).
+
+### Transparence sur la mesure
+Le mécanisme est prouvé (pic de concurrence effectif observé, résultats
+strictement identiques — 16 miniatures conformes sur le dataset vidéo,
+synchronisation galerie validée de bout en bout contre un vrai serveur
+local), mais l'environnement de développement ne disposait que d'un seul
+cœur et d'un réseau à latence nulle : le gain n'y est par nature pas
+mesurable. Il se matérialise sur machine multi-cœurs (4 extractions
+simultanées sur un Mac M4) et vers un serveur distant réel. Les logs de
+mesure intégrés permettent de le chiffrer sur machine réelle.
+
 ## [2.24.9] — 2026-07-19
 
 ### Optimisé — SQL

@@ -5,6 +5,7 @@
  */
 import { createReadStream } from 'node:fs'
 import { getDb } from '../db'
+import { runPool } from './pool'
 import { safeStorage } from 'electron'
 import type { BrowserWindow } from 'electron'
 
@@ -200,7 +201,11 @@ export async function runWebSync(
   onProgress({ phase: 'thumbnails', done: 0, total })
   let done = 0
   const toUpload = pending.filter((r) => !present.has(r.hash_xxh3))
-  for (const row of toUpload) {
+  // Parallélisé (audit item 23) : chaque miniature payait un aller-retour
+  // réseau complet en série. I/O pur → pool de 6 uploads simultanés ;
+  // les 2 tailles d'une même photo restent séquentielles entre elles
+  // (même connexion keep-alive, ordre sans importance).
+  await runPool(toUpload, 6, async (row) => {
     for (const [size, path] of [
       ['256', row.cache_256],
       ['1024', row.cache_1024]
@@ -222,7 +227,7 @@ export async function runWebSync(
     if (done % 5 === 0 || done === toUpload.length) {
       onProgress({ phase: 'thumbnails', done, total: toUpload.length })
     }
-  }
+  })
 
   // 3. Métadonnées par lots
   onProgress({ phase: 'metadata', done: 0, total: pending.length })

@@ -1541,7 +1541,8 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_BATCHEDIT',
     'PICALIBRE_TEST_TRASH',
     'PICALIBRE_TEST_TRIPS',
-    'PICALIBRE_TEST_MAP'
+    'PICALIBRE_TEST_MAP',
+    'PICALIBRE_TEST_SCANPERF'
   ].some((k) => !!process.env[k])
   if (!isTestMode) {
     const hasRoots = getDb().prepare('SELECT 1 FROM scan_roots LIMIT 1').get()
@@ -2131,6 +2132,27 @@ app.whenReady().then(() => {
         exitTest(0)
       }
     }, 500)
+  }
+
+  // Mesure de performance du scan : PICALIBRE_TEST_SCANPERF=<dossier>
+  // Chronomètre le scan complet (hash + EXIF + miniatures photos/vidéos)
+  // puis quitte — sert à comparer objectivement avant/après optimisation.
+  const scanPerfDir = process.env.PICALIBRE_TEST_SCANPERF
+  if (scanPerfDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(scanPerfDir)
+    const t0sp = Date.now()
+    startScan(mainWindow)
+    const expected = Number(process.env.PICALIBRE_TEST_SCANPERF_COUNT ?? '8')
+    const ivsp = setInterval(() => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos >= expected && thumbs >= photos * 2) || Date.now() - t0sp > 300000) {
+        clearInterval(ivsp)
+        console.log(`[scanperf] ${photos} fichiers indexés, ${thumbs} miniatures — durée totale: ${((Date.now() - t0sp) / 1000).toFixed(1)}s`)
+        exitTest(0)
+      }
+    }, 250)
   }
 
   // Test headless de la vue Carte : PICALIBRE_TEST_MAP=<dossier>

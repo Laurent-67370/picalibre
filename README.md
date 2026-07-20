@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.24.9-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.10-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -126,76 +126,12 @@ Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
 
-## 🆕 Quoi de neuf en 2.24.9
+## 🆕 Quoi de neuf en 2.24.10
 
-- ⚡ **SQL optimisé** : N+1 doublons → une seule requête `IN`,
-  sous-requête persons → CTE `ROW_NUMBER`, lookup visages O(n) → `Map`
-  O(1), `photos:details` 4 requêtes → 1 seule, métadonnées sharp lues une
-  seule fois.
-- ⚡ **Renderer mémoïsé** : `MapView`, `Lightbox`, `Editor` enveloppés de
-  `React.memo`, cache LRU vignettes 200 → 500 (couverture 4K ~8 écrans).
-- 🔒 **Sécurité renforcée** : allowlist IPC preload (88 canaux + 12
-  events avec garde d'exhaustivité), token WebSync chiffré via
-  `safeStorage`, validation runtime des canaux sensibles (rating, GPS,
-  scan roots).
-
-## 🆕 Quoi de neuf en 2.24.8
-
-- ⚡ **Effets render-sharp via ops natives sharp** : softFocus, glow et
-  orton convertis de boucles pixel-par-pixel JS vers `sharp.composite`
-  (libvips natif). Le pipeline stream via libvips sans materialiser de
-  buffer raw 72 Mo en JS par effet. **Gain estimé : 5-20× sur l'export.**
-  tiltShift et hdr restent en JS (logique de masque trop complexe pour
-  composite).
-
-## 🆕 Quoi de neuf en 2.24.7
-
-- 🧠 **Store Zustand pour état volatil** : `searchInput`, `websync*`,
-  `rename*`, `watermark`, `helpOpen`, `showTour`, `screensaver*`, `trips*`,
-  `collage*` migrés vers un store Zustand avec selectors ciblés. Ces états
-  ne déclenchent plus de re-render de la grille — **80% des re-renders
-  cascade éliminés**. La barre de recherche ne re-render plus les vignettes
-  à chaque frappe.
-- 🧹 **Nettoyage code mort** : suppression de `timeline/core.ts` (139
-  lignes jamais importées), migration `011_cleanup_timeline.sql` (DROP
-  des tables fantômes), factorisation de `hashFile`/`walk` vers
-  `utils/hash-walk.ts` et des helpers `ffmpeg` vers `utils/ffmpeg.ts`
-  (suppression de la duplication entre `importer.ts`/`relocate.ts` et
-  `movie.ts`/`pipeline.ts`).
-
-## 🆕 Quoi de neuf en 2.24.6
-
-- 🔒 **Sécurité** : injection de commande corrigée dans `setWallpaper`
-  (exec → execFile sans shell), path traversal bloqué dans `batchRename`
-  (sanitization du pattern), fichiers secrets retirés du dépôt.
-- ⚡ **Perf backend** : `queue.shift()` O(n) → index O(1) (fin du O(n²)
-  sur 50k miniatures), éviction LRU par batch au lieu de `clear()` (fin
-  du thundering herd), transactions englobantes pour `deleteForever` et
-  `folders:remove`, `db.prepare()` sortis des boucles.
-- ⚡ **Perf renderer** : throttle 300 ms du handler `library:changed`
-  (fini les re-renders en cascade pendant un scan), `React.lazy` +
-  `Suspense` pour 8 composants rarement utilisés (MapView, Editor,
-  Slideshow, FaceMovie, CollagePreview, PrintDialog, HelpCenter,
-  OnboardingTour) → bundle initial réduit de ~150-250 ko.
-
-## 🆕 Quoi de neuf en 2.24.5
-
-- ⚡ **Throttle des événements de scan** : les événements `scan:progress`
-  sont désormais limités à ~10 par seconde (100ms) avec flush final
-  garantissant le dernier état. Avant : 1 événement par fichier (10 000+
-  pour 10k photos). Après : ~100 événements maximum pour un scan de 10s.
-- 🧠 **Mémoïsation des vignettes** : `ThumbCanvas` est enveloppé de
-  `React.memo` avec un comparateur custom (photoId, hash, size, fitMode).
-  Les vignettes ne se redessinent que si la photo change réellement, plus à
-  chaque événement de progression. Les deux optimisations se multipliaient
-  pendant un scan : chaque event redessinait toutes les vignettes visibles.
-
-## 🆕 Quoi de neuf en 2.24.4
-
-- 🗺️ **Correction carte** : cliquer un groupe de photos pour zoomer ne
-  les fait plus disparaître — le zoom cadre désormais précisément les
-  photos du groupe, et un groupe de photos prises au même endroit exact
-  s'ouvre directement au zoom maximum.
+- ⚡ **Scan plus rapide sur les bibliothèques riches en vidéos** :
+  extraction des miniatures vidéo en parallèle (2-4 selon les cœurs), et
+  synchronisation de la galerie mobile 6× parallélisée — gains d'autant
+  plus nets que la machine a de cœurs et que le serveur est distant.
 
 ## 📜 Historique des versions
 

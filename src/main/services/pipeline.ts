@@ -6,8 +6,9 @@ import { utilityProcess, BrowserWindow, app } from 'electron'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import { mkdir, unlink, access } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { tmpdir, cpus } from 'node:os'
 import { getFfmpegPath, probeVideoInfo } from '../utils/ffmpeg'
+import { runPool } from './pool'
 import sharp from 'sharp'
 import { getDb } from '../db'
 import { extractExifBatch } from './exif'
@@ -198,8 +199,18 @@ async function videoThumbsPhase(win: BrowserWindow, progressSender: ProgressSend
        duration_ms = COALESCE(?, duration_ms) WHERE id = ?`
   )
 
+  // Parallélisé (audit item 14) : l'extraction d'une image par ffmpeg est
+  // courte et surtout I/O ; les traiter une par une faisait payer N ×
+  // (spawn + seek + décodage) en série. Pool de 3-4 selon la machine —
+  // sharp utilise déjà ses propres threads derrière, inutile de saturer.
+  const VIDEO_CONCURRENCY = Number(process.env.PICALIBRE_VIDEO_CONCURRENCY ?? '') || Math.max(2, Math.min(4, cpus().length - 1))
   let done = 0
-  for (const item of items) {
+  const t0 = Date.now()
+  let active = 0
+  let peak = 0
+  await runPool(items, VIDEO_CONCURRENCY, async (item) => {
+    active++
+    peak = Math.max(peak, active)
     try {
       const { duration: dur } = await probeVideoInfo(ff, item.filepath).catch(() => ({
         duration: 0,
@@ -248,11 +259,17 @@ async function videoThumbsPhase(win: BrowserWindow, progressSender: ProgressSend
       console.error('[video-thumb]', item.filepath, (err as Error).message)
     }
     done++
+    active--
     progressSender.send({
       phase: 'thumbs',
       filesFound: items.length,
       filesProcessed: done
     })
+  })
+  if (Object.keys(process.env).some((k) => k.startsWith('PICALIBRE_TEST_'))) {
+    console.log(
+      `[video-thumbs] ${items.length} vidéo(s) en ${((Date.now() - t0) / 1000).toFixed(2)}s — concurrence ${VIDEO_CONCURRENCY}, pic effectif ${peak}`
+    )
   }
 }
 
