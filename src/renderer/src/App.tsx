@@ -300,6 +300,36 @@ export default function App(): JSX.Element {
   )
   useEffect(() => localStorage.setItem('picalibre.cellSize', String(cellSize)), [cellSize])
   useEffect(() => localStorage.setItem('picalibre.infoOpen', infoOpen ? '1' : '0'), [infoOpen])
+
+  /**
+   * Sections repliables de la barre latérale (Personnes/Albums/Dossiers) —
+   * une longue liste de personnes poussait Albums et Dossiers loin en
+   * dessous, rendant la barre latérale peu lisible. Chaque section a
+   * maintenant son propre repli, mémorisé, et une hauteur maximale avec
+   * défilement interne quand elle est ouverte (jamais tout envahir).
+   * Personnes se replie automatiquement par défaut au-delà de 8 entrées
+   * (uniquement tant que l'utilisateur n'a pas explicitement choisi —
+   * un choix explicite est toujours respecté ensuite).
+   */
+  const [personsOpen, setPersonsOpen] = useState<boolean | null>(() => {
+    const saved = localStorage.getItem('picalibre.sidebar.personsOpen')
+    return saved === null ? null : saved === '1'
+  })
+  const [albumsOpen, setAlbumsOpen] = useState<boolean>(
+    localStorage.getItem('picalibre.sidebar.albumsOpen') !== '0'
+  )
+  const [foldersOpen, setFoldersOpen] = useState<boolean>(
+    localStorage.getItem('picalibre.sidebar.foldersOpen') !== '0'
+  )
+  useEffect(() => {
+    if (personsOpen !== null) localStorage.setItem('picalibre.sidebar.personsOpen', personsOpen ? '1' : '0')
+  }, [personsOpen])
+  useEffect(() => localStorage.setItem('picalibre.sidebar.albumsOpen', albumsOpen ? '1' : '0'), [albumsOpen])
+  useEffect(() => localStorage.setItem('picalibre.sidebar.foldersOpen', foldersOpen ? '1' : '0'), [foldersOpen])
+  /** Repli automatique la toute première fois (aucun choix mémorisé) si
+   * la liste dépasse 8 personnes — recalculé seulement tant qu'aucun
+   * choix explicite n'a été fait. */
+  const personsOpenResolved = personsOpen ?? persons.length <= 8
   const anchorIndex = useRef<number>(-1)
   const photosRef = useRef<PhotoRow[]>([])
   const trayHideRef = useRef<(() => Promise<void>) | null>(null)
@@ -1350,6 +1380,43 @@ export default function App(): JSX.Element {
     textOverflow: 'ellipsis'
   })
 
+  /** En-tête de section repliable pour la barre latérale (Personnes,
+   * Albums, Dossiers) : chevron + libellé + compteur, cliquable sur
+   * toute sa largeur. `extra` reste pour un texte secondaire (ex: le
+   * décompte de dossiers filtrés par la recherche). */
+  const sidebarSectionHeader = (
+    label: string,
+    count: number,
+    open: boolean,
+    onToggle: () => void,
+    extra?: React.ReactNode,
+    testKey?: string
+  ): JSX.Element => (
+    <div
+      onClick={onToggle}
+      data-sidebar-section={testKey}
+      data-sidebar-section-open={testKey ? String(open) : undefined}
+      style={{
+        fontSize: 11,
+        opacity: 0.7,
+        margin: '10px 0 4px',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        userSelect: 'none'
+      }}
+      title={open ? 'Replier' : 'Déplier'}
+    >
+      <span style={{ display: 'inline-block', width: 10, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>
+        ▸
+      </span>
+      <span style={{ fontWeight: 600 }}>{label}</span>
+      <span style={{ opacity: 0.6 }}>({count})</span>
+      {extra}
+    </div>
+  )
+
   const onOsDrop = async (e: React.DragEvent): Promise<void> => {
     e.preventDefault()
     setOsDragging(false)
@@ -1489,157 +1556,177 @@ export default function App(): JSX.Element {
             ⚙ Réglages
           </div>
 
-          <div style={{ fontSize: 11, opacity: 0.5, margin: '10px 0 4px' }}>PERSONNES</div>
-          <button
-            onClick={async () => {
-              const r = await window.api.invoke('faces:scan', undefined)
-              if (r.started) setFaceProgress({ done: 0, total: 1 })
-            }}
-            style={{ width: '100%', padding: 6, marginBottom: 6, fontSize: 12 }}
-          >
-            🔍 Analyser les visages
-          </button>
-          {faceProgress && (
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
-              Détection… {faceProgress.done}/{faceProgress.total}
-            </div>
+          {sidebarSectionHeader('PERSONNES', persons.length, personsOpenResolved, () =>
+            setPersonsOpen(!personsOpenResolved), undefined, 'persons'
           )}
-          {persons.map((pe) => {
-            const hasBox =
-              pe.samplePhotoId != null && pe.bbox_w != null && pe.bbox_w > 0 && pe.bbox_h != null
-            const bx = pe.bbox_x ?? 0
-            const by = pe.bbox_y ?? 0
-            const bw = pe.bbox_w ?? 1
-            const bh = pe.bbox_h ?? 1
-            return (
-              <div
-                key={pe.id}
-                onClick={() => {
-                  setRenameValue(pe.name ?? '')
-                  loadView({ type: 'person', id: pe.id })
-                }}
-                style={{
-                  ...sidebarItem(view?.type === 'person' && view.id === pe.id),
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8
-                }}
-              >
-                <span
-                  style={{
-                    width: 26,
-                    height: 26,
-                    borderRadius: '50%',
-                    flexShrink: 0,
-                    background: 'var(--card)',
-                    backgroundImage: hasBox
-                      ? `url("thumb://library/256/${pe.samplePhotoId}")`
-                      : undefined,
-                    backgroundSize: `${100 / bw}% ${100 / bh}%`,
-                    backgroundPosition: `${bw < 1 ? (bx / (1 - bw)) * 100 : 0}% ${
-                      bh < 1 ? (by / (1 - bh)) * 100 : 0
-                    }%`
-                  }}
-                />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {pe.name ?? `Personne ${pe.id}`}{' '}
-                  <span style={{ opacity: 0.5 }}>({pe.face_count})</span>
-                </span>
-              </div>
-            )
-          })}
-          {persons.length === 0 && !faceProgress && (
-            <div style={{ fontSize: 12, opacity: 0.4, padding: '2px 8px' }}>
-              Lance l'analyse ci-dessus
-            </div>
-          )}
-
-          <div style={{ fontSize: 11, opacity: 0.5, margin: '8px 0 4px' }}>ALBUMS</div>
-          {albums.map((a) => (
-            <div
-              key={a.id}
-              onClick={() => loadView({ type: 'album', id: a.id })}
-              onDragOver={(e) => {
-                if (e.dataTransfer.types.includes('application/x-picalibre-ids')) {
-                  e.preventDefault()
-                  setDragOverAlbum(a.id)
-                }
-              }}
-              onDragLeave={() => setDragOverAlbum(null)}
-              onDrop={async (e) => {
-                e.preventDefault()
-                setDragOverAlbum(null)
-                const raw = e.dataTransfer.getData('application/x-picalibre-ids')
-                if (!raw) return
-                await window.api.invoke('albums:addPhotos', { albumId: a.id, photoIds: JSON.parse(raw) })
-                refreshSidebar()
-              }}
-              style={{
-                ...sidebarItem(view?.type === 'album' && view.id === a.id),
-                outline: dragOverAlbum === a.id ? '2px dashed var(--accent)' : 'none',
-                outlineOffset: -2
-              }}
-            >
-              🗂️ {a.name} <span style={{ opacity: 0.5 }}>({a.count})</span>
-            </div>
-          ))}
-          {albums.length === 0 && (
-            <div style={{ fontSize: 12, opacity: 0.4, padding: '2px 8px' }}>
-              Aucun album — utilise le bac
-            </div>
-          )}
-
-          <div style={{ fontSize: 11, opacity: 0.5, margin: '12px 0 4px' }}>
-            DOSSIERS
-            {searchInput.trim() && (
-              <span style={{ opacity: 0.7 }}>
-                {' '}
-                · {filteredFolders.length}/{folders.length} correspondant à « {searchInput.trim()} »
-              </span>
-            )}
-          </div>
-          {filteredFolders.map((f) => (
-            <div
-              key={f.id}
-              style={{ display: 'flex', alignItems: 'center', gap: 2 }}
-            >
-              <div
-                onClick={() => loadView({ type: 'folder', id: f.id })}
-                title={f.path}
-                style={{ ...sidebarItem(view?.type === 'folder' && view.id === f.id), flex: 1, minWidth: 0 }}
-              >
-                📁 {folderName(f.path)}
-              </div>
+          {personsOpenResolved && (
+            <>
               <button
-                onClick={async (e) => {
-                  e.stopPropagation()
-                  if (
-                    !confirm(
-                      `Retirer « ${folderName(f.path)} » de la bibliothèque ?\n\nLes photos de ce dossier disparaîtront de PicaLibre (fichiers intacts sur le disque, annulable juste après). Il ne sera plus réajouté lors des prochains scans.`
-                    )
-                  )
-                    return
-                  const r = await window.api.invoke('folders:remove', { folderId: f.id })
-                  window.api.invoke('folders:tree', undefined).then(setFolders)
-                  if (view?.type === 'folder' && view.id === f.id) loadView({ type: 'timeline' })
-                  else if (viewRef.current) loadView(viewRef.current)
-                  armUndo({
-                    type: 'folderRemove',
-                    folderId: f.id,
-                    photoIds: r.photoIds,
-                    label: `Dossier « ${folderName(f.path)} » retiré (${r.photoIds.length} photo(s))`
-                  })
+                onClick={async () => {
+                  const r = await window.api.invoke('faces:scan', undefined)
+                  if (r.started) setFaceProgress({ done: 0, total: 1 })
                 }}
-                title="Retirer ce dossier de la bibliothèque"
-                style={{ fontSize: 11, padding: '2px 5px', opacity: 0.6 }}
+                style={{ width: '100%', padding: 6, marginBottom: 6, fontSize: 12 }}
               >
-                🗑
+                🔍 Analyser les visages
               </button>
+              {faceProgress && (
+                <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
+                  Détection… {faceProgress.done}/{faceProgress.total}
+                </div>
+              )}
+              <div style={{ maxHeight: 260, overflowY: 'auto', paddingRight: 2 }}>
+                {persons.map((pe) => {
+                  const hasBox =
+                    pe.samplePhotoId != null && pe.bbox_w != null && pe.bbox_w > 0 && pe.bbox_h != null
+                  const bx = pe.bbox_x ?? 0
+                  const by = pe.bbox_y ?? 0
+                  const bw = pe.bbox_w ?? 1
+                  const bh = pe.bbox_h ?? 1
+                  return (
+                    <div
+                      key={pe.id}
+                      onClick={() => {
+                        setRenameValue(pe.name ?? '')
+                        loadView({ type: 'person', id: pe.id })
+                      }}
+                      style={{
+                        ...sidebarItem(view?.type === 'person' && view.id === pe.id),
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 26,
+                          height: 26,
+                          borderRadius: '50%',
+                          flexShrink: 0,
+                          background: 'var(--card)',
+                          backgroundImage: hasBox
+                            ? `url("thumb://library/256/${pe.samplePhotoId}")`
+                            : undefined,
+                          backgroundSize: `${100 / bw}% ${100 / bh}%`,
+                          backgroundPosition: `${bw < 1 ? (bx / (1 - bw)) * 100 : 0}% ${
+                            bh < 1 ? (by / (1 - bh)) * 100 : 0
+                          }%`
+                        }}
+                      />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {pe.name ?? `Personne ${pe.id}`}{' '}
+                        <span style={{ opacity: 0.5 }}>({pe.face_count})</span>
+                      </span>
+                    </div>
+                  )
+                })}
+                {persons.length === 0 && !faceProgress && (
+                  <div style={{ fontSize: 12, opacity: 0.4, padding: '2px 8px' }}>
+                    Lance l'analyse ci-dessus
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {sidebarSectionHeader('ALBUMS', albums.length, albumsOpen, () => setAlbumsOpen(!albumsOpen), undefined, 'albums')}
+          {albumsOpen && (
+            <div style={{ maxHeight: 260, overflowY: 'auto', paddingRight: 2 }}>
+              {albums.map((a) => (
+                <div
+                  key={a.id}
+                  onClick={() => loadView({ type: 'album', id: a.id })}
+                  onDragOver={(e) => {
+                    if (e.dataTransfer.types.includes('application/x-picalibre-ids')) {
+                      e.preventDefault()
+                      setDragOverAlbum(a.id)
+                    }
+                  }}
+                  onDragLeave={() => setDragOverAlbum(null)}
+                  onDrop={async (e) => {
+                    e.preventDefault()
+                    setDragOverAlbum(null)
+                    const raw = e.dataTransfer.getData('application/x-picalibre-ids')
+                    if (!raw) return
+                    await window.api.invoke('albums:addPhotos', { albumId: a.id, photoIds: JSON.parse(raw) })
+                    refreshSidebar()
+                  }}
+                  style={{
+                    ...sidebarItem(view?.type === 'album' && view.id === a.id),
+                    outline: dragOverAlbum === a.id ? '2px dashed var(--accent)' : 'none',
+                    outlineOffset: -2
+                  }}
+                >
+                  🗂️ {a.name} <span style={{ opacity: 0.5 }}>({a.count})</span>
+                </div>
+              ))}
+              {albums.length === 0 && (
+                <div style={{ fontSize: 12, opacity: 0.4, padding: '2px 8px' }}>
+                  Aucun album — utilise le bac
+                </div>
+              )}
             </div>
-          ))}
-          {searchInput.trim() && filteredFolders.length === 0 && (
-            <div style={{ fontSize: 12, opacity: 0.5, padding: '4px 8px' }}>
-              Aucun dossier ne correspond.
+          )}
+
+          {sidebarSectionHeader(
+            'DOSSIERS',
+            filteredFolders.length,
+            foldersOpen || !!searchInput.trim(),
+            () => setFoldersOpen(!foldersOpen),
+            searchInput.trim() && (
+              <span style={{ opacity: 0.7, fontWeight: 400 }}>
+                {' '}
+                /{folders.length} correspondant à « {searchInput.trim()} »
+              </span>
+            ),
+            'folders'
+          )}
+          {(foldersOpen || !!searchInput.trim()) && (
+            <div style={{ maxHeight: 320, overflowY: 'auto', paddingRight: 2 }}>
+              {filteredFolders.map((f) => (
+                <div
+                  key={f.id}
+                  style={{ display: 'flex', alignItems: 'center', gap: 2 }}
+                >
+                  <div
+                    onClick={() => loadView({ type: 'folder', id: f.id })}
+                    title={f.path}
+                    style={{ ...sidebarItem(view?.type === 'folder' && view.id === f.id), flex: 1, minWidth: 0 }}
+                  >
+                    📁 {folderName(f.path)}
+                  </div>
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      if (
+                        !confirm(
+                          `Retirer « ${folderName(f.path)} » de la bibliothèque ?\n\nLes photos de ce dossier disparaîtront de PicaLibre (fichiers intacts sur le disque, annulable juste après). Il ne sera plus réajouté lors des prochains scans.`
+                        )
+                      )
+                        return
+                      const r = await window.api.invoke('folders:remove', { folderId: f.id })
+                      window.api.invoke('folders:tree', undefined).then(setFolders)
+                      if (view?.type === 'folder' && view.id === f.id) loadView({ type: 'timeline' })
+                      else if (viewRef.current) loadView(viewRef.current)
+                      armUndo({
+                        type: 'folderRemove',
+                        folderId: f.id,
+                        photoIds: r.photoIds,
+                        label: `Dossier « ${folderName(f.path)} » retiré (${r.photoIds.length} photo(s))`
+                      })
+                    }}
+                    title="Retirer ce dossier de la bibliothèque"
+                    style={{ fontSize: 11, padding: '2px 5px', opacity: 0.6 }}
+                  >
+                    🗑
+                  </button>
+                </div>
+              ))}
+              {searchInput.trim() && filteredFolders.length === 0 && (
+                <div style={{ fontSize: 12, opacity: 0.5, padding: '4px 8px' }}>
+                  Aucun dossier ne correspond.
+                </div>
+              )}
             </div>
           )}
         </aside>

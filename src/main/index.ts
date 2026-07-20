@@ -1565,6 +1565,7 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_PERSONS',
     'PICALIBRE_TEST_FOLDERSEARCH',
     'PICALIBRE_TEST_GRIDOVERLAP',
+    'PICALIBRE_TEST_SIDEBAR',
     'PICALIBRE_TEST_MAP',
     'PICALIBRE_TEST_SCANPERF',
     'PICALIBRE_TEST_HELPCONTRAST'
@@ -2318,6 +2319,105 @@ app.whenReady().then(() => {
         console.log('[persons-test] 1 photo restaurée — réapparue, count=1 attendu:', JSON.stringify(entry))
 
         console.log('[persons-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
+  }
+
+  // Test headless de la réorganisation de la barre latérale (rapporté :
+  // beaucoup de personnes empiètent sur Albums/Dossiers) :
+  // PICALIBRE_TEST_SIDEBAR=<dossier avec quelques photos>
+  const sidebarTestDir = process.env.PICALIBRE_TEST_SIDEBAR
+  if (sidebarTestDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(sidebarTestDir)
+    startScan(mainWindow)
+    const t0sb = Date.now()
+    const ivsb = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos >= 3 && thumbs >= photos * 2) || Date.now() - t0sb > 60000) {
+        clearInterval(ivsb)
+        const db = getDb()
+        const photoIds = (
+          db.prepare("SELECT id FROM photos WHERE status = 'active' LIMIT 3").all() as { id: number }[]
+        ).map((r) => r.id)
+
+        // 15 personnes synthétiques (> seuil de repli automatique = 8),
+        // chacune avec un visage sur une vraie photo scannée.
+        const insertPerson = db.prepare(
+          "INSERT INTO persons (name, centroid, face_count) VALUES (?, NULL, 1) RETURNING id"
+        )
+        const insertFace = db.prepare(
+          `INSERT INTO faces (photo_id, person_id, bbox_x, bbox_y, bbox_w, bbox_h, embedding, confidence, assignment)
+           VALUES (?, ?, 0.1, 0.1, 0.2, 0.2, x'00', 0.9, 'confirmed')`
+        )
+        for (let i = 1; i <= 15; i++) {
+          const p = insertPerson.get(`Personne test ${i}`) as { id: number }
+          insertFace.run(photoIds[i % photoIds.length], p.id)
+        }
+
+        // Créer aussi 2 albums pour vérifier qu'ils restent atteignables
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('albums:create', { name: 'Album test A' })`
+        )
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('albums:create', { name: 'Album test B' })`
+        )
+
+        mainWindow.webContents.send('menu:action', { action: 'goTimeline' })
+        await new Promise((r) => setTimeout(r, 600))
+        // Recharger la page pour que le renderer relise persons/albums
+        // depuis la base (les INSERT SQL directs ci-dessus ne notifient
+        // pas le renderer) — fidèle à un vrai lancement de l'app avec ces
+        // données déjà en base.
+        await mainWindow.webContents.reload()
+        await new Promise((r) => setTimeout(r, 1500))
+
+        const readState = async (): Promise<unknown> =>
+          mainWindow.webContents.executeJavaScript(`(() => {
+            const sec = (key) => {
+              const el = document.querySelector(\`[data-sidebar-section="\${key}"]\`)
+              return el ? { open: el.dataset.sidebarSectionOpen === 'true', top: Math.round(el.getBoundingClientRect().top) } : null
+            }
+            return { persons: sec('persons'), albums: sec('albums'), folders: sec('folders') }
+          })()`)
+
+        const initial = await readState()
+        console.log('[sidebar-test] état initial (15 personnes, aucune préférence mémorisée):', JSON.stringify(initial))
+        console.log(
+          '[sidebar-test] Personnes repliée par défaut (>8, attendu true):',
+          (initial as { persons: { open: boolean } }).persons.open === false
+        )
+        const foldersTopCollapsed = (initial as { folders: { top: number } }).folders.top
+
+        // Cliquer pour déplier Personnes
+        await mainWindow.webContents.executeJavaScript(
+          `document.querySelector('[data-sidebar-section="persons"]').dispatchEvent(new MouseEvent('click', { bubbles: true }))`
+        )
+        await new Promise((r) => setTimeout(r, 200))
+        const afterClick = await readState()
+        console.log(
+          '[sidebar-test] Personnes dépliée après clic (attendu true):',
+          (afterClick as { persons: { open: boolean } }).persons.open === true
+        )
+        const foldersTopExpanded = (afterClick as { folders: { top: number } }).folders.top
+        console.log(
+          `[sidebar-test] Dossiers repoussé de ${foldersTopExpanded - foldersTopCollapsed}px quand Personnes (15) est dépliée — preuve que le repli par défaut évite exactement ça (attendu > 200):`,
+          foldersTopExpanded - foldersTopCollapsed > 200
+        )
+
+        // Recharger la page (simulateur de relance de l'app) → la
+        // préférence "dépliée" doit avoir persisté
+        await mainWindow.webContents.reload()
+        await new Promise((r) => setTimeout(r, 1500))
+        const afterReload = await readState()
+        console.log(
+          '[sidebar-test] préférence "dépliée" persistée après rechargement (attendu true):',
+          (afterReload as { persons: { open: boolean } }).persons.open === true
+        )
+
+        console.log('[sidebar-test] TERMINÉ')
         exitTest(0)
       }
     }, 500)

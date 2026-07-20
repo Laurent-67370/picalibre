@@ -3,6 +3,32 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.17] — 2026-07-20
+
+### Ajouté
+- **Barre latérale réorganisée** (rapporté) : la section Personnes,
+  quand elle contient beaucoup d'entrées, poussait Albums et Dossiers
+  loin en dessous, obligeant à défiler pour les atteindre. Les trois
+  sections (Personnes, Albums, Dossiers) sont désormais **repliables
+  indépendamment** (chevron cliquable, préférence mémorisée), et chacune
+  a une **hauteur maximale avec défilement interne** une fois dépliée —
+  aucune ne peut plus jamais envahir tout l'espace des autres.
+  - Personnes se replie **automatiquement** dès la première utilisation
+    au-delà de 8 entrées (aucun réglage à faire) — un clic la rouvre,
+    et ce choix est ensuite mémorisé.
+  - Albums et Dossiers restent dépliés par défaut (généralement moins
+    nombreux), mais peuvent être repliés à volonté.
+  - Chercher un dossier déplie automatiquement Dossiers même si replié,
+    pour ne jamais cacher un résultat de recherche.
+
+### Vérifié (Xvfb + Electron réel)
+15 personnes synthétiques (au-delà du seuil de repli automatique) : la
+section Personnes démarre repliée sans aucun réglage préalable ; la
+déplier repousse Dossiers de 298 px vers le bas (la preuve exacte du
+problème rapporté) ; le choix "dépliée" persiste après un redémarrage
+de l'application. Non-régression : Corbeille/sécurité (13/13) et grille
+(2.24.16, 0 chevauchement) repassées à l'identique.
+
 ## [2.24.16] — 2026-07-20
 
 ### Corrigé

@@ -81,7 +81,7 @@ Pour retirer un SOUS-dossier précis (sans toucher au reste du dossier racine) :
     category: 'Bibliothèque',
     title: 'Reconnaissance des personnes',
     keywords: ['visage', 'personne', 'reconnaissance', 'fusionner', 'scinder'],
-    body: `« 🔍 Analyser les visages » dans la barre latérale détecte et regroupe les visages par personne. Renomme une personne en cliquant sur son nom. En cas d'erreur de regroupement, la vue Personne propose de fusionner deux personnes ou de scinder un visage mal classé.`
+    body: `« 🔍 Analyser les visages » dans la barre latérale détecte et regroupe les visages par personne. Renomme une personne en cliquant sur son nom. En cas d'erreur de regroupement, la vue Personne propose de fusionner deux personnes ou de scinder un visage mal classé. Au-delà de 8 personnes, la section se replie automatiquement pour ne pas envahir la barre latérale — clique sur son titre pour la déplier, ce choix est ensuite mémorisé.`
   },
   {
     id: 'map',
