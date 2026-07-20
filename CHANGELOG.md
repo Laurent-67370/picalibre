@@ -3,6 +3,28 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.13] — 2026-07-20
+
+### Corrigé
+- **Une personne restait dans la barre latérale après mise à la corbeille
+  de toutes ses photos** (rapporté) : la liste des personnes s'appuyait
+  sur `persons.face_count`, un compteur interne qui ne sert qu'à la
+  moyenne pondérée du centroïde de reconnaissance faciale et n'est
+  **jamais décrémenté** — y compris quand les photos concernées sont
+  mises à la corbeille ou masquées. La personne restait donc affichée
+  (avec un nombre erroné) même sans plus aucune photo réellement visible.
+  Le nombre de visages affiché est désormais calculé en direct, à partir
+  des seules photos actives et non masquées — cohérent avec le
+  comportement déjà correct en cliquant sur la personne.
+
+### Vérifié (Xvfb + Electron réel)
+Nouveau test dédié reproduisant le scénario exact : personne avec un
+visage sur 3 photos (count interne 3, jamais touché) → 2 photos mises à
+la corbeille : personne toujours visible, compteur 1 (visibilité
+partielle correcte) → la 3e mise à la corbeille : **personne absente de
+la liste** (reproduction du bug) → restauration d'une photo : personne
+réapparaît, compteur 1.
+
 ## [2.24.12] — 2026-07-20
 
 ### Corrigé

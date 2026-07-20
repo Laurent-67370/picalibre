@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.24.12-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.13-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -126,11 +126,12 @@ Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
 
-## 🆕 Quoi de neuf en 2.24.12
+## 🆕 Quoi de neuf en 2.24.13
 
-- 🔧 **Correctif d'affichage** : le centre d'aide en thème sombre était
-  difficile à lire (champ de recherche invisible, contrastes trop
-  faibles) — corrigé et vérifié par capture d'écran réelle.
+- 🔧 **Correctif** : une personne mise entièrement à la corbeille (ou
+  masquée) restait affichée dans la barre latérale — corrigé, le
+  décompte est désormais calculé en direct sur les photos réellement
+  visibles.
 
 ## 📜 Historique des versions
 

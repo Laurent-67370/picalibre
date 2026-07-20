@@ -1231,14 +1231,34 @@ function registerIpc(): void {
   ipcMain.handle('persons:list', () =>
     getDb()
       .prepare(
-        `SELECT pe.id, pe.name, pe.face_count,
+        // Correctif : `persons.face_count` est un compteur interne qui ne
+        // sert QU'à la moyenne pondérée du centroïde de reconnaissance
+        // (faces/index.ts) — il n'est jamais décrémenté, y compris quand
+        // toutes les photos d'une personne sont mises à la corbeille ou
+        // masquées, ce qui faisait persister la personne dans la barre
+        // latérale (avec un nombre erroné) même sans plus aucune photo
+        // visible. On calcule ici, en direct, le nombre de visages
+        // appartenant réellement à des photos actives et non masquées —
+        // cohérent avec photos:byPerson qui applique déjà ce même filtre.
+        `WITH visible_counts AS (
+           SELECT f.person_id AS pid, COUNT(*) AS cnt
+           FROM faces f
+           JOIN photos p ON p.id = f.photo_id
+           WHERE p.status = 'active' AND p.is_hidden = 0
+           GROUP BY f.person_id
+         )
+         SELECT pe.id, pe.name, vc.cnt AS face_count,
                 f.photo_id AS samplePhotoId, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h
          FROM persons pe
+         JOIN visible_counts vc ON vc.pid = pe.id
          LEFT JOIN faces f ON f.id = (
-           SELECT id FROM faces WHERE person_id = pe.id ORDER BY confidence DESC LIMIT 1
+           SELECT f2.id FROM faces f2
+           JOIN photos p2 ON p2.id = f2.photo_id
+           WHERE f2.person_id = pe.id AND p2.status = 'active' AND p2.is_hidden = 0
+           ORDER BY f2.confidence DESC LIMIT 1
          )
-         WHERE pe.is_ignored = 0 AND pe.face_count > 0
-         ORDER BY pe.name IS NULL, pe.name COLLATE NOCASE, pe.face_count DESC`
+         WHERE pe.is_ignored = 0
+         ORDER BY pe.name IS NULL, pe.name COLLATE NOCASE, vc.cnt DESC`
       )
       .all()
   )
@@ -1542,6 +1562,7 @@ app.whenReady().then(() => {
     'PICALIBRE_TEST_TRASH',
     'PICALIBRE_TEST_TRIPS',
     'PICALIBRE_TEST_HELPSHOT',
+    'PICALIBRE_TEST_PERSONS',
     'PICALIBRE_TEST_MAP',
     'PICALIBRE_TEST_SCANPERF',
     'PICALIBRE_TEST_HELPCONTRAST'
@@ -2220,6 +2241,84 @@ app.whenReady().then(() => {
       console.log('[help-contrast] TERMINÉ')
       exitTest(failing.length === 0 ? 0 : 1)
     }, 1500)
+  }
+
+  // Test headless de la visibilité des personnes vs Corbeille/masquage :
+  // PICALIBRE_TEST_PERSONS=<dossier> (reproduit le bug rapporté : une
+  // personne restait dans la barre latérale alors que toutes ses photos
+  // étaient à la corbeille).
+  const personsTestDir = process.env.PICALIBRE_TEST_PERSONS
+  if (personsTestDir) {
+    getDb().prepare('INSERT OR IGNORE INTO scan_roots (path) VALUES (?)').run(personsTestDir)
+    startScan(mainWindow)
+    const t0pe = Date.now()
+    const ivpe = setInterval(async () => {
+      const q = (sql: string): number => (getDb().prepare(sql).get() as { c: number }).c
+      const photos = q('SELECT COUNT(*) c FROM photos')
+      const thumbs = q('SELECT COUNT(*) c FROM thumbnails')
+      if ((photos >= 3 && thumbs >= photos * 2) || Date.now() - t0pe > 60000) {
+        clearInterval(ivpe)
+        const db = getDb()
+        const ids = (
+          db.prepare("SELECT id FROM photos WHERE status = 'active' ORDER BY id LIMIT 3").all() as {
+            id: number
+          }[]
+        ).map((r) => r.id)
+        console.log('[persons-test] photos de départ:', JSON.stringify(ids))
+
+        // Personne synthétique avec un visage sur CHACUNE des 3 photos —
+        // face_count interne = 3, jamais décrémenté (usage centroïde).
+        const personId = db
+          .prepare("INSERT INTO persons (name, centroid, face_count) VALUES ('Test Audit', NULL, 3) RETURNING id")
+          .get() as { id: number }
+        const insertFace = db.prepare(
+          `INSERT INTO faces (photo_id, person_id, bbox_x, bbox_y, bbox_w, bbox_h, embedding, confidence, assignment)
+           VALUES (?, ?, 0.1, 0.1, 0.2, 0.2, x'00', 0.9, 'confirmed')`
+        )
+        for (const id of ids) insertFace.run(id, personId.id)
+
+        const listVia = async (): Promise<Array<{ id: number; face_count: number }>> =>
+          mainWindow.webContents.executeJavaScript(
+            `window.api.invoke('persons:list', undefined).then(r => r.map(p => ({ id: p.id, face_count: p.face_count })))`
+          )
+
+        // 1) Les 3 photos actives → la personne doit apparaître, count=3
+        let list = await listVia()
+        let entry = list.find((p) => p.id === personId.id)
+        console.log('[persons-test] avant corbeille — présente, count=3 attendu:', JSON.stringify(entry))
+
+        // 2) Corbeille sur 2 des 3 photos → doit rester visible, count=1
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:trash', { photoIds: [${ids[0]}, ${ids[1]}] })`
+        )
+        list = await listVia()
+        entry = list.find((p) => p.id === personId.id)
+        console.log('[persons-test] 2/3 photos en corbeille — encore visible, count=1 attendu:', JSON.stringify(entry))
+
+        // 3) Corbeille sur la 3e (dernière active) → REPRODUCTION DU BUG :
+        //    doit maintenant DISPARAÎTRE de la liste (plus aucune photo visible)
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:trash', { photoIds: [${ids[2]}] })`
+        )
+        list = await listVia()
+        entry = list.find((p) => p.id === personId.id)
+        console.log(
+          '[persons-test] 3/3 photos en corbeille — doit avoir disparu (undefined attendu):',
+          JSON.stringify(entry)
+        )
+
+        // 4) Restaurer une photo → doit réapparaître, count=1
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:undoTrash', { photoIds: [${ids[0]}] })`
+        )
+        list = await listVia()
+        entry = list.find((p) => p.id === personId.id)
+        console.log('[persons-test] 1 photo restaurée — réapparue, count=1 attendu:', JSON.stringify(entry))
+
+        console.log('[persons-test] TERMINÉ')
+        exitTest(0)
+      }
+    }, 500)
   }
 
   // Capture visuelle du centre d'aide (vérification contraste) :
