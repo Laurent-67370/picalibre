@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.24.10-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.11-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -126,12 +126,13 @@ Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
 
-## 🆕 Quoi de neuf en 2.24.10
+## 🆕 Quoi de neuf en 2.24.11
 
-- ⚡ **Scan plus rapide sur les bibliothèques riches en vidéos** :
-  extraction des miniatures vidéo en parallèle (2-4 selon les cœurs), et
-  synchronisation de la galerie mobile 6× parallélisée — gains d'autant
-  plus nets que la machine a de cœurs et que le serveur est distant.
+- 🏁 **Audit de performance intégralement soldé** : le tilt-shift, dernier
+  effet calculé pixel par pixel, passe en natif (parité prouvée au pixel
+  près), la lecture EXIF tourne en file continue sans temps morts, et le
+  hachage lit par blocs de 8 Mo. Chaque item restant de l'''audit est soit
+  corrigé, soit documenté comme choix assumé.
 
 ## 📜 Historique des versions
 

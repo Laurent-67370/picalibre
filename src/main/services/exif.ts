@@ -4,8 +4,9 @@
  */
 import { exiftool, Tags } from 'exiftool-vendored'
 import { getDb } from '../db'
+import { runPool } from './pool'
 
-const CHUNK = 24 // requêtes exiftool en parallèle par vague
+const CHUNK = 32 // profondeur du pool de lectures exiftool (file continue, sans vagues)
 
 export interface ExifTarget {
   id: number
@@ -48,19 +49,27 @@ export async function extractExifBatch(
   let done = 0
   let failed = 0
 
-  for (let i = 0; i < targets.length; i += CHUNK) {
-    const wave = targets.slice(i, i + CHUNK)
-    const results = await Promise.allSettled(wave.map((t) => exiftool.read(t.filepath)))
+  // Pool continu (audit item 28) : les « vagues » de 24 lectures faisaient
+  // attendre à chaque fois le fichier le plus lent de la vague avant de
+  // lancer la suivante. runPool maintient la file toujours pleine ;
+  // l'écriture SQL reste transactionnelle, par paquets au fil de l'eau.
+  const tx = db.transaction((batch: Array<Record<string, unknown>>) => {
+    for (const row of batch) update.run(row)
+  })
+  let buffer: Array<Record<string, unknown>> = []
+  const flush = (): void => {
+    if (buffer.length === 0) return
+    tx(buffer)
+    done += buffer.length
+    buffer = []
+    onProgress?.(done, targets.length)
+  }
 
-    const rows: Array<Record<string, unknown>> = []
-    results.forEach((r, j) => {
-      if (r.status === 'rejected') {
-        failed++
-        return
-      }
-      const tags = r.value as Tags
-      rows.push({
-        id: wave[j].id,
+  await runPool(targets, CHUNK, async (t) => {
+    try {
+      const tags = (await exiftool.read(t.filepath)) as Tags
+      buffer.push({
+        id: t.id,
         taken_at:
           toEpoch(tags.DateTimeOriginal) ?? toEpoch(tags.CreateDate) ?? toEpoch(tags.MediaCreateDate),
         camera_make: tags.Make ?? null,
@@ -77,16 +86,12 @@ export async function extractExifBatch(
         width: num(tags.ImageWidth),
         height: num(tags.ImageHeight)
       })
-    })
-
-    const tx = db.transaction((batch: typeof rows) => {
-      for (const row of batch) update.run(row)
-    })
-    tx(rows)
-
-    done += rows.length
-    onProgress?.(done, targets.length)
-  }
+      if (buffer.length >= 48) flush()
+    } catch {
+      failed++
+    }
+  })
+  flush()
 
   return { done, failed }
 }

@@ -13,7 +13,7 @@ export const MEDIA_EXT = new Set([
   '.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.3gp', '.mts'
 ])
 
-const HASH_CHUNK = 4 * 1024 * 1024
+const HASH_CHUNK = 8 * 1024 * 1024 // 8 Mo — moitié moins de syscalls sur les gros fichiers (vidéos)
 
 let hasher: Awaited<ReturnType<typeof xxhash>> | null = null
 

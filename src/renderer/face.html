@@ -3,6 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <title>PicaLibre — détection de visages</title>
+    <!-- unsafe-eval : requis par TensorFlow.js (compilation des kernels via
+         new Function). Décision d'audit (item 27) : accepté et circonscrit —
+         cette CSP ne s'applique qu'à CETTE fenêtre cachée de détection de
+         visages, sandboxée, sans accès Node ni données distantes ; la
+         fenêtre principale garde sa CSP stricte sans unsafe-eval. -->
     <meta http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'unsafe-eval' blob:; img-src 'self' thumb: faceres: data: blob:; connect-src 'self' faceres: blob: data:; worker-src 'self' blob:" />
   </head>

@@ -3,6 +3,35 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.11] — 2026-07-20
+
+### Performance — solde du résiduel de l'audit
+- **Tilt-shift 100 % natif** (dernier effet en boucle pixel JS) : le
+  masque de distance est désormais un dégradé SVG (la transition étant
+  linéaire, l'équivalence est mathématiquement exacte) composé en natif
+  libvips. **Parité prouvée** contre l'ancienne implémentation, pixel par
+  pixel sur 4 scénarios (radial/linéaire, centré/décentré) : écart maximum
+  2/255, moyen < 0,2 — indiscernable, pur arrondi. Fini les 24 millions
+  d'appels Math.hypot par export.
+- **Lecture EXIF en file continue** : les « vagues » de 24 lectures
+  attendaient à chaque fois le fichier le plus lent avant de repartir ;
+  pool continu de 32 avec écriture transactionnelle au fil de l'eau.
+  Vérifié : 24/24 dates et 17/17 GPS extraits à l'identique.
+- **Hash par blocs de 8 Mo** (au lieu de 4) : moitié moins d'appels
+  système sur les gros fichiers vidéo.
+
+### Décisions d'audit documentées (volontairement non « corrigés »)
+- `unsafe-eval` (fenêtre visages) : requis par TensorFlow.js, accepté et
+  circonscrit à cette seule fenêtre sandboxée — désormais commenté dans
+  le code même.
+- Transaction par photo dans la détection de visages : le coût d'une
+  transaction SQLite (µs) est négligeable devant l'inférence (100 ms+) —
+  batcher n'apporterait rien de mesurable.
+- Styles inline du renderer : refactor massif pour un gain marginal
+  (React réconcilie les objets de style) — non retenu.
+- Duplication `hashFile` : constatée déjà factorisée (`utils/hash-walk`) ;
+  la copie du scan-worker est volontaire (bundle utilityProcess séparé).
+
 ## [2.24.10] — 2026-07-20
 
 ### Performance — parallélisme (audit, items 14 et 23)

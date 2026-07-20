@@ -31,6 +31,59 @@ import {
 } from '../../shared/edit-engine'
 import { resolveHeicInput } from '../../shared/heic'
 
+/**
+ * Construit le masque SVG du tilt-shift (0 = net, 255 = flou), reproduisant
+ * EXACTEMENT t = clamp((dist - rPx) / transition, 0, 1) :
+ * - radial : radialGradient en userSpaceOnUse (distance euclidienne, comme
+ *   Math.hypot) de rayon rPx+transition, stop noir a rPx/(rPx+transition),
+ *   blanc a 1 - interpolation lineaire entre les deux, pad blanc au-dela.
+ * - linear : linearGradient vertical a 4 stops (blanc/noir/noir/blanc aux
+ *   positions cy-/+(rPx+transition) et cy-/+rPx). Les positions hors image
+ *   sont clampees en recalculant la VALEUR exacte de t a y=0 et y=H -
+ *   un simple clamp d'offset denaturerait la pente aux bords.
+ * Exportee pour le test de parite avec l'ancienne implementation JS.
+ */
+export function buildTiltShiftMaskSvg(
+  mode: 'radial' | 'linear',
+  W: number,
+  H: number,
+  cx: number,
+  cy: number,
+  rPx: number,
+  transition: number
+): string {
+  const grey = (t: number): string => {
+    const v = Math.round(Math.max(0, Math.min(1, t)) * 255)
+    return `rgb(${v},${v},${v})`
+  }
+  if (mode === 'radial') {
+    const R = rPx + transition
+    const inner = R > 0 ? rPx / R : 0
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><defs><radialGradient id="g" gradientUnits="userSpaceOnUse" cx="${cx}" cy="${cy}" r="${R}"><stop offset="${inner}" stop-color="black"/><stop offset="1" stop-color="white"/></radialGradient></defs><rect width="${W}" height="${H}" fill="url(#g)"/></svg>`
+  }
+  const tAt = (y: number): number => {
+    const dist = Math.abs(y - cy)
+    if (dist <= rPx) return 0
+    if (dist >= rPx + transition) return 1
+    return (dist - rPx) / transition
+  }
+  const raw: Array<{ y: number; t: number }> = [
+    { y: cy - rPx - transition, t: 1 },
+    { y: cy - rPx, t: 0 },
+    { y: cy + rPx, t: 0 },
+    { y: cy + rPx + transition, t: 1 }
+  ]
+  const stops: Array<{ off: number; t: number }> = [{ off: 0, t: tAt(0) }]
+  for (const s of raw) {
+    if (s.y > 0 && s.y < H) stops.push({ off: s.y / H, t: s.t })
+  }
+  stops.push({ off: 1, t: tAt(H) })
+  const stopsXml = stops
+    .map((s) => `<stop offset="${s.off}" stop-color="${grey(s.t)}"/>`)
+    .join('')
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${H}">${stopsXml}</linearGradient></defs><rect width="${W}" height="${H}" fill="url(#g)"/></svg>`
+}
+
 export interface ExportOptions {
   format?: 'jpeg' | 'webp' | 'png'
   quality?: number
@@ -129,6 +182,14 @@ export async function renderEdited(
   // selon un masque de distance (net au centre, flou sur les bords).
   // Mode radial : cercle net centré sur (focusX, focusY) avec rayon focusRadius.
   // Mode linear : bande nette horizontale centrée sur focusY, hauteur 2×focusRadius.
+  //
+  // 100 % natif libvips (audit item 1-2) : l'ancien code parcourait les
+  // 24 millions de pixels en JS (Math.hypot par pixel). La transition du
+  // masque étant LINÉAIRE (t = clamp((dist - rPx) / transition)), un
+  // dégradé SVG — qui interpole linéairement entre stops, en distance
+  // euclidienne pour un radialGradient userSpaceOnUse — la reproduit
+  // exactement. Le mélange orig×(1-t) + flou×t est exactement la
+  // composition alpha « over » avec t pour alpha du calque flouté.
   const tiltShiftParams = getTiltShiftParams(stack)
   if (tiltShiftParams && tiltShiftParams.blurRadius > 0) {
     const tsParams: TiltShiftParams = tiltShiftParams
@@ -140,36 +201,28 @@ export async function renderEdited(
       .blur(tsParams.blurRadius)
       .raw()
       .toBuffer({ resolveWithObject: true })
-    const od = origBuf.data
-    const bd = blurBuf.data
     const rPx = tsParams.focusRadius * W
     const cx = tsParams.focusX * W
     const cy = tsParams.focusY * H
     const transition = rPx * 0.5
 
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        let dist: number
-        if (tsParams.mode === 'radial') {
-          dist = Math.hypot(x - cx, y - cy)
-        } else {
-          dist = Math.abs(y - cy)
-        }
-        let t: number
-        if (dist <= rPx) {
-          t = 0
-        } else if (dist >= rPx + transition) {
-          t = 1
-        } else {
-          t = (dist - rPx) / transition
-        }
-        const i = (y * W + x) * ch
-        for (let c = 0; c < 3; c++) {
-          od[i + c] = Math.round(od[i + c] * (1 - t) + bd[i + c] * t)
-        }
-      }
-    }
-    pass2 = sharp(od, {
+    const maskSvg = buildTiltShiftMaskSvg(tsParams.mode, W, H, cx, cy, rPx, transition)
+    const mask = await sharp(Buffer.from(maskSvg))
+      .ensureAlpha()
+      .extractChannel(0)
+      .raw()
+      .toBuffer()
+    // Calque flouté avec le masque pour alpha, composé « over » l'originale.
+    const blurRgba = await sharp(blurBuf.data, { raw: { width: W, height: H, channels: ch as 3 } })
+      .joinChannel(mask, { raw: { width: W, height: H, channels: 1 } })
+      .raw()
+      .toBuffer()
+    const outBuf = await sharp(origBuf.data, { raw: { width: W, height: H, channels: ch as 3 } })
+      .composite([{ input: blurRgba, raw: { width: W, height: H, channels: 4 }, blend: 'over' }])
+      .removeAlpha()
+      .raw()
+      .toBuffer()
+    pass2 = sharp(outBuf, {
       raw: { width: W, height: H, channels: ch }
     })
   }

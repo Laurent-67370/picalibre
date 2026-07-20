@@ -26,7 +26,7 @@ const VIDEO_EXT = new Set(['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.3g
 const IGNORED_DIRS = new Set(['node_modules', '.git', '.thumbnails', '@eaDir', '.picalibre'])
 
 const BATCH_SIZE = 200
-const HASH_CHUNK = 4 * 1024 * 1024 // 4 Mo
+const HASH_CHUNK = 8 * 1024 * 1024 // 8 Mo — moitié moins de syscalls sur les gros fichiers (vidéos)
 
 export interface ScannedFile {
   filepath: string
