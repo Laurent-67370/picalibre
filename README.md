@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.24.14-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.15-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -126,12 +126,11 @@ Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
 
-## 🆕 Quoi de neuf en 2.24.14
+## 🆕 Quoi de neuf en 2.24.15
 
-- 🔍 **Recherche par dossier, enfin visible** : tape un nom (ex.
-  « Colmar ») et la liste des dossiers dans la barre latérale se filtre
-  en direct — plus besoin d'appuyer sur Entrée, plus de doute sur quels
-  dossiers correspondent.
+- 🔍 **Recherche par nom d'album** : les albums (dont ceux créés
+  automatiquement par Voyages/événements, nommés d'après le lieu
+  détecté) sont désormais pris en compte par la recherche.
 
 ## 📜 Historique des versions
 

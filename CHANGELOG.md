@@ -3,6 +3,33 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.15] — 2026-07-20
+
+### Ajouté
+- **Recherche par nom d'album** (rapporté) : la recherche ignorait
+  totalement les albums — en particulier ceux créés automatiquement par
+  la détection de voyages/événements, qui portent pourtant le nom du
+  lieu géotagué détecté (ex : « Colmar — 15–18 mars 2026 » via
+  géocodage inversé). Une photo prise à Colmar mais rangée dans un
+  dossier au nom quelconque ne remontait jamais en tapant « Colmar ».
+  Recherche désormais étendue aux noms d'album (migration FTS `012`,
+  synchronisée sur ajout/retrait de photo et renommage d'album).
+
+### Point ouvert, honnêtement signalé
+La recherche par lieu géotagué **indépendamment de tout album** (ex :
+retrouver une photo isolée prise à Colmar, jamais groupée par la
+détection voyages) n'est pas couverte ici — ça demanderait soit de
+géocoder chaque photo individuellement (coûteux, non fait), soit de
+géocoder la requête tapée à la volée pour la comparer aux coordonnées
+GPS des photos (faisable, plus gros morceau). À discuter si voulu.
+
+### Vérifié (Xvfb + Electron réel)
+Photo du dossier « Strasbourg » (absente des résultats « Colmar »,
+confirmé) ajoutée à un album nommé « Colmar — 15–18 mars 2026 » →
+recherche « Colmar » la retrouve désormais. Non-régression complète :
+recherche par dossier (2.24.14) et corbeille/sécurité (13/13)
+repassées à l'identique.
+
 ## [2.24.14] — 2026-07-20
 
 ### Ajouté / corrigé

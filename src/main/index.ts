@@ -2393,6 +2393,30 @@ app.whenReady().then(() => {
         })()`)
         console.log('[foldersearch-test] dossiers visibles après effacement (doit être 3):', afterClear)
 
+        // Scénario album (correctif migration 012) : un album nommé comme
+        // un album « Voyages/événements » (ex: géocodage "Colmar — 15–18
+        // mars 2026") doit rendre SA photo trouvable par recherche, même
+        // si le dossier de cette photo ne contient pas "Colmar" — c'est
+        // exactement le cas d'une photo prise à Colmar mais rangée par
+        // exemple sous /Photos/2026/Import du 18 mars/.
+        const strasbourgId = (
+          db.prepare("SELECT id FROM photos WHERE filepath LIKE '%Strasbourg%'").get() as { id: number }
+        ).id
+        const { id: tripAlbumId } = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('albums:create', { name: 'Colmar — 15–18 mars 2026' })`
+        )
+        await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('albums:addPhotos', { albumId: ${tripAlbumId}, photoIds: [${strasbourgId}] })`
+        )
+        const viaAlbum = await mainWindow.webContents.executeJavaScript(
+          `window.api.invoke('photos:search', { query: 'Colmar', offset: 0, limit: 50 }).then(r => r.map(p => p.filename))`
+        )
+        console.log('[foldersearch-test] recherche "Colmar" après ajout à un album — résultat:', JSON.stringify(viaAlbum))
+        console.log(
+          '[foldersearch-test] retrouve désormais la photo du dossier Strasbourg via son album (attendu true):',
+          (viaAlbum as string[]).includes('photo3.jpg')
+        )
+
         console.log('[foldersearch-test] TERMINÉ')
         exitTest(0)
       }
