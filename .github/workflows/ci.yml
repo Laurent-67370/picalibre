@@ -103,9 +103,39 @@ jobs:
 
 
       # Packaging (sans publication) : AppImage/deb sur Linux, NSIS sur Windows
+      #
+      # Signature — plomberie prête, inerte tant que les secrets n'existent pas :
+      #  · macOS : ajouter les secrets MAC_CSC_LINK (certificat Developer ID
+      #    Application en .p12, encodé base64), MAC_CSC_KEY_PASSWORD,
+      #    APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD et APPLE_TEAM_ID —
+      #    electron-builder signe (hardened runtime + entitlements, voir
+      #    build-resources/entitlements.mac.plist) et notarise automatiquement.
+      #    Sans ces secrets : signature ad-hoc actuelle (afterPack.js), inchangée.
+      #  · Windows : en attente d'acceptation SignPath Foundation (dossier
+      #    déposé — voir CODE_SIGNING.md). Une fois le projet accepté,
+      #    décommenter l'étape « Signer (SignPath) » ci-dessous et renseigner
+      #    SIGNPATH_API_TOKEN + les slugs organisation/projet/politique.
       - name: Package
         shell: bash
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npx electron-builder --publish never 2>&1 | tee package.log
+
+      # - name: Signer (SignPath)   # ← décommenter à l'acceptation du dossier
+      #   if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v')
+      #   uses: signpath/github-action-submit-signing-request@v1
+      #   with:
+      #     api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+      #     organization-id: 'ORGANISATION-ID-SIGNPATH'
+      #     project-slug: 'picalibre'
+      #     signing-policy-slug: 'release-signing'
+      #     github-artifact-id: ''   # voir doc SignPath : signe l'artefact du run
+      #     wait-for-completion: true
+      #     output-artifact-directory: dist
 
       - name: E2E sur le binaire packagé (pile native dans l'asar.unpacked)
         if: runner.os == 'Linux'

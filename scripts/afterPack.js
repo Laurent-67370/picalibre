@@ -23,6 +23,15 @@ const path = require('path');
 exports.default = async function afterPack(context) {
   if (context.electronPlatformName !== 'darwin') return;
 
+  // Si une vraie identité de signature est configurée (certificat Developer
+  // ID via CSC_LINK/CSC_NAME), electron-builder signe lui-même l'app avec le
+  // hardened runtime et les entitlements — re-signer en ad-hoc ici
+  // ÉCRASERAIT cette signature et casserait la notarisation.
+  if (process.env.CSC_LINK || process.env.CSC_NAME) {
+    console.log('[afterPack] Certificat Developer ID détecté — signature ad-hoc ignorée');
+    return;
+  }
+
   const appName = context.packager.appInfo.productFilename;
   const appPath = path.join(context.appOutDir, `${appName}.app`);
 

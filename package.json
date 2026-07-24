@@ -1,6 +1,6 @@
 {
   "name": "picalibre",
-  "version": "2.24.21",
+  "version": "2.24.22",
   "description": "Gestionnaire de photos open-source inspiré de Picasa — Electron + React + TypeScript + SQLite",
   "main": "./out/main/index.js",
   "author": {
@@ -102,7 +102,11 @@
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.photography"
+      "category": "public.app-category.photography",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build-resources/entitlements.mac.plist",
+      "entitlementsInherit": "build-resources/entitlements.mac.plist"
     },
     "afterPack": "scripts/afterPack.js",
     "publish": {
