@@ -120,6 +120,22 @@ Preview éditée mise en cache disque (`cache/renders/{photo_hash}/{stack_hash}.
 - WebP qualité 82, génération par lots dans ThumbWorker (sharp, concurrence = nb cœurs − 1).
 - Miniatures vidéo : frame à 10 % de la durée via ffmpeg.
 
+### Profil « petite configuration » (`src/shared/perf-profile.ts`)
+
+Détecté au démarrage (≤ 8 Go de RAM ou ≤ 4 cœurs logiques ; forçable via
+`PICALIBRE_LOW_SPEC=1|0`). Sur ces machines, toutes les tâches de fond sont
+recalibrées en un seul endroit pour que l'interface reste fluide :
+workers de scan plafonnés à 2, couloirs sharp 2 × 2 threads vips (au lieu
+de (n−1) × n), cache libvips 24 Mo, extraction de frames vidéo limitée à 2,
+transcodage proxy en `veryfast` avec un cœur laissé libre, détection de
+visages par lots de 4 avec 250 ms de pause entre lots, SQLite 16 Mo de
+cache / 128 Mo de mmap. Les process ffmpeg d'arrière-plan sont en outre
+lancés en priorité BELOW_NORMAL sur toutes les machines. Côté renderer
+(sans `node:os`), une heuristique équivalente (`low-spec.ts`) réduit le
+budget du cache LRU de bitmaps (48 Mo au lieu de 96 Mo, borne désormais en
+octets et plus seulement en nombre d'entrées) et le préchargement prédictif
+(10 miniatures au lieu de 20). Sur machine confortable, rien ne change.
+
 ## 6. Visages : pipeline
 
 1. **Détection** (FaceWorker, basse priorité, après l'import) : Human détecte les visages → bounding box + embedding 512-d + score.

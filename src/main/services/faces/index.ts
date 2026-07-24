@@ -9,6 +9,7 @@
 import { BrowserWindow, ipcMain, app } from 'electron'
 import { join } from 'node:path'
 import { getDb } from '../../db'
+import { faceBatchSize, faceBatchPauseMs } from '../../../shared/perf-profile'
 import {
   PersonCentroid,
   bestMatch,
@@ -139,16 +140,27 @@ export async function startFaceScan(mainWin: BrowserWindow): Promise<void> {
       resolve()
     }
 
+    // Petite configuration (≤ 8 Go / ≤ 4 cœurs) : lots de 4 au lieu de 8 et
+    // pause de 250 ms entre deux lots — la détection Human (WebGL/WASM) est
+    // la tâche de fond la plus gourmande, sans respiration elle rend la
+    // grille poussive pendant toute la passe.
     let cursor = 0
-    const BATCH = 8
+    const BATCH = faceBatchSize()
+    const PAUSE_MS = faceBatchPauseMs()
     const sendNext = (): void => {
       if (cursor >= targets.length) {
         cleanup()
         return
       }
-      const batch = targets.slice(cursor, cursor + BATCH).map((t) => t.id)
-      cursor += BATCH
-      faceWin?.webContents.send('faces:detect', { photoIds: batch })
+      const dispatch = (): void => {
+        // La fenêtre a pu être détruite pendant la pause (faces:error, quit)
+        if (!faceWin || !running) return
+        const batch = targets.slice(cursor, cursor + BATCH).map((t) => t.id)
+        cursor += BATCH
+        faceWin.webContents.send('faces:detect', { photoIds: batch })
+      }
+      if (PAUSE_MS > 0 && cursor > 0) setTimeout(dispatch, PAUSE_MS)
+      else dispatch()
     }
 
     ipcMain.on('faces:ready', () => sendNext())

@@ -3,6 +3,44 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.19] — 2026-07-24
+
+### Ajouté
+- **Profil « petite configuration »** : sur les machines à ≤ 8 Go de RAM ou
+  ≤ 4 cœurs, PicaLibre recalibre automatiquement toutes ses tâches de fond
+  pour que l'interface reste réactive pendant les scans et l'indexation
+  (forçable via `PICALIBRE_LOW_SPEC=1` ou désactivable via `=0`) :
+  - miniatures : 2 couloirs sharp × 2 threads libvips au lieu de
+    (cœurs−1) couloirs × cœurs threads — sur un 4 cœurs, on passait de
+    12 threads de calcul concurrents (interface figée) à 4 ;
+  - cache interne libvips réduit à 24 Mo, workers de hachage plafonnés à 2
+    (le hachage est surtout limité par le disque, pas par le CPU) ;
+  - transcodage des proxys vidéo HEVC en préréglage `veryfast` (≈ 2× moins
+    de CPU) avec un cœur toujours laissé libre pour l'interface ;
+  - détection de visages par lots de 4 (au lieu de 8) avec 250 ms de pause
+    entre les lots — la tâche de fond la plus gourmande apprend à respirer ;
+  - SQLite : 16 Mo de cache de pages et 128 Mo de mmap (au lieu de 64/256),
+    la RAM rendue profite au cache disque de l'OS et au renderer ;
+  - côté interface : budget du cache de vignettes décodées réduit à 48 Mo
+    et préchargement prédictif ramené à 10 miniatures.
+
+### Amélioré
+- **Les process ffmpeg d'arrière-plan** (proxys vidéo, extraction de frames)
+  sont désormais lancés en priorité CPU réduite (BELOW_NORMAL / nice +10)
+  sur toutes les machines : le système donne toujours la main à l'interface
+  d'abord, au transcodage ensuite.
+- **Le cache mémoire des vignettes est maintenant borné en octets réels**
+  (96 Mo par défaut) et plus seulement en nombre d'entrées — 500 bitmaps
+  256 px pouvaient auparavant occuper ~130 Mo de RAM quelle que soit la
+  machine.
+
+### Vérifié
+- `npm run typecheck` et `npm run build` propres ; le profil est bien
+  embarqué dans les bundles main, scan-worker et thumb-worker (chunk
+  partagé). Comportement inchangé sur machine confortable : les valeurs
+  historiques (concurrences, caches, préréglage `fast`) sont conservées à
+  l'identique hors petite configuration.
+
 ## [2.24.18] — 2026-07-20
 
 ### Ajouté

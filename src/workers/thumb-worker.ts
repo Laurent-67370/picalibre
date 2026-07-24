@@ -14,13 +14,27 @@
 import sharp from 'sharp'
 import { mkdir, access, unlink } from 'node:fs/promises'
 import { join, dirname, extname } from 'node:path'
-import { cpus, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { exiftool } from 'exiftool-vendored'
 import { resolveHeicInput } from '../shared/heic'
+import {
+  isLowSpec,
+  sharpCacheMb,
+  sharpVipsConcurrency,
+  thumbLaneLimit
+} from '../shared/perf-profile'
 
 const SIZES = [256, 1024] as const
 const QUALITY = 82
-const CONCURRENCY = Math.max(2, (cpus().length || 4) - 1)
+// Petite configuration (≤ 8 Go / ≤ 4 cœurs) : 2 couloirs × 2 threads vips
+// au lieu de (cpus−1) couloirs × cpus threads vips — sans ce plafond, un
+// 4 cœurs se retrouvait avec 12 threads de calcul et une interface figée
+// pendant toute la génération des miniatures.
+const CONCURRENCY = thumbLaneLimit()
+if (isLowSpec()) {
+  sharp.concurrency(sharpVipsConcurrency())
+  sharp.cache({ memory: sharpCacheMb() })
+}
 const RESULT_BATCH = 50
 
 // Extensions RAW et PSD qui peuvent nécessiter un fallback exiftool
