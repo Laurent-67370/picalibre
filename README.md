@@ -126,26 +126,27 @@ Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
 
-## 🆕 Quoi de neuf en 2.24.21
+## 🆕 Quoi de neuf en 2.24.22
 
-- 🔎 **Audit complet post-release** : typecheck, 4 suites unitaires,
-  E2E Electron réel (pipeline, WebGL, synchro galerie) et E2E PWA en
-  Chromium — tout vert. Deux faiblesses corrigées dans la galerie web :
-  recherche avec debounce (200 ms) et cache API du service worker borné
-  (éviction FIFO).
+- 🔏 **Signature de code : câblage prêt et documentation honnête** :
+  la CI est prête à signer et notariser dès que les certificats
+  existeront (SignPath Foundation côté Windows — dossier déposé, en
+  attente ; Apple Developer côté macOS — hardened runtime et
+  entitlements déjà configurés). En attendant,
+  [CODE_SIGNING.md](CODE_SIGNING.md) décrit l'état réel et la
+  vérification d'intégrité **SHA-256** disponible sur chaque release.
+- 🔎 **Audit complet post-release** (2.24.21) : typecheck, 4 suites
+  unitaires, E2E Electron réel et E2E PWA Chromium — tout vert. Deux
+  faiblesses corrigées dans la galerie web (debounce de la recherche,
+  cache API du service worker borné).
 - 📱 **La galerie web mobile devient une PWA** (2.24.20) : installable
-  sur l'écran d'accueil (Android et iPhone), plein écran sans barre de
-  navigateur, consultation **hors-ligne** des dernières photos vues, et
-  navigation au geste dans le visualiseur — voir
+  sur l'écran d'accueil (Android et iPhone), plein écran, consultation
+  **hors-ligne**, navigation au geste — voir
   [web-server/README.md](web-server/README.md).
 - ⚡ **Profil « petite configuration »** (2.24.19) : sur les machines à
-  ≤ 8 Go de RAM ou ≤ 4 cœurs, toutes les tâches de fond (miniatures,
-  hachage, proxys vidéo, détection de visages, caches SQLite et
-  vignettes) se recalibrent automatiquement pour que l'interface reste
-  fluide pendant les scans — forçable via `PICALIBRE_LOW_SPEC=1|0`.
-- 🤫 **Tâches de fond plus discrètes sur toutes les machines** (2.24.19) :
-  process ffmpeg d'arrière-plan en priorité CPU réduite, cache mémoire
-  des vignettes borné en octets réels.
+  ≤ 8 Go de RAM ou ≤ 4 cœurs, toutes les tâches de fond se recalibrent
+  automatiquement pour que l'interface reste fluide pendant les scans —
+  forçable via `PICALIBRE_LOW_SPEC=1|0`.
 
 ## 📜 Historique des versions
 
