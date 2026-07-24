@@ -6,6 +6,7 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'node:path'
+import { isLowSpec, sqliteCacheKib, sqliteMmapBytes } from '../../shared/perf-profile'
 import type { ScannedFile } from '../../workers/scan-worker'
 import migration001 from './migrations/001_init.sql?raw'
 import migration002 from './migrations/002_faces_scanned.sql?raw'
@@ -44,9 +45,13 @@ export function initDb(): Database.Database {
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   db.pragma('synchronous = NORMAL')
-  db.pragma('cache_size = -65536') // 64 Mo de cache de pages
+  // Profil petite configuration (≤ 8 Go / ≤ 4 cœurs) : 16 Mo de cache de
+  // pages + 128 Mo de mmap au lieu de 64/256 — la RAM rendue profite au
+  // cache disque de l'OS et aux autres processus (renderer, workers).
+  db.pragma(`cache_size = -${sqliteCacheKib()}`)
   db.pragma('temp_store = MEMORY')
-  db.pragma('mmap_size = 268435456') // 256 Mo en mmap : lectures sans syscall
+  db.pragma(`mmap_size = ${sqliteMmapBytes()}`)
+  if (isLowSpec()) console.log('[db] profil petite configuration : cache 16 Mo, mmap 128 Mo')
   runMigrations()
   return db
 }

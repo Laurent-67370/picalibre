@@ -4,10 +4,15 @@
  */
 import { utilityProcess, BrowserWindow, app } from 'electron'
 import { join } from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdir, unlink, access } from 'node:fs/promises'
-import { tmpdir, cpus } from 'node:os'
+import { tmpdir, constants as osConstants, setPriority } from 'node:os'
 import { getFfmpegPath, probeVideoInfo } from '../utils/ffmpeg'
+import {
+  ffmpegTranscodePreset,
+  ffmpegTranscodeThreads,
+  videoThumbConcurrency
+} from '../../shared/perf-profile'
 import { runPool } from './pool'
 import sharp from 'sharp'
 import { getDb } from '../db'
@@ -103,17 +108,38 @@ async function fileExists(p: string): Promise<boolean> {
  * intact sur disque, seul un proxy mis en cache (par hash, comme les
  * miniatures) est généré pour la balise <video>.
  */
+/**
+ * Baisse la priorité CPU d'un process ffmpeg de fond (BELOW_NORMAL, mappé
+ * nice +10 sous Linux/macOS). Le transcodage et l'extraction de frames sont
+ * des tâches d'arrière-plan : elles ne doivent jamais voler des cycles à
+ * l'interface, surtout sur petit processeur. Best-effort (EPERM possible).
+ */
+function deprioritize(proc: ChildProcess): void {
+  if (proc.pid == null) return
+  try {
+    setPriority(proc.pid, osConstants.priority.PRIORITY_BELOW_NORMAL)
+  } catch {
+    /* non bloquant */
+  }
+}
+
 async function transcodeToH264(ffmpegPath: string, src: string, dest: string): Promise<void> {
   const tmp = dest + '.part'
   await new Promise<void>((resolve, reject) => {
+    // Petite configuration : préréglage veryfast (≈ 2× moins de CPU que
+    // fast pour un proxy local un peu plus gros) et un cœur laissé libre
+    // pour l'interface via -threads.
+    const threads = ffmpegTranscodeThreads()
     const proc = spawn(ffmpegPath, [
       '-y', '-i', src,
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+      ...(threads > 0 ? ['-threads', String(threads)] : []),
+      '-c:v', 'libx264', '-preset', ffmpegTranscodePreset(), '-crf', '23',
       '-c:a', 'aac', '-b:a', '128k',
       '-movflags', '+faststart',
       '-f', 'mp4',
       tmp
     ])
+    deprioritize(proc)
     // Une vidéo peut être longue : timeout généreux (10 min) plutôt que
     // les 20s du frame grab, mais toujours borné pour ne jamais bloquer
     // indéfiniment le pipeline en arrière-plan.
@@ -201,9 +227,11 @@ async function videoThumbsPhase(win: BrowserWindow, progressSender: ProgressSend
 
   // Parallélisé (audit item 14) : l'extraction d'une image par ffmpeg est
   // courte et surtout I/O ; les traiter une par une faisait payer N ×
-  // (spawn + seek + décodage) en série. Pool de 3-4 selon la machine —
-  // sharp utilise déjà ses propres threads derrière, inutile de saturer.
-  const VIDEO_CONCURRENCY = Number(process.env.PICALIBRE_VIDEO_CONCURRENCY ?? '') || Math.max(2, Math.min(4, cpus().length - 1))
+  // (spawn + seek + décodage) en série. Pool de 3-4 selon la machine
+  // (2 sur petite configuration) — sharp utilise déjà ses propres threads
+  // derrière, inutile de saturer.
+  const VIDEO_CONCURRENCY =
+    Number(process.env.PICALIBRE_VIDEO_CONCURRENCY ?? '') || videoThumbConcurrency()
   let done = 0
   const t0 = Date.now()
   let active = 0
@@ -223,6 +251,7 @@ async function videoThumbsPhase(win: BrowserWindow, progressSender: ProgressSend
           '-y', '-ss', seek, '-i', item.filepath,
           '-frames:v', '1', '-q:v', '3', tmpFrame
         ])
+        deprioritize(proc)
         const killTimer = setTimeout(() => {
           proc.kill('SIGKILL')
           reject(new Error('ffmpeg timeout (20s) — process tué'))

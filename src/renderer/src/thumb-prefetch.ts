@@ -16,6 +16,7 @@
  */
 
 import { thumbCache } from './thumb-cache'
+import { isLowSpecRenderer } from './low-spec'
 
 /**
  * Type partiel d'une ligne de grille — suffisant pour extraire les photoIds.
@@ -27,8 +28,10 @@ interface PrefetchableRow {
   items?: { p: { id: number; hash_xxh3?: string } }[]
 }
 
-/** Nombre maximum de miniatures à pré-décoder en avance. */
-const PREFETCH_LIMIT = 20
+/** Nombre maximum de miniatures à pré-décoder en avance — réduit sur
+ *  petite configuration : le décodage anticipé est un confort, pas une
+ *  urgence, et chaque bitmap décodé pèse ~260 Ko de RAM. */
+const PREFETCH_LIMIT = isLowSpecRenderer() ? 10 : 20
 
 /** Taille de miniature utilisée par la grille (doit correspondre à ThumbCanvas). */
 const THUMB_SIZE = 256

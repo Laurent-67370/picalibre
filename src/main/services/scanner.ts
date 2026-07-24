@@ -16,13 +16,15 @@
 import { utilityProcess, BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { opendir } from 'node:fs/promises'
-import { cpus } from 'node:os'
 import { getDb, getKnownFilesForRoots, upsertScannedBatch } from '../db'
 import { runPostScanPipeline } from './pipeline'
 import { createProgressThrottle, type ProgressSender } from './progress-throttle'
+import { scanWorkerLimit } from '../../shared/perf-profile'
 
-/** Nombre maximum de workers en parallèle (cpus − 1, au moins 1). */
-const MAX_WORKERS = Math.max(1, (cpus().length || 2) - 1)
+/** Nombre maximum de workers en parallèle : cpus − 1 (au moins 1), plafonné
+ *  à 2 sur petite configuration — le hachage est surtout I/O, au-delà on ne
+ *  paie que la RAM des Map knownFiles dupliquées et la contention disque. */
+const MAX_WORKERS = scanWorkerLimit()
 
 /** Partitions de travail envoyées aux workers. */
 interface WorkerPartition {
