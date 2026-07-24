@@ -3,6 +3,25 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.21] — 2026-07-24
+
+### Corrigé (audit post-release)
+- **Galerie web : recherche avec debounce (200 ms)** — chaque frappe
+  déclenchait un appel `/api/photos`, pénalisant sur mobile (réseau,
+  batterie) sans bénéfice visuel.
+- **Galerie web : cache API du service worker borné (200 entrées, FIFO)**
+  — chaque combinaison de filtres/pagination créait une entrée jamais
+  évincée ; le cache aurait grossi indéfiniment au fil des mois.
+
+### Vérifié
+Audit complet re-exécuté en local sur le commit de la 2.24.20 : typecheck,
+suites unitaires (moteur d'édition, clusters de visages, movie maker v2,
+fallback RAW/PSD), E2E Electron réel sous Xvfb (pipeline scan→EXIF→
+miniatures OK en 1,5 s avec le profil petite configuration actif, parité
+WebGL en SKIP propre faute de GPU, synchro galerie web 4/4 photos), puis
+E2E PWA Chromium re-joué après ces deux correctifs (service worker,
+manifest, visualiseur, rechargement hors-ligne).
+
 ## [2.24.20] — 2026-07-24
 
 ### Ajouté
