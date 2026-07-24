@@ -4,6 +4,21 @@ Galerie mobile miroir de ta bibliothèque PicaLibre : **miniatures + métadonné
 uniquement**, aucun fichier original ne quitte ton ordinateur. Déployable sur
 ton VPS (Coolify, Docker, ou Node nu).
 
+## 📱 PWA — installer la galerie comme une app
+
+La galerie est une **Progressive Web App** : installable sur l'écran
+d'accueil, plein écran sans barre de navigateur, et consultable
+**hors-ligne** (dernières listes chargées + jusqu'à ~2 000 miniatures déjà
+vues, mises en cache par le service worker).
+
+- **Android (Chrome/Edge)** : un bouton « ⬇ Installer » apparaît dans
+  l'en-tête de la galerie — sinon menu ⋮ → *Installer l'application*.
+- **iPhone/iPad (Safari)** : bouton Partager → *Sur l'écran d'accueil*.
+- HTTPS obligatoire pour le service worker (déjà le cas via Traefik/Coolify).
+
+Dans le visualiseur : glisser à gauche/droite pour naviguer entre les
+photos, glisser vers le bas pour fermer (flèches ‹ › et clavier aussi).
+
 ## Déploiement Coolify (Oracle Cloud, comme tes autres apps)
 
 1. Nouvelle ressource → **Dockerfile** → pointer sur ce dossier `web-server/`

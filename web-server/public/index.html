@@ -4,6 +4,13 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>PicaLibre</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#0f172a" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="PicaLibre" />
 <style>
   :root { --bg:#0f172a; --card:#1e293b; --border:#334155; --text:#e2e8f0; --muted:#94a3b8; --accent:#f97316; }
   * { box-sizing: border-box; }
@@ -13,7 +20,7 @@
   #login input { width:100%; max-width:320px; padding:12px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:16px; }
   #login button, .btn { padding:12px 16px; border-radius:10px; border:1px solid var(--accent); background:var(--accent); color:#0f172a; font-weight:700; font-size:15px; cursor:pointer; }
   #app { display:none; flex-direction:column; height:100vh; }
-  header { padding:12px 14px; border-bottom:1px solid var(--border); display:flex; gap:8px; align-items:center; position:sticky; top:0; background:var(--bg); z-index:5; }
+  header { padding:calc(12px + env(safe-area-inset-top)) 14px 12px; border-bottom:1px solid var(--border); display:flex; gap:8px; align-items:center; position:sticky; top:0; background:var(--bg); z-index:5; }
   header h1 { font-size:16px; margin:0; color:var(--accent); flex-shrink:0; }
   header input { flex:1; min-width:0; padding:9px 12px; border-radius:999px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:14px; }
   nav { display:flex; gap:6px; padding:8px 12px; overflow-x:auto; border-bottom:1px solid var(--border); }
@@ -27,9 +34,14 @@
   .load-more { grid-column:1/-1; padding:16px; text-align:center; color:var(--muted); font-size:13px; }
   #viewer { position:fixed; inset:0; background:#000d; display:none; align-items:center; justify-content:center; z-index:20; touch-action:pan-y; }
   #viewer img { max-width:100%; max-height:90vh; object-fit:contain; }
-  #viewer .close { position:absolute; top:14px; right:14px; font-size:26px; color:#fff; background:none; border:none; }
-  #viewer .cap { position:absolute; bottom:14px; left:14px; right:14px; color:#cbd5e1; font-size:13px; text-align:center; }
+  #viewer .close { position:absolute; top:calc(14px + env(safe-area-inset-top)); right:14px; font-size:26px; color:#fff; background:none; border:none; }
+  #viewer .cap { position:absolute; bottom:calc(14px + env(safe-area-inset-bottom)); left:14px; right:14px; color:#cbd5e1; font-size:13px; text-align:center; }
+  #viewer .nav-arrow { position:absolute; top:50%; transform:translateY(-50%); font-size:34px; color:#fff9; background:none; border:none; padding:18px 10px; z-index:21; }
+  #viewer .nav-arrow:disabled { opacity:0.2; }
   .empty { padding:40px 20px; text-align:center; color:var(--muted); }
+  #offline { display:none; padding:6px 12px; background:#7c2d12; color:#fed7aa; font-size:12.5px; text-align:center; }
+  body.offline #offline { display:block; }
+  #installBtn { display:none; flex-shrink:0; padding:6px 12px; border-radius:999px; border:1px solid var(--accent); background:none; color:var(--accent); font-size:12.5px; }
 </style>
 </head>
 <body>
@@ -46,7 +58,9 @@
   <header>
     <h1 id="libName">📸</h1>
     <input id="search" placeholder="Rechercher…" oninput="onSearch()" />
+    <button id="installBtn" onclick="promptInstall()">⬇ Installer</button>
   </header>
+  <div id="offline">📡 Hors-ligne — affichage des dernières photos consultées</div>
   <nav>
     <button class="active" onclick="setView('timeline',this)">🕒 Tout</button>
     <button onclick="setView('folders',this)">📁 Dossiers</button>
@@ -57,13 +71,38 @@
 
 <div id="viewer" onclick="closeViewer(event)">
   <button class="close" onclick="closeViewer(event)">✕</button>
+  <button class="nav-arrow" id="prevBtn" style="left:0" onclick="stepViewer(-1, event)">‹</button>
   <img id="viewerImg" />
+  <button class="nav-arrow" id="nextBtn" style="right:0" onclick="stepViewer(1, event)">›</button>
   <div class="cap" id="viewerCap"></div>
 </div>
 
 <script>
 let API = '', TOKEN = '', offset = 0, loading = false, currentFilter = {}, mode = 'timeline'
+let allPhotos = [], viewerIdx = -1, deferredInstall = null
 const $ = (id) => document.getElementById(id)
+
+// ---------- PWA : service worker, installation, état réseau ----------
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {})
+}
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault()
+  deferredInstall = e
+  $('installBtn').style.display = 'block'
+})
+function promptInstall() {
+  if (!deferredInstall) return
+  deferredInstall.prompt()
+  deferredInstall.userChoice.finally(() => {
+    deferredInstall = null
+    $('installBtn').style.display = 'none'
+  })
+}
+function syncOnlineState() { document.body.classList.toggle('offline', !navigator.onLine) }
+window.addEventListener('online', syncOnlineState)
+window.addEventListener('offline', syncOnlineState)
+syncOnlineState()
 
 function saved() {
   try { return JSON.parse(localStorage.getItem('picalibre-web') || 'null') } catch { return null }
@@ -110,7 +149,7 @@ function onSearch() {
 }
 
 async function loadList(reset) {
-  if (reset) { offset = 0; $('list').innerHTML = '' }
+  if (reset) { offset = 0; allPhotos = []; $('list').innerHTML = '' }
   if (loading) return
   loading = true
 
@@ -148,10 +187,12 @@ async function loadList(reset) {
     $('list').appendChild(emptyMsg('Aucune photo synchronisée pour l\'instant.'))
   }
   photos.forEach((p) => {
+    const idx = allPhotos.length
+    allPhotos.push(p)
     const img = document.createElement('img')
     img.loading = 'lazy'
     img.src = `${API}/thumb/${p.hash}/256.webp`
-    img.onclick = () => openViewer(p)
+    img.onclick = () => openViewer(idx)
     grid.appendChild(img)
   })
   offset += photos.length
@@ -167,14 +208,46 @@ async function loadList(reset) {
 function emptyMsg(t) {
   const d = document.createElement('div'); d.className = 'empty'; d.textContent = t; return d
 }
-function openViewer(p) {
+function openViewer(idx) {
+  const p = allPhotos[idx]
+  if (!p) return
+  viewerIdx = idx
   $('viewerImg').src = `${API}/thumb/${p.hash}/1024.webp`
   $('viewerCap').textContent = `${p.filename}${p.takenAt ? ' · ' + new Date(p.takenAt*1000).toLocaleDateString('fr-FR') : ''}${'★'.repeat(p.rating)}`
+  $('prevBtn').disabled = idx <= 0
+  $('nextBtn').disabled = idx >= allPhotos.length - 1
   $('viewer').style.display = 'flex'
+}
+function stepViewer(delta, e) {
+  if (e) e.stopPropagation()
+  const next = viewerIdx + delta
+  if (next >= 0 && next < allPhotos.length) openViewer(next)
 }
 function closeViewer(e) {
   if (e.target.id === 'viewer' || e.target.classList.contains('close')) $('viewer').style.display = 'none'
 }
+// Navigation au geste dans le visualiseur : glisser à gauche/droite pour
+// changer de photo, glisser vers le bas pour fermer.
+let touchX = null, touchY = null
+$('viewer').addEventListener('touchstart', (e) => {
+  if (e.touches.length !== 1) { touchX = null; return }
+  touchX = e.touches[0].clientX
+  touchY = e.touches[0].clientY
+}, { passive: true })
+$('viewer').addEventListener('touchend', (e) => {
+  if (touchX == null) return
+  const dx = e.changedTouches[0].clientX - touchX
+  const dy = e.changedTouches[0].clientY - touchY
+  touchX = null
+  if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) stepViewer(dx < 0 ? 1 : -1)
+  else if (dy > 90 && Math.abs(dy) > Math.abs(dx) * 1.5) $('viewer').style.display = 'none'
+}, { passive: true })
+document.addEventListener('keydown', (e) => {
+  if ($('viewer').style.display !== 'flex') return
+  if (e.key === 'ArrowRight') stepViewer(1)
+  else if (e.key === 'ArrowLeft') stepViewer(-1)
+  else if (e.key === 'Escape') $('viewer').style.display = 'none'
+})
 document.getElementById('list').addEventListener('scroll', () => {
   const el = $('list')
   if (mode === 'timeline' && el.scrollTop + el.clientHeight > el.scrollHeight - 400) loadList(false)

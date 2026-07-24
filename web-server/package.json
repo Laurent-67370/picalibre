@@ -1,6 +1,6 @@
 {
   "name": "picalibre-web",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Galerie mobile PicaLibre — miroir léger (miniatures + métadonnées) déployable sur VPS",
   "private": true,
   "type": "module",

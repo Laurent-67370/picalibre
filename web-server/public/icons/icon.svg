@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Icône PWA PicaLibre — appareil photo orange sur fond ardoise,
+       marges généreuses pour rester lisible en variante maskable. -->
+  <rect width="512" height="512" rx="96" fill="#0f172a"/>
+  <g fill="none" stroke="#f97316" stroke-width="26" stroke-linejoin="round" stroke-linecap="round">
+    <!-- boîtier -->
+    <rect x="96" y="176" width="320" height="220" rx="36"/>
+    <!-- viseur (bosse) -->
+    <path d="M196 176 L216 132 H296 L316 176"/>
+    <!-- objectif -->
+    <circle cx="256" cy="286" r="74"/>
+  </g>
+  <!-- déclencheur -->
+  <circle cx="376" cy="222" r="16" fill="#f97316"/>
+</svg>

@@ -3,6 +3,36 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.20] — 2026-07-24
+
+### Ajouté
+- **La galerie web mobile devient une PWA installable** (`web-server/`),
+  première étape du chemin vers une app Android/iPhone :
+  - **Installation sur l'écran d'accueil** : manifest + icônes dédiées
+    (appareil photo orange sur ardoise, variante maskable), plein écran
+    `standalone` sans barre de navigateur. Bouton « ⬇ Installer » dans
+    l'en-tête sur Android/Chrome ; Partager → « Sur l'écran d'accueil »
+    sur iPhone/Safari.
+  - **Consultation hors-ligne** via service worker : l'app shell s'ouvre
+    sans réseau, les dernières listes chargées (API en network-first avec
+    repli cache) et jusqu'à ~2 000 miniatures déjà vues (cache-first,
+    immuables car adressées par hash, éviction FIFO) restent disponibles.
+    Bandeau « Hors-ligne » discret quand le réseau est coupé.
+  - **Ergonomie tactile du visualiseur** : glisser à gauche/droite pour
+    passer d'une photo à l'autre, glisser vers le bas pour fermer,
+    flèches ‹ › et navigation clavier (←/→/Échap), zones sûres iOS
+    (encoche) respectées.
+
+### Vérifié (Chromium réel via Playwright)
+Serveur `picalibre-web` démarré avec 2 photos synchronisées (API sync +
+miniatures WebP 256/1024) : connexion par jeton, grille affichée (2
+vignettes), service worker actif sur la bonne portée, manifest
+`standalone` servi, navigation suivant/précédent dans le visualiseur —
+puis **réseau coupé et page rechargée** : la galerie se ré-ouvre
+entièrement hors-ligne, les 2 miniatures sont décodées depuis le cache
+du service worker. Auth inchangée : `/api/*` sans jeton répond toujours
+401, la coquille statique reste vide sans connexion valide.
+
 ## [2.24.19] — 2026-07-24
 
 ### Ajouté
