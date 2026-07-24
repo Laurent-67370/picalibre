@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements pour le hardened runtime (exigé par la notarisation Apple).
+  Inertes tant qu'aucun certificat Developer ID n'est configuré (la
+  signature ad-hoc d'afterPack.js ne les applique pas) ; utilisés
+  automatiquement par electron-builder dès que CSC_LINK/CSC_NAME existent.
+
+  - allow-jit + allow-unsigned-executable-memory : requis par V8/Chromium
+  - disable-library-validation : requis pour charger les modules natifs
+    (better-sqlite3, sharp) signés avec une autre identité que l'app
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>

@@ -3,6 +3,30 @@
 Toutes les évolutions notables de PicaLibre sont documentées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — versionnage sémantique.
 
+## [2.24.22] — 2026-07-24
+
+### Ajouté
+- **Plomberie de signature de code prête à l'emploi** (inerte tant que les
+  comptes/certificats n'existent pas — aucun changement de comportement) :
+  - **macOS** : hardened runtime + entitlements
+    (`build-resources/entitlements.mac.plist` : JIT V8, mémoire exécutable,
+    chargement des modules natifs better-sqlite3/sharp) configurés dans
+    electron-builder ; signature Developer ID et notarisation Apple
+    automatiques dès l'ajout des secrets `MAC_CSC_LINK`,
+    `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`,
+    `APPLE_TEAM_ID`. `afterPack.js` saute sa signature ad-hoc quand un
+    vrai certificat est présent (elle écraserait la signature notarisée).
+  - **Windows** : étape SignPath Foundation prête (commentée dans la CI),
+    à activer à l'acceptation du dossier déposé auprès de la fondation.
+
+### Corrigé
+- **CODE_SIGNING.md disait les `.exe` signés via SignPath — c'était
+  inexact** : aucune étape de signature n'existait dans la CI. Le document
+  décrit désormais l'état réel (installeurs Windows non signés, dossier
+  SignPath déposé et en attente — projet jugé trop jeune), explique
+  l'avertissement SmartScreen, et documente la vérification d'intégrité
+  par empreinte SHA-256 disponible dès aujourd'hui sur chaque release.
+
 ## [2.24.21] — 2026-07-24
 
 ### Corrigé (audit post-release)

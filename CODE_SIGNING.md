@@ -7,32 +7,57 @@ de ce dépôt public par notre pipeline CI (GitHub Actions,
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)) — aucune étape
 manuelle, aucun code propriétaire n'entre dans le binaire publié.
 
-## Signature Windows
+## Signature Windows — état actuel : NON signés
 
-Les installeurs `.exe` sont signés numériquement grâce à une certification
-de code offerte gracieusement aux projets open-source par la
-[**SignPath Foundation**](https://signpath.org/), via la plateforme
-[SignPath.io](https://signpath.io/).
+Les installeurs `.exe` ne sont **pas encore signés numériquement**.
+SmartScreen affiche donc l'avertissement « Éditeur inconnu » au premier
+lancement (cliquer sur *Informations complémentaires* → *Exécuter quand
+même*). C'est attendu et sans rapport avec l'intégrité du fichier — les
+binaires sont construits automatiquement par la CI publique de ce dépôt,
+sans étape manuelle.
 
+**Démarche en cours** : un dossier a été déposé auprès de la
+[**SignPath Foundation**](https://signpath.org/), qui offre gracieusement
+la signature de code aux projets open-source. Il n'a pas encore été
+accepté (projet jugé trop jeune) ; une nouvelle candidature sera faite
+après quelques mois d'historique de releases. L'intégration CI est déjà
+préparée (étape commentée dans
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml)) : à l'acceptation,
+la signature s'activera en une seule modification.
+
+Une fois actif :
 - **Éditeur affiché** : SignPath Foundation (le certificat est délivré à la
   fondation, pas à un contributeur individuel — voir leurs
   [conditions pour projets open-source](https://signpath.org/terms.html))
 - **Clé privée** : générée et stockée sur le module matériel de sécurité
   (HSM) de SignPath — jamais accessible aux mainteneurs du projet
-- **Intégration** : la signature est appliquée automatiquement dans le
-  pipeline CI, sur les binaires construits depuis ce dépôt
+- **Intégration** : signature appliquée automatiquement dans le pipeline
+  CI, sur les binaires construits depuis ce dépôt
 
-## Vérifier l'intégrité d'un installeur
+## Vérifier l'intégrité d'un installeur (dès aujourd'hui)
 
-Windows affiche l'éditeur **SignPath Foundation** lors de l'installation.
-Pour vérifier manuellement la signature d'un fichier téléchargé :
+En attendant la signature, chaque fichier de release a une empreinte
+**SHA-256** affichée par GitHub (page de la release → icône à côté de
+chaque fichier, ou via l'API). Pour vérifier un téléchargement :
 
 ```powershell
-Get-AuthenticodeSignature ".\PicaLibre Setup X.Y.Z.exe"
+Get-FileHash ".\PicaLibre.Setup.X.Y.Z.exe" -Algorithm SHA256
 ```
 
-Le résultat doit indiquer `Status: Valid` avec un certificat émis par
-SignPath Foundation.
+```bash
+sha256sum PicaLibre-X.Y.Z.AppImage
+```
+
+L'empreinte doit correspondre exactement à celle affichée sur la page de
+la release GitHub.
+
+Quand la signature SignPath sera active, la vérification deviendra :
+
+```powershell
+Get-AuthenticodeSignature ".\PicaLibre.Setup.X.Y.Z.exe"
+```
+
+avec `Status: Valid` et un certificat émis par SignPath Foundation.
 
 ## Autres plateformes
 
@@ -57,9 +82,14 @@ SignPath Foundation.
   obtenir un certificat Developer ID et faire notariser l'app par Apple
   — une démarche que seul le propriétaire du compte Apple Developer
   peut engager (identité vérifiée par Apple), non automatisable par ce
-  dépôt seul. Si Laurent souhaite s'y engager un jour, l'intégration
-  CI (soumission automatique à `notarytool` à chaque release) peut être
-  ajoutée en une fois.
+  dépôt seul. **L'intégration CI est déjà prête** : hardened runtime et
+  entitlements configurés (`build-resources/entitlements.mac.plist`),
+  signature et notarisation automatiques dès que les secrets
+  `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`,
+  `APPLE_APP_SPECIFIC_PASSWORD` et `APPLE_TEAM_ID` sont ajoutés au dépôt
+  (voir les commentaires de l'étape « Package » dans
+  [`.github/workflows/ci.yml`](.github/workflows/ci.yml)). Sans ces
+  secrets, rien ne change : signature ad-hoc actuelle.
 - **Linux** : AppImage et `.deb` ne sont pas signés (non requis par les
   gestionnaires de paquets Linux courants pour une distribution hors dépôt
   officiel).
