@@ -126,12 +126,16 @@ Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
 
-## 🆕 Quoi de neuf en 2.24.18
+## 🆕 Quoi de neuf en 2.24.19
 
-- 🌍 **Recherche par lieu géotagué** : une photo isolée jamais rangée
-  dans un dossier ou un album nommé d'après le lieu remonte désormais
-  aussi en tapant ce lieu, grâce à son GPS — dernier maillon de la
-  recherche unifiée (texte, dossier, album, lieu).
+- ⚡ **Profil « petite configuration »** : sur les machines à ≤ 8 Go de
+  RAM ou ≤ 4 cœurs, toutes les tâches de fond (miniatures, hachage,
+  proxys vidéo, détection de visages, caches SQLite et vignettes) se
+  recalibrent automatiquement pour que l'interface reste fluide pendant
+  les scans et l'indexation — forçable via `PICALIBRE_LOW_SPEC=1|0`.
+- 🤫 **Tâches de fond plus discrètes sur toutes les machines** : les
+  process ffmpeg d'arrière-plan tournent en priorité CPU réduite et le
+  cache mémoire des vignettes est désormais borné en octets réels.
 
 ## 📜 Historique des versions
 
