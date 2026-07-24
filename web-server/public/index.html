@@ -141,11 +141,17 @@ function setView(m, btn) {
   btn.classList.add('active')
   loadList(true)
 }
+// Debounce : sans lui, chaque frappe déclenchait un appel /api/photos —
+// pénalisant sur mobile (réseau + batterie) et inutile visuellement.
+let searchTimer
 function onSearch() {
-  const q = $('search').value.trim()
-  currentFilter = q ? { q } : {}
-  mode = 'timeline'
-  loadList(true)
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    const q = $('search').value.trim()
+    currentFilter = q ? { q } : {}
+    mode = 'timeline'
+    loadList(true)
+  }, 200)
 }
 
 async function loadList(reset) {

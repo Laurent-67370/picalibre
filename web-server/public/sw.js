@@ -23,6 +23,10 @@ const THUMB_CACHE = 'picalibre-thumbs' // volontairement non versionné
 
 /** Nombre max de miniatures conservées hors-ligne (~25 Mo de WebP 256 px). */
 const THUMB_LIMIT = 2000
+/** Nombre max de réponses API en cache — chaque combinaison de filtres et
+ *  de pagination crée une entrée distincte, sans borne le cache grossirait
+ *  indéfiniment au fil des mois. */
+const API_LIMIT = 200
 
 const SHELL_ASSETS = [
   './',
@@ -77,12 +81,23 @@ async function thumbCacheFirst(request) {
   return response
 }
 
+/** Même éviction FIFO que les miniatures, pour le cache API. */
+async function trimApiCache() {
+  const cache = await caches.open(API_CACHE)
+  const keys = await cache.keys()
+  if (keys.length <= API_LIMIT) return
+  for (const key of keys.slice(0, keys.length - API_LIMIT)) {
+    await cache.delete(key)
+  }
+}
+
 async function apiNetworkFirst(request) {
   try {
     const response = await fetch(request)
     if (response.ok) {
       const cache = await caches.open(API_CACHE)
       await cache.put(request, response.clone())
+      trimApiCache()
     }
     return response
   } catch (err) {
