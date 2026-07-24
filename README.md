@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.24.19-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.20-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -126,16 +126,21 @@ Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
 
-## 🆕 Quoi de neuf en 2.24.19
+## 🆕 Quoi de neuf en 2.24.20
 
-- ⚡ **Profil « petite configuration »** : sur les machines à ≤ 8 Go de
-  RAM ou ≤ 4 cœurs, toutes les tâches de fond (miniatures, hachage,
-  proxys vidéo, détection de visages, caches SQLite et vignettes) se
-  recalibrent automatiquement pour que l'interface reste fluide pendant
-  les scans et l'indexation — forçable via `PICALIBRE_LOW_SPEC=1|0`.
-- 🤫 **Tâches de fond plus discrètes sur toutes les machines** : les
-  process ffmpeg d'arrière-plan tournent en priorité CPU réduite et le
-  cache mémoire des vignettes est désormais borné en octets réels.
+- 📱 **La galerie web mobile devient une PWA** : installable sur
+  l'écran d'accueil (Android et iPhone), plein écran sans barre de
+  navigateur, consultation **hors-ligne** des dernières photos vues, et
+  navigation au geste dans le visualiseur — voir
+  [web-server/README.md](web-server/README.md).
+- ⚡ **Profil « petite configuration »** (2.24.19) : sur les machines à
+  ≤ 8 Go de RAM ou ≤ 4 cœurs, toutes les tâches de fond (miniatures,
+  hachage, proxys vidéo, détection de visages, caches SQLite et
+  vignettes) se recalibrent automatiquement pour que l'interface reste
+  fluide pendant les scans — forçable via `PICALIBRE_LOW_SPEC=1|0`.
+- 🤫 **Tâches de fond plus discrètes sur toutes les machines** (2.24.19) :
+  process ffmpeg d'arrière-plan en priorité CPU réduite, cache mémoire
+  des vignettes borné en octets réels.
 
 ## 📜 Historique des versions
 
