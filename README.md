@@ -1,7 +1,7 @@
 # PicaLibre 📸
 
 [![CI](https://github.com/Laurent-67370/picalibre/actions/workflows/ci.yml/badge.svg)](https://github.com/Laurent-67370/picalibre/actions)
-[![Version](https://img.shields.io/badge/version-2.24.20-f97316)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.24.21-f97316)](CHANGELOG.md)
 [![Licence](https://img.shields.io/badge/licence-MIT-334155)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/Linux%20%7C%20SteamOS%20%7C%20Windows%20%7C%20macOS-1e293b)
 
@@ -126,10 +126,15 @@ Picasa n'a jamais eu), verrou de confidentialité étendu de bout en bout,
 et un audit de sécurité complet mené jusqu'à zéro vulnérabilité — chaque
 point vérifié par des tests automatisés sur les trois systèmes.
 
-## 🆕 Quoi de neuf en 2.24.20
+## 🆕 Quoi de neuf en 2.24.21
 
-- 📱 **La galerie web mobile devient une PWA** : installable sur
-  l'écran d'accueil (Android et iPhone), plein écran sans barre de
+- 🔎 **Audit complet post-release** : typecheck, 4 suites unitaires,
+  E2E Electron réel (pipeline, WebGL, synchro galerie) et E2E PWA en
+  Chromium — tout vert. Deux faiblesses corrigées dans la galerie web :
+  recherche avec debounce (200 ms) et cache API du service worker borné
+  (éviction FIFO).
+- 📱 **La galerie web mobile devient une PWA** (2.24.20) : installable
+  sur l'écran d'accueil (Android et iPhone), plein écran sans barre de
   navigateur, consultation **hors-ligne** des dernières photos vues, et
   navigation au geste dans le visualiseur — voir
   [web-server/README.md](web-server/README.md).
